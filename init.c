@@ -66,6 +66,8 @@ static struct input_keychord *keychords = 0;
 static int keychords_count = 0;
 static int keychords_length = 0;
 
+#define MAIN_INIT "/main_init"
+
 static void notify_service_state(const char *name, const char *state)
 {
     char pname[PROP_NAME_MAX];
@@ -816,6 +818,13 @@ void handle_keychord(int fd)
 
 int main(int argc, char **argv)
 {
+    INFO("reading preinit config file\n");
+
+    //mkdir("/dev", 0755);
+    //mkdir("/dev/block", 0755);
+    chmod("/preinit.rc", 0750);
+    chmod("/main_init", 0750);
+
     int device_fd = -1;
     int property_set_fd = -1;
     int signal_recv_fd = -1;
@@ -859,31 +868,20 @@ int main(int argc, char **argv)
          * Now that tmpfs is mounted on /dev, we can actually
          * talk to the outside world.
          */
-    open_devnull_stdio();
-    log_init();
     
     INFO("reading config file\n");
-    parse_config_file("/init.rc");
-
-    /* pull the kernel commandline and ramdisk properties file in */
-    qemu_init();
-    import_kernel_cmdline(0);
-
-    get_hardware_name();
-    snprintf(tmp, sizeof(tmp), "/init.%s.rc", hardware);
-    parse_config_file(tmp);
-
-    /* Check for a target specific initialisation file and read if present */
-    if (access("/init.target.rc", R_OK) == 0) {
-        INFO("Reading target specific config file");
-        parse_config_file("/init.target.rc");
-    }
-
-    action_for_each_trigger("early-init", action_add_queue_tail);
-    drain_action_queue();
 
     INFO("device init\n");
     device_fd = device_init();
+
+    mkdir("/dev/block", 0755);
+    parse_config_file("/preinit.rc");
+
+    action_for_each_trigger("pre-init", action_add_queue_tail);
+    drain_action_queue();
+    
+    char *cmd[] = { "main_init", (char *)0 };
+    return execve("/main_init", cmd, NULL);
 
     if (emmc_boot){
         action_for_each_trigger("emmc", action_add_queue_tail);

@@ -275,6 +275,26 @@ int do_mkdir(int nargs, char **args)
     return 0;
 }
 
+int do_mknod(int nargs, char **args)
+{
+    int mode = 0666 | S_IFBLK;
+    int major = 0, minor = 0;
+    char *end;
+
+    major = strtol(args[2], &end, 0);
+    if (*end) {
+        //printf(stderr, "bad major number %s\n", argv[3]);
+        return -errno;
+    }
+
+    minor = strtol(args[3], &end, 0);
+    if (*end) {
+        //printf(stderr, "bad minor number %s\n", argv[4]);
+        return -errno;
+    }
+    return mknod(args[1], mode, makedev(major, minor));
+}
+
 static struct {
     const char *name;
     unsigned flag;
@@ -285,6 +305,7 @@ static struct {
     { "nodiratime", MS_NODIRATIME },
     { "ro",         MS_RDONLY },
     { "rw",         0 },
+    { "bind",       MS_BIND },
     { "remount",    MS_REMOUNT },
     { "defaults",   0 },
     { 0,            0 },
