@@ -847,6 +847,8 @@ int main(int argc, char **argv)
     /* clear the umask */
     umask(0);
 
+    log_init();
+
         /* Get the basic filesystem setup we need put
          * together in the initramdisk on / and then we'll
          * let the rc file figure out the rest.

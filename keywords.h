@@ -11,6 +11,7 @@ int do_hostname(int nargs, char **args);
 int do_ifup(int nargs, char **args);
 int do_insmod(int nargs, char **args);
 int do_import(int nargs, char **args);
+int do_import_boot(int nargs, char **args);
 int do_mkdir(int nargs, char **args);
 int do_mknod(int nargs, char **args);
 int do_mount(int nargs, char **args);
@@ -52,6 +53,7 @@ enum {
     KEYWORD(ifup,        COMMAND, 1, do_ifup)
     KEYWORD(insmod,      COMMAND, 1, do_insmod)
     KEYWORD(import,      COMMAND, 1, do_import)
+    KEYWORD(import_boot, COMMAND, 1, do_import_boot)
     KEYWORD(keycodes,    OPTION,  0, 0)
     KEYWORD(mkdir,       COMMAND, 1, do_mkdir)
     KEYWORD(mknod,       COMMAND, 3, do_mknod)

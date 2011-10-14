@@ -31,6 +31,7 @@
 #include <sys/resource.h>
 #include <linux/loop.h>
 #include <poll.h>
+#include <dirent.h>
 
 #include "init.h"
 #include "keywords.h"
@@ -486,7 +487,17 @@ int do_write(int nargs, char **args)
     return write_file(args[1], args[2]);
 }
 
+int __copy(char *from, char *to);
+
 int do_copy(int nargs, char **args)
+{
+    if (nargs != 3)
+        return -1;
+
+    return __copy(args[1], args[2]);
+}
+
+int __copy(char *from, char *to)
 {
     char *buffer = NULL;
     int rc = 0;
@@ -495,16 +506,13 @@ int do_copy(int nargs, char **args)
     int brtw, brtr;
     char *p;
 
-    if (nargs != 3)
+    if (stat(from, &info) < 0)
         return -1;
 
-    if (stat(args[1], &info) < 0) 
-        return -1;
-
-    if ((fd1 = open(args[1], O_RDONLY)) < 0) 
+    if ((fd1 = open(from, O_RDONLY)) < 0)
         goto out_err;
 
-    if ((fd2 = open(args[2], O_WRONLY|O_CREAT|O_TRUNC, 0660)) < 0)
+    if ((fd2 = open(to, O_WRONLY|O_CREAT|O_TRUNC, 0660)) < 0)
         goto out_err;
 
     if (!(buffer = malloc(info.st_size)))
@@ -663,4 +671,74 @@ int do_devwait(int nargs, char **args) {
     }
 
     return rc;
+}
+
+inline unsigned char __commentLine(char *line)
+{
+    if(strstr(line, "mount") && strstr(line, "yaffs2") &&
+      (strstr(line, "/system") || strstr(line, "/data") || strstr(line, "/cache")))
+        return 1;
+
+    if(strstr(line, "mkdir /data") || strstr(line, "mkdir /system") || strstr(line, "mkdir /cache"))
+        return 1;
+    return 0;
+}
+
+int do_import_boot(int nargs, char **args)
+{
+    DIR *d = opendir(args[1]);
+    if(d == NULL)
+        return -1;
+    struct dirent *dp;
+    char to[100];
+    char from[100];
+    char line[512];
+    unsigned short itr = 0;
+    unsigned short line_begin = 0;
+    int c = 0;
+    FILE *f = NULL;
+
+    while(dp = readdir(d))
+    {
+        if(strstr(dp->d_name, ".rc") == NULL)
+            continue;
+
+        // copy to our ramdisk
+        INFO("Copy %s to ramdisk", dp->d_name);
+        sprintf(from, "%s/%s", args[1], dp->d_name);
+        sprintf(to, "/%s", dp->d_name);
+        __copy(from, to);
+        chmod(to, 0750);
+
+        // Remove system, data and cache mounts from rc files
+        itr = 0;
+        f = fopen(to, "r+");
+        if(f == NULL) continue;
+        
+        while(1)
+        {
+           c = fgetc(f);
+           if(c == EOF)
+               break;
+           if(c == '\n')
+           {
+               line[itr] = 0; // null-terminated string
+
+               if(__commentLine(line))
+               {
+                   itr = ftell(f);
+                   fseek(f, line_begin, SEEK_SET);
+                   fputc((int)'#', f);
+                   fseek(f, itr, SEEK_SET);
+               }
+
+               itr = 0;
+               line_begin = ftell(f);
+           }else
+               line[itr++] = (char)c;
+        }
+        fflush(f);
+        fclose(f);
+    }
+    return 0;
 }
