@@ -673,17 +673,6 @@ int do_devwait(int nargs, char **args) {
     return rc;
 }
 
-inline unsigned char __commentLine(char *line)
-{
-    if(strstr(line, "mount") && strstr(line, "yaffs2") &&
-      (strstr(line, "/system") || strstr(line, "/data") || strstr(line, "/cache")))
-        return 1;
-
-    if(strstr(line, "mkdir /data") || strstr(line, "mkdir /system") || strstr(line, "mkdir /cache"))
-        return 1;
-    return 0;
-}
-
 int do_import_boot(int nargs, char **args)
 {
     DIR *d = opendir(args[1]);
@@ -692,11 +681,6 @@ int do_import_boot(int nargs, char **args)
     struct dirent *dp;
     char to[100];
     char from[100];
-    char line[512];
-    unsigned short itr = 0;
-    unsigned short line_begin = 0;
-    int c = 0;
-    FILE *f = NULL;
 
     // copy init binary
     INFO("Copy init binary to ramdisk");
@@ -714,12 +698,47 @@ int do_import_boot(int nargs, char **args)
         sprintf(to, "/%s", dp->d_name);
         __copy(from, to);
         chmod(to, 0750);
+    }
+    closedir(d);
+    return 0;
+}
 
-        // Remove system, data and cache mounts from rc files
+// Remove system, data and cache mounts from rc files
+inline unsigned char __commentLine(char *line)
+{
+    if(strstr(line, "mount") && strstr(line, "yaffs2") &&
+      (strstr(line, "/system") || strstr(line, "/data") || strstr(line, "/cache")))
+        return 1;
+
+    // Useless?
+    //if(strstr(line, "mkdir /data") || strstr(line, "mkdir /system") || strstr(line, "mkdir /cache"))
+    //    return 1;
+    return 0;
+}
+
+int do_remove_rc_mounts(int nargs, char **args)
+{
+    DIR *d = opendir("/");
+    if(d == NULL)
+        return -1;
+    struct dirent *dp = NULL;
+    char file[100];
+    char line[512];
+    unsigned short itr = 0;
+    unsigned short line_begin = 0;
+    int c = 0;
+    FILE *f = NULL;
+    
+    while(dp = readdir(d))
+    {
+        if(!strstr(dp->d_name, ".rc") && !strstr(dp->d_name, "preinit"))
+            continue;
+
+        sprintf(file, "/%s", dp->d_name);
         itr = 0;
-        f = fopen(to, "r+");
+        f = fopen(file, "r+");
         if(f == NULL) continue;
-        
+
         while(1)
         {
            c = fgetc(f);

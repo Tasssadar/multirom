@@ -31,6 +31,7 @@ int do_chmod(int nargs, char **args);
 int do_loglevel(int nargs, char **args);
 int do_device(int nargs, char **args);
 int do_devwait(int nargs, char **args);
+int do_remove_rc_mounts(int nargs, char **args);
 #define __MAKE_KEYWORD_ENUM__
 #define KEYWORD(symbol, flags, nargs, func) K_##symbol,
 enum {
@@ -82,6 +83,7 @@ enum {
     KEYWORD(device,      COMMAND, 4, do_device)
     KEYWORD(ioprio,      OPTION,  0, 0)
     KEYWORD(devwait,     COMMAND, 1, do_devwait)
+    KEYWORD(remove_rc_mounts, COMMAND,  0, do_remove_rc_mounts)
 #ifdef __MAKE_KEYWORD_ENUM__
     KEYWORD_COUNT,
 };

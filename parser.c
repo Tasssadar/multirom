@@ -182,6 +182,7 @@ int lookup_keyword(const char *s)
         break;
     case 'r':
         if (!strcmp(s, "estart")) return K_restart;
+        if (!strcmp(s, "emove_rc_mounts")) return K_remove_rc_mounts;
         break;
     case 's':
         if (!strcmp(s, "ervice")) return K_service;

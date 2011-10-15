@@ -21,14 +21,10 @@ sysclktz 0
 
 #    mkdir /bootimg 0755 system system
 #    mount sysfs loop@/sdroot/multirom/boot.img /bootimg
-    import_boot /sdroot/multirom/boot
-    mount ext4 /sdroot/multirom/system /system bind
-    mount ext4 /sdroot/multirom/data /data bind
-    mount ext4 /sdroot/multirom/cache /cache bind
-
-# permission fixes
-    chown bluetooth bluetooth /system/etc/dbus.conf
-    chown system misc /data/misc
-    chown keystore keystore /data/misc/keystore
+    import_boot /sdroot/multirom/rom/boot
+    remove_rc_mounts
+    mount ext4 /sdroot/multirom/rom/system /system bind
+    mount ext4 /sdroot/multirom/rom/data /data bind
+    mount ext4 /sdroot/multirom/rom/cache /cache bind
 
 # after our job is completed, than run main init
