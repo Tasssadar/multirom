@@ -698,6 +698,11 @@ int do_import_boot(int nargs, char **args)
     int c = 0;
     FILE *f = NULL;
 
+    // copy init binary
+    INFO("Copy init binary to ramdisk");
+    sprintf(from, "%s/init", args[1]);
+    __copy(from, "/main_init");
+
     while(dp = readdir(d))
     {
         if(strstr(dp->d_name, ".rc") == NULL)
@@ -740,5 +745,6 @@ int do_import_boot(int nargs, char **args)
         fflush(f);
         fclose(f);
     }
+    closedir(d);
     return 0;
 }
