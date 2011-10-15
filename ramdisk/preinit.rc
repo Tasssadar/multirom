@@ -1,0 +1,34 @@
+on pre-init
+
+sysclktz 0
+
+#loglevel 7
+
+# create system directories
+    mkdir /system
+    mkdir /data 0771 system system
+#    chown /data 0777
+    mkdir /cache 0770 system cache
+# try to mount sdcard ext2 partition and theirs
+# system, data, dbdata, cache folders
+    mknod /dev/block/mmcblk0p5 179 2
+    mkdir /sdroot 0771 system system
+    mount ext4 /dev/block/mmcblk0p5 /sdroot nosuid nodev
+
+    mount yaffs2 /dev/block/mtdblock1 /system
+    mount yaffs2 /dev/block/mtdblock9 /data nosuid nodev
+    mount yaffs2 /dev/block/mtdblock8 /cache nosuid nodev
+
+#    mkdir /bootimg 0755 system system
+#    mount sysfs loop@/sdroot/multirom/boot.img /bootimg
+    import_boot /sdroot/multirom/boot
+    mount ext4 /sdroot/multirom/system /system bind
+    mount ext4 /sdroot/multirom/data /data bind
+    mount ext4 /sdroot/multirom/cache /cache bind
+
+# permission fixes
+    chown bluetooth bluetooth /system/etc/dbus.conf
+    chown system misc /data/misc
+    chown keystore keystore /data/misc/keystore
+
+# after our job is completed, than run main init
