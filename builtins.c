@@ -345,9 +345,9 @@ int do_mount(int nargs, char **args)
         }
 
         sprintf(tmp, "/dev/block/mtdblock%d", n);
-
-        if (mount(tmp, target, system, flags, options) < 0) {
-            return -1;
+        int res = mount(tmp, target, system, flags, options);
+        if (res < 0) {
+            return res;
         }
 
         return 0;
@@ -358,14 +358,14 @@ int do_mount(int nargs, char **args)
         mode = (flags & MS_RDONLY) ? O_RDONLY : O_RDWR;
         fd = open(source + 5, mode);
         if (fd < 0) {
-            return -1;
+            return -1112;
         }
 
         for (n = 0; ; n++) {
             sprintf(tmp, "/dev/block/loop%d", n);
             loop = open(tmp, mode);
             if (loop < 0) {
-                return -1;
+                return -1111;
             }
 
             /* if it is a blank loop device */
@@ -373,11 +373,11 @@ int do_mount(int nargs, char **args)
                 /* if it becomes our loop device */
                 if (ioctl(loop, LOOP_SET_FD, fd) >= 0) {
                     close(fd);
-
-                    if (mount(tmp, target, system, flags, options) < 0) {
+                    int res = mount(tmp, target, system, flags, options);
+                    if (res < 0) {
                         ioctl(loop, LOOP_CLR_FD, 0);
                         close(loop);
-                        return -1;
+                        return res;
                     }
 
                     close(loop);
@@ -392,8 +392,9 @@ int do_mount(int nargs, char **args)
         ERROR("out of loopback devices");
         return -1;
     } else {
-        if (mount(source, target, system, flags, options) < 0) {
-            return -1;
+        int res = mount(source, target, system, flags, options);
+        if (res < 0) {
+            return res;
         }
 
         return 0;
@@ -686,6 +687,7 @@ int do_import_boot(int nargs, char **args)
     INFO("Copy init binary to ramdisk");
     sprintf(from, "%s/init", args[1]);
     __copy(from, "/main_init");
+    chmod("/main_init", 0750);
 
     while(dp = readdir(d))
     {
@@ -721,7 +723,9 @@ int do_remove_rc_mounts(int nargs, char **args)
     DIR *d = opendir("/");
     if(d == NULL)
         return -1;
+
     struct dirent *dp = NULL;
+
     char file[100];
     char line[512];
     unsigned short itr = 0;
@@ -731,7 +735,7 @@ int do_remove_rc_mounts(int nargs, char **args)
     
     while(dp = readdir(d))
     {
-        if(!strstr(dp->d_name, ".rc") && !strstr(dp->d_name, "preinit"))
+        if(!strstr(dp->d_name, ".rc") || strstr(dp->d_name, "preinit"))
             continue;
 
         sprintf(file, "/%s", dp->d_name);

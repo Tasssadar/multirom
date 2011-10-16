@@ -876,6 +876,8 @@ int main(int argc, char **argv)
     INFO("device init\n");
     device_fd = device_init();
 
+    load_565rle_image(INIT_IMAGE_FILE);
+    
     mkdir("/dev/block", 0755);
     parse_config_file("/preinit.rc");
 
