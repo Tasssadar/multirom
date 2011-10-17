@@ -404,7 +404,7 @@ int do_mount(int nargs, char **args)
         {
             if(!strcmp(system, multirom_sd_fs[0]))
             {
-                static unsigned char multirom_fs = 0;
+                static unsigned char multirom_fs = 1;
                 int res_tmp = mount(source, target, multirom_sd_fs[multirom_fs], flags, options);
                 if(res_tmp == 0)
                     return 0;
@@ -412,13 +412,19 @@ int do_mount(int nargs, char **args)
                 unsigned char cur_fs = 1;
                 for(; cur_fs < MULTIROM_SD_FS_COUNT; ++cur_fs)
                 {
+                    if(multirom_fs == cur_fs)
+                        continue;
+
                     res_tmp = mount(source, target, multirom_sd_fs[cur_fs], flags, options);
+
                     if(res_tmp < 0)
                         continue;
+
                     multirom_fs = cur_fs;
                     return 0;
                 }
             }
+            return res;
         }
 
         return 0;
