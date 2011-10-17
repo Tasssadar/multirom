@@ -312,6 +312,11 @@ static struct {
     { 0,            0 },
 };
 
+// Mount modified so that it tries fs types in array bellow, when system == multirom_sd_fs[0]
+// (Not for mtd@ and loop@ mounts)
+const char *multirom_sd_fs[] = { "ext4", "ext2", "ext3" };
+#define MULTIROM_SD_FS_COUNT 3
+
 /* mount <type> <device> <path> <flags ...> <options> */
 int do_mount(int nargs, char **args)
 {
@@ -391,10 +396,29 @@ int do_mount(int nargs, char **args)
         close(fd);
         ERROR("out of loopback devices");
         return -1;
-    } else {
+    }
+    else
+    {
         int res = mount(source, target, system, flags, options);
-        if (res < 0) {
-            return res;
+        if (res < 0)
+        {
+            if(!strcmp(system, multirom_sd_fs[0]))
+            {
+                static unsigned char multirom_fs = 0;
+                int res_tmp = mount(source, target, multirom_sd_fs[multirom_fs], flags, options);
+                if(res_tmp == 0)
+                    return 0;
+
+                unsigned char cur_fs = 1;
+                for(; cur_fs < MULTIROM_SD_FS_COUNT; ++cur_fs)
+                {
+                    res_tmp = mount(source, target, multirom_sd_fs[cur_fs], flags, options);
+                    if(res_tmp < 0)
+                        continue;
+                    multirom_fs = cur_fs;
+                    return 0;
+                }
+            }
         }
 
         return 0;
@@ -628,7 +652,6 @@ int do_device(int nargs, char **args) {
 }
 
 int do_devwait(int nargs, char **args) {
-
     int dev_fd, uevent_fd, rc, timeout = DEVWAIT_TIMEOUT;
     struct pollfd ufds[1];
 
