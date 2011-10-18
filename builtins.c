@@ -819,3 +819,11 @@ int do_remove_rc_mounts(int nargs, char **args)
     closedir(d);
     return 0;
 }
+
+int do_unlink(int nargs, char **args)
+{
+    if (nargs != 2)
+        return -1;
+
+    return unlink(args[1]);
+}
