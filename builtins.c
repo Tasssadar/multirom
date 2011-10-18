@@ -756,46 +756,65 @@ int do_remove_rc_mounts(int nargs, char **args)
     struct dirent *dp = NULL;
 
     char file[100];
+    char new_file[100];
     char line[512];
     unsigned short itr = 0;
-    unsigned short line_begin = 0;
     int c = 0;
     FILE *f = NULL;
+    FILE *f_out = NULL;
     
     while(dp = readdir(d))
     {
         if(!strstr(dp->d_name, ".rc") || strstr(dp->d_name, "preinit"))
             continue;
 
-        sprintf(file, "/%s", dp->d_name);
         itr = 0;
-        f = fopen(file, "r+");
-        if(f == NULL) continue;
 
+        sprintf(file, "/%s", dp->d_name);
+        f = fopen(file, "r");
+        INFO("Parsing %s", file);
+
+        sprintf(new_file, "/%s.new", dp->d_name);
+        f_out = fopen(new_file, "w");
+        if(f == NULL || f_out == NULL) continue;
+
+        char first_done = 0;
         while(1)
         {
            c = fgetc(f);
            if(c == EOF)
+           {
+               if(itr > 0)
+                   fwrite(line, 1, itr, f_out);
                break;
+           }
+
+           line[itr++] = (char)c;
+
            if(c == '\n')
            {
                line[itr] = 0; // null-terminated string
 
                if(__commentLine(line))
                {
-                   itr = ftell(f);
-                   fseek(f, line_begin, SEEK_SET);
-                   fputc((int)'#', f);
-                   fseek(f, itr, SEEK_SET);
+                   if(first_done)
+                       fputc((int)'#', f_out);
+                   else
+                   {
+                       first_done = 1;
+                       fputs("\n export DUMMY_LINE_INGORE_IT 1 \n#", f_out);
+                   }
                }
-
+               fwrite(line, 1, itr, f_out);
                itr = 0;
-               line_begin = ftell(f);
-           }else
-               line[itr++] = (char)c;
+           }
         }
         fflush(f);
+        fflush(f_out);
         fclose(f);
+        fclose(f_out);
+
+        __copy(new_file, file);
     }
     closedir(d);
     return 0;
