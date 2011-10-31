@@ -128,8 +128,11 @@ struct {
 int lookup_keyword(const char *s)
 {
     switch (*s++) {
+    case 'b':
+        if (!strcmp(s, "ootmgr")) return K_bootmgr;
+        break;
     case 'c':
-	if (!strcmp(s, "opy")) return K_copy;
+        if (!strcmp(s, "opy")) return K_copy;
         if (!strcmp(s, "apability")) return K_capability;
         if (!strcmp(s, "hdir")) return K_chdir;
         if (!strcmp(s, "hroot")) return K_chroot;

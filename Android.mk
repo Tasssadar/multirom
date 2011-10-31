@@ -10,6 +10,7 @@ LOCAL_SRC_FILES:= \
 	property_service.c \
 	util.c \
 	parser.c \
+	bootmgr.c \
 	logo.c
 
 ifeq ($(strip $(INIT_BOOTCHART)),true)

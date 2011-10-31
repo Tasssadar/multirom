@@ -39,21 +39,7 @@ void android_memset16(void *_ptr, unsigned short val, unsigned count)
 }
 #endif
 
-struct FB {
-    unsigned short *bits;
-    unsigned size;
-    int fd;
-    struct fb_fix_screeninfo fi;
-    struct fb_var_screeninfo vi;
-};
-
-#define fb_width(fb) ((fb)->vi.xres)
-#define fb_height(fb) ((fb)->vi.yres)
-#define fb_bpp(fb) ((fb)->vi.bits_per_pixel)
-#define fb_size(fb) ((fb)->vi.xres * (fb)->vi.yres * \
-	((fb)->vi.bits_per_pixel/8))
-
-static int fb_open(struct FB *fb)
+int fb_open(struct FB *fb)
 {
     fb->fd = open("/dev/graphics/fb0", O_RDWR);
     if (fb->fd < 0)
@@ -76,14 +62,14 @@ fail:
     return -1;
 }
 
-static void fb_close(struct FB *fb)
+void fb_close(struct FB *fb)
 {
     munmap(fb->bits, fb_size(fb));
     close(fb->fd);
 }
 
 /* there's got to be a more portable way to do this ... */
-static void fb_update(struct FB *fb)
+void fb_update(struct FB *fb)
 {
     fb->vi.yoffset = 1;
     ioctl(fb->fd, FBIOPUT_VSCREENINFO, &fb->vi);
@@ -91,7 +77,7 @@ static void fb_update(struct FB *fb)
     ioctl(fb->fd, FBIOPUT_VSCREENINFO, &fb->vi);
 }
 
-static int vt_set_mode(int graphics)
+int vt_set_mode(int graphics)
 {
     int fd, r;
     fd = open("/dev/tty0", O_RDWR | O_SYNC);

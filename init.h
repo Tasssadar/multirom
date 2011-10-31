@@ -17,6 +17,8 @@
 #ifndef _INIT_INIT_H
 #define _INIT_INIT_H
 
+#include <linux/fb.h>
+
 int mtd_name_to_number(const char *name);
 
 void handle_control_message(const char *msg, const char *arg);
@@ -179,5 +181,27 @@ void queue_all_property_triggers();
 #define INIT_IMAGE_FILE	"/initlogo.rle"
 
 int load_565rle_image( char *file_name );
+int __copy(char *from, char *to);
+
+struct FB {
+    unsigned short *bits;
+    unsigned size;
+    int fd;
+    struct fb_fix_screeninfo fi;
+    struct fb_var_screeninfo vi;
+};
+
+#define fb_width(fb) ((fb)->vi.xres)
+#define fb_height(fb) ((fb)->vi.yres)
+#define fb_bpp(fb) ((fb)->vi.bits_per_pixel)
+#define fb_size(fb) ((fb)->vi.xres * (fb)->vi.yres * \
+    ((fb)->vi.bits_per_pixel/8))
+
+int fb_open(struct FB *fb);
+void fb_close(struct FB *fb);
+void fb_update(struct FB *fb);
+int vt_set_mode(int graphics);
 
 #endif	/* _INIT_INIT_H */
+
+

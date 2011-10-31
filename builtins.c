@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include <fcntl.h>
+#include <linux/fb.h>
+#include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -32,11 +35,13 @@
 #include <linux/loop.h>
 #include <poll.h>
 #include <dirent.h>
+#include <linux/input.h>
 
 #include "init.h"
 #include "keywords.h"
 #include "property_service.h"
 #include "devices.h"
+#include "bootmgr.h"
 
 #include <private/android_filesystem_config.h>
 
@@ -328,6 +333,15 @@ int do_mount(int nargs, char **args)
 
     for (n = 4; n < nargs; n++) {
         for (i = 0; mount_flags[i].name; i++) {
+            if(!strcmp(args[n], "multirom"))
+            {
+                if(!bootmgr_selected)
+                {
+                    INFO("Skipping mount because of bootmgr");
+                    return 0;
+                }
+                break;
+            }
             if (!strcmp(args[n], mount_flags[i].name)) {
                 flags |= mount_flags[i].flag;
                 break;
@@ -517,8 +531,6 @@ int do_write(int nargs, char **args)
 {
     return write_file(args[1], args[2]);
 }
-
-int __copy(char *from, char *to);
 
 int do_copy(int nargs, char **args)
 {
@@ -718,6 +730,9 @@ int do_import_boot(int nargs, char **args)
     __copy(from, "/main_init");
     chmod("/main_init", 0750);
 
+    sprintf(from, "%s/default.prop", args[1]);
+    __copy(from, "/default.prop");
+
     while(dp = readdir(d))
     {
         if(strstr(dp->d_name, ".rc") == NULL)
@@ -826,4 +841,14 @@ int do_unlink(int nargs, char **args)
         return -1;
 
     return unlink(args[1]);
+}
+
+int do_bootmgr(int nargs, char **args)
+{
+    if (nargs != 2)
+        return -1;
+    
+    bootmgr_start(atoi(args[1]));
+    load_565rle_image(INIT_IMAGE_FILE);
+    return 0;
 }

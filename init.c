@@ -46,6 +46,7 @@
 #include "init.h"
 #include "property_service.h"
 #include "bootchart.h"
+#include "bootmgr.h"
 
 static int property_triggers_enabled = 0;
 
@@ -863,6 +864,7 @@ int main(int argc, char **argv)
     mount("devpts", "/dev/pts", "devpts", 0, NULL);
     mount("proc", "/proc", "proc", 0, NULL);
     mount("sysfs", "/sys", "sysfs", 0, NULL);
+    mkdir("/dev/block", 0755);
 
         /* We must have some place other than / to create the
          * device nodes for kmsg and null, otherwise we won't
@@ -875,15 +877,12 @@ int main(int argc, char **argv)
 
     INFO("device init\n");
     device_fd = device_init();
-
-    load_565rle_image(INIT_IMAGE_FILE);
-    
-    mkdir("/dev/block", 0755);
+    //load_565rle_image(INIT_IMAGE_FILE);
     parse_config_file("/preinit.rc");
 
     action_for_each_trigger("pre-init", action_add_queue_tail);
     drain_action_queue();
-    
+
     char *cmd[] = { "main_init", (char *)0 };
     return execve("/main_init", cmd, NULL);
 
