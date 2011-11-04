@@ -23,6 +23,11 @@ int bootmgr_key_queue[10];
 char bootmgr_key_itr = 10;
 static pthread_mutex_t bootmgr_input_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+struct FB fb;
+struct stat s0, s1;
+int fd0, fd1;
+unsigned max_fb_size;
+
 static void *bootmgr_input_thread(void *cookie)
 {
     ev_init();
@@ -44,6 +49,12 @@ static void *bootmgr_input_thread(void *cookie)
 
 void bootmgr_start(unsigned short timeout_seconds)
 {
+    if(bootmgr_open_framebuffer() != 0)
+    {
+        ERROR("BootMgr: Cant open framebuffer");
+        return;
+    }
+    
     int key = 0;
     char last_selected = -1;
     char key_pressed = (timeout_seconds == 0);
@@ -56,8 +67,7 @@ void bootmgr_start(unsigned short timeout_seconds)
     {
         if(last_selected != bootmgr_selected)
         {
-            if(bootmgr_selected) load_565rle_image("/init_1.rle");
-            else                 load_565rle_image("/init_0.rle");
+            bootmgr_show_img();
             last_selected = bootmgr_selected;
         }
 
@@ -73,10 +83,12 @@ void bootmgr_start(unsigned short timeout_seconds)
                     break;
                 case KEY_POWER:
                 case KEY_BACK:
+                    bootmgr_close_framebuffer();
                     bootmgr_input_run = 0;
                     reboot(key == KEY_POWER ? RB_POWER_OFF : RB_AUTOBOOT);
                     return;
                 case KEY_MENU:
+                    bootmgr_close_framebuffer();
                     bootmgr_input_run = 0;
                     return;
                 default:break;
@@ -88,6 +100,7 @@ void bootmgr_start(unsigned short timeout_seconds)
         {
             if(--timer <= 0)
             {
+                bootmgr_close_framebuffer();
                 bootmgr_input_run = 0;
                 return;
             }
@@ -160,4 +173,82 @@ int ev_get(struct input_event *ev, unsigned dont_wait)
     } while(dont_wait == 0);
 
     return -1;
+}
+
+int bootmgr_open_framebuffer()
+{
+    if (vt_set_mode(1))
+        return -1;
+
+    fd0 = open("/init_0.rle", O_RDONLY);
+    fd1 = open("/init_1.rle", O_RDONLY);
+    if (fd0 < 0 || fd1 < 0)
+        return -1;
+
+    if (fstat(fd0, &s0) < 0 || fstat(fd1, &s1) < 0)
+        return -1;
+
+    if (fb_open(&fb))
+        return -1;
+    
+    max_fb_size = fb_width(&fb) * fb_height(&fb);
+
+    return 0;
+}
+
+void bootmgr_close_framebuffer()
+{
+    fb_close(&fb);
+    close(fd0);
+    close(fd1);
+}
+
+int bootmgr_show_img()
+{
+    //struct FB fb;
+    //struct stat s;
+    unsigned short *data, *bits, *ptr;
+    uint32_t rgb32, red, green, blue, alpha;
+    unsigned count, max;
+    //int fd;
+
+    struct stat *s = bootmgr_selected ? &s1 : &s0;
+    data = mmap(0, s->st_size, PROT_READ, MAP_SHARED, bootmgr_selected ? fd1 : fd0, 0);
+    if (data == MAP_FAILED)
+        return -1;
+
+    max = max_fb_size;
+    ptr = data;
+    count = s->st_size;
+    bits = fb.bits;
+    while (count > 3) {
+        unsigned n = ptr[0];
+        if (n > max)
+            break;
+                if (fb_bpp(&fb) == 16) {
+                        android_memset16(bits, ptr[1], n << 1);
+                        bits += n;
+                } else {
+                        /* convert 16 bits to 32 bits */
+                        rgb32 = ((ptr[1] >> 11) & 0x1F);
+                        red = (rgb32 << 3) | (rgb32 >> 2);
+                        rgb32 = ((ptr[1] >> 5) & 0x3F);
+                        green = (rgb32 << 2) | (rgb32 >> 4);
+                        rgb32 = ((ptr[1]) & 0x1F);
+                        blue = (rgb32 << 3) | (rgb32 >> 2);
+                        alpha = 0xff;
+                        rgb32 = (alpha << 24) | (blue << 16)
+                        | (green << 8) | (red);
+                        android_memset32((uint32_t *)bits, rgb32, n << 2);
+                        bits += (n * 2);
+               }
+        max -= n;
+        ptr += 2;
+        count -= 4;
+    }
+
+    munmap(data, s->st_size);
+    fb_update(&fb);
+
+    return 0;
 }

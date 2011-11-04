@@ -730,8 +730,13 @@ int do_import_boot(int nargs, char **args)
     __copy(from, "/main_init");
     chmod("/main_init", 0750);
 
+    // /default.prop
     sprintf(from, "%s/default.prop", args[1]);
     __copy(from, "/default.prop");
+
+    // /sbin/adbd
+    sprintf(from, "%s/adbd", args[1]);
+    __copy(from, "/sbin/adbd");
 
     while(dp = readdir(d))
     {
