@@ -22,6 +22,9 @@ volatile char bootmgr_input_run = 1;
 int bootmgr_key_queue[10];
 char bootmgr_key_itr = 10;
 static pthread_mutex_t bootmgr_input_mutex = PTHREAD_MUTEX_INITIALIZER;
+static const char* bootmgr_bg0 = "/bmgr_imgs/init_0.rle";
+static const char* bootmgr_bg1 = "/bmgr_imgs/init_1.rle";
+static const char* bootmgr_img_folder = "/bmgr_imgs/%s";
 
 struct FB fb;
 struct stat s0, s1;
@@ -47,6 +50,17 @@ static void *bootmgr_input_thread(void *cookie)
     return NULL;
 }
 
+inline void __bootmgr_boot()
+{
+    char *img = (char*)malloc(20);
+    sprintf(img, "init_%u_sel.rle", bootmgr_selected);
+    bootmgr_show_img(0, 320, img);
+    free(img);
+
+    bootmgr_close_framebuffer();
+    bootmgr_input_run = 0;
+}
+
 void bootmgr_start(unsigned short timeout_seconds)
 {
     if(bootmgr_open_framebuffer() != 0)
@@ -54,7 +68,7 @@ void bootmgr_start(unsigned short timeout_seconds)
         ERROR("BootMgr: Cant open framebuffer");
         return;
     }
-    
+
     int key = 0;
     char last_selected = -1;
     char key_pressed = (timeout_seconds == 0);
@@ -67,7 +81,7 @@ void bootmgr_start(unsigned short timeout_seconds)
     {
         if(last_selected != bootmgr_selected)
         {
-            bootmgr_show_img();
+            bootmgr_show_img(0, 0, NULL);
             last_selected = bootmgr_selected;
         }
 
@@ -81,15 +95,15 @@ void bootmgr_start(unsigned short timeout_seconds)
                 case KEY_VOLUMEUP:
                     bootmgr_selected = !bootmgr_selected;
                     break;
-                case KEY_POWER:
                 case KEY_BACK:
+                    bootmgr_show_img(0, 320, "init_rbt.rle");
+                case KEY_POWER:
                     bootmgr_close_framebuffer();
                     bootmgr_input_run = 0;
                     reboot(key == KEY_POWER ? RB_POWER_OFF : RB_AUTOBOOT);
                     return;
                 case KEY_MENU:
-                    bootmgr_close_framebuffer();
-                    bootmgr_input_run = 0;
+                    __bootmgr_boot();
                     return;
                 default:break;
             }
@@ -100,8 +114,7 @@ void bootmgr_start(unsigned short timeout_seconds)
         {
             if(--timer <= 0)
             {
-                bootmgr_close_framebuffer();
-                bootmgr_input_run = 0;
+                __bootmgr_boot();
                 return;
             }
         }
@@ -180,8 +193,8 @@ int bootmgr_open_framebuffer()
     if (vt_set_mode(1))
         return -1;
 
-    fd0 = open("/init_0.rle", O_RDONLY);
-    fd1 = open("/init_1.rle", O_RDONLY);
+    fd0 = open(bootmgr_bg0, O_RDONLY);
+    fd1 = open(bootmgr_bg1, O_RDONLY);
     if (fd0 < 0 || fd1 < 0)
         return -1;
 
@@ -203,7 +216,7 @@ void bootmgr_close_framebuffer()
     close(fd1);
 }
 
-int bootmgr_show_img()
+int bootmgr_show_img(unsigned short start_x, unsigned short start_y, char *custom_img)
 {
     //struct FB fb;
     //struct stat s;
@@ -211,9 +224,33 @@ int bootmgr_show_img()
     uint32_t rgb32, red, green, blue, alpha;
     unsigned count, max;
     //int fd;
+    struct stat *s = NULL;
+    int *fd = NULL;
 
-    struct stat *s = bootmgr_selected ? &s1 : &s0;
-    data = mmap(0, s->st_size, PROT_READ, MAP_SHARED, bootmgr_selected ? fd1 : fd0, 0);
+    if(custom_img)
+    {
+        char *path = (char*)malloc(50);
+        sprintf(path, bootmgr_img_folder, custom_img);
+
+        fd = malloc(sizeof(*fd));
+
+        *fd = open(path, O_RDONLY);
+        free(path);
+
+        if(*fd < 0)
+            return -1;
+
+        s = malloc(sizeof(*s));
+        if (fstat(*fd, s) < 0)
+            return -1;
+    }
+    else
+    {
+        s = bootmgr_selected ? &s1 : &s0;
+        fd = bootmgr_selected ? &fd1 : &fd0;
+    }
+
+    data = mmap(0, s->st_size, PROT_READ, MAP_SHARED, *fd, 0);
     if (data == MAP_FAILED)
         return -1;
 
@@ -221,6 +258,10 @@ int bootmgr_show_img()
     ptr = data;
     count = s->st_size;
     bits = fb.bits;
+
+    if(start_x || start_y)
+        bits += fb_width(&fb)*start_y + start_x;
+
     while (count > 3) {
         unsigned n = ptr[0];
         if (n > max)
@@ -250,5 +291,93 @@ int bootmgr_show_img()
     munmap(data, s->st_size);
     fb_update(&fb);
 
+    if(custom_img)
+    {
+        close(*fd);
+        free(s);
+        free(fd);
+    }
     return 0;
 }
+// TESTING framebuffer write code
+/*
+
+uint32_t charA[20];
+uint32_t charO[20];
+void initFont()
+{
+    int i = 2;
+    charA[0] = 0x1FFFFFF;
+    charA[1] = 0x1FFFFFF;
+    for(;i<20; ++i)
+        charA[i] = 0x7C00;
+    charA[18] = 0x1FFFFFF;
+    charA[19] = 0x1FFFFFF;
+
+    charO[0] = 0x1FFFFFF;
+    charO[1] = 0x1FFFFFF;
+    for(i = 2; i < 20; ++i)
+        charO[i] = 0x1F0001F;
+    charO[18] = 0x1FFFFFF;
+    charO[19] = 0x1FFFFFF;
+}
+
+void bootmgr_write_time()
+{
+    initFont();
+    uint32_t *charsPo[2];
+    charsPo[0] = &charA;
+    charsPo[1] = &charO;
+    unsigned short startX = 100;
+    unsigned short startY = 320;
+    unsigned short endX = 125;
+    unsigned short endY = 340;
+    unsigned short curX = startX;
+    unsigned short curY = startY;
+    unsigned short *bits = fb.bits;
+    unsigned short *curDraw = NULL;
+    bits += 320*startY + startX;
+    int line = 0;
+    uint32_t charL;
+    int drawL = 0;
+    int row = 0;
+    int charW = 0;
+    for(; line < endY - startY; ++line)
+    {
+        row = 0;
+        int chars = 0;
+        for(; chars < 2; ++chars)
+        {
+            charL = 0x1000000;
+            drawL = 0;
+            charW = 0;
+            while(1)
+            {
+                if(charsPo[chars][line] & charL)
+                    ++drawL;
+                else if(drawL)
+                {
+                    curDraw = bits + row + (charW - drawL);
+                    ERROR("Draw %u %u", drawL, charW);
+                    android_memset32((uint32_t *)curDraw, 0xFFFFFFFF, drawL*2);
+                    drawL = 0;
+                }
+                ++charW;
+                if(charW >= 25)
+                {
+                    if(drawL)
+                    {
+                        ERROR("Draw %u %u", drawL, charW);
+                        curDraw = bits + row + (charW - drawL);
+                        android_memset32((uint32_t *)curDraw, 0xFFFFFFFF, drawL*2);
+                    }
+                    break;
+                }
+                charL /= 2;
+            }
+            row += 30;
+        }
+        bits += (320 - startX) + startX;
+    }
+    fb_update(&fb); 
+}*/

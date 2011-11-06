@@ -11,6 +11,7 @@ void ev_exit(void);
 int ev_get(struct input_event *ev, unsigned dont_wait);
 int bootmgr_open_framebuffer();
 void bootmgr_close_framebuffer();
-int bootmgr_show_img();
+int bootmgr_show_img(unsigned short start_x, unsigned short start_y, char *custom_img);
+//void bootmgr_write_time();
 
 #endif

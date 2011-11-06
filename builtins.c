@@ -854,6 +854,5 @@ int do_bootmgr(int nargs, char **args)
         return -1;
     
     bootmgr_start(atoi(args[1]));
-    load_565rle_image(INIT_IMAGE_FILE);
     return 0;
 }
