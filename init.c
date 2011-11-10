@@ -86,7 +86,7 @@ static time_t process_needs_restart;
 static const char *ENV[32];
 
 static unsigned emmc_boot = 0;
-static unsigned battchg_pause = 0;
+unsigned battchg_pause = 0;
 
 /* add_environment - add "key=value" to the current environment */
 int add_environment(const char *key, const char *val)
@@ -566,6 +566,7 @@ int mtd_name_to_number(const char *name)
 
 static void import_kernel_nv(char *name, int in_qemu)
 {
+    ERROR("C: %s", name);
     char *value = strchr(name, '=');
 
     if (value == 0) return;
@@ -819,13 +820,6 @@ void handle_keychord(int fd)
 
 int main(int argc, char **argv)
 {
-    INFO("reading preinit config file\n");
-
-    //mkdir("/dev", 0755);
-    //mkdir("/dev/block", 0755);
-    chmod("/preinit.rc", 0750);
-    chmod("/main_init", 0750);
-
     int device_fd = -1;
     int property_set_fd = -1;
     int signal_recv_fd = -1;
@@ -838,6 +832,9 @@ int main(int argc, char **argv)
     struct pollfd ufds[4];
     char *tmpdev;
     char* debuggable;
+
+    chmod("/preinit.rc", 0750);
+    chmod("/main_init", 0750);
 
     act.sa_handler = sigchld_handler;
     act.sa_flags = SA_NOCLDSTOP;
@@ -872,12 +869,12 @@ int main(int argc, char **argv)
          * Now that tmpfs is mounted on /dev, we can actually
          * talk to the outside world.
          */
-    
-    INFO("reading config file\n");
 
     INFO("device init\n");
     device_fd = device_init();
-    //load_565rle_image(INIT_IMAGE_FILE);
+
+    INFO("reading preinit config file\n");
+
     parse_config_file("/preinit.rc");
 
     action_for_each_trigger("pre-init", action_add_queue_tail);
@@ -885,7 +882,7 @@ int main(int argc, char **argv)
 
     char *cmd[] = { "main_init", (char *)0 };
     return execve("/main_init", cmd, NULL);
-
+#if 0
     if (emmc_boot){
         action_for_each_trigger("emmc", action_add_queue_tail);
         drain_action_queue();
@@ -1076,4 +1073,5 @@ int main(int argc, char **argv)
     }
 
     return 0;
+#endif
 }

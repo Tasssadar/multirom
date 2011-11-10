@@ -38,7 +38,7 @@ void log_write(int level, const char *fmt, ...)
 #define NOTICE(x...)  log_write(5, "<5>init: " x)
 #define INFO(x...)    log_write(6, "<6>init: " x)
 
-#define LOG_DEFAULT_LEVEL  3  /* messages <= this level are logged */
+#define LOG_DEFAULT_LEVEL  7  /* messages <= this level are logged */
 #define LOG_UEVENTS        0  /* log uevent messages if 1. verbose */
 
 unsigned int decode_uid(const char *s);
@@ -182,6 +182,8 @@ void queue_all_property_triggers();
 
 int load_565rle_image( char *file_name );
 int __copy(char *from, char *to);
+
+extern unsigned battchg_pause;
 
 struct FB {
     unsigned short *bits;

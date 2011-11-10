@@ -138,119 +138,6 @@ static void service_start_if_not_disabled(struct service *svc)
     }
 }
 
-int do_chdir(int nargs, char **args)
-{
-    chdir(args[1]);
-    return 0;
-}
-
-int do_chroot(int nargs, char **args)
-{
-    chroot(args[1]);
-    return 0;
-}
-
-int do_class_start(int nargs, char **args)
-{
-        /* Starting a class does not start services
-         * which are explicitly disabled.  They must
-         * be started individually.
-         */
-    service_for_each_class(args[1], service_start_if_not_disabled);
-    return 0;
-}
-
-int do_class_stop(int nargs, char **args)
-{
-    service_for_each_class(args[1], service_stop);
-    return 0;
-}
-
-int do_domainname(int nargs, char **args)
-{
-    return write_file("/proc/sys/kernel/domainname", args[1]);
-}
-
-/*exec <path> <arg1> <arg2> ... */
-#define MAX_PARAMETERS 64
-int do_exec(int nargs, char **args)
-{
-    pid_t pid;
-    int status, i, j;
-    char *par[MAX_PARAMETERS];
-    if (nargs > MAX_PARAMETERS)
-    {
-        return -1;
-    }
-    for(i=0, j=1; i<(nargs-1) ;i++,j++)
-    {
-        par[i] = args[j];
-    }
-    par[i] = (char*)0;
-    pid = fork();
-    if (!pid)
-    {
-        execv(par[0],par);
-    }
-    else
-    {
-        while(wait(&status)!=pid);
-    }
-    return 0;
-}
-
-int do_export(int nargs, char **args)
-{
-    add_environment(args[1], args[2]);
-    return 0;
-}
-
-int do_hostname(int nargs, char **args)
-{
-    return write_file("/proc/sys/kernel/hostname", args[1]);
-}
-
-int do_ifup(int nargs, char **args)
-{
-    return __ifupdown(args[1], 1);
-}
-
-
-static int do_insmod_inner(int nargs, char **args, int opt_len)
-{
-    char options[opt_len + 1];
-    int i;
-
-    options[0] = '\0';
-    if (nargs > 2) {
-        strcpy(options, args[2]);
-        for (i = 3; i < nargs; ++i) {
-            strcat(options, " ");
-            strcat(options, args[i]);
-        }
-    }
-
-    return insmod(args[1], options);
-}
-
-int do_insmod(int nargs, char **args)
-{
-    int i;
-    int size = 0;
-
-    if (nargs > 2) {
-        for (i = 2; i < nargs; ++i)
-            size += strlen(args[i]) + 1;
-    }
-
-    return do_insmod_inner(nargs, args, size);
-}
-
-int do_import(int nargs, char **args)
-{
-    return parse_config_file(args[1]);
-}
-
 int do_mkdir(int nargs, char **args)
 {
     mode_t mode = 0755;
@@ -445,69 +332,6 @@ int do_mount(int nargs, char **args)
     }
 }
 
-int do_setkey(int nargs, char **args)
-{
-    struct kbentry kbe;
-    kbe.kb_table = strtoul(args[1], 0, 0);
-    kbe.kb_index = strtoul(args[2], 0, 0);
-    kbe.kb_value = strtoul(args[3], 0, 0);
-    return setkey(&kbe);
-}
-
-int do_setprop(int nargs, char **args)
-{
-    property_set(args[1], args[2]);
-    return 0;
-}
-
-int do_setrlimit(int nargs, char **args)
-{
-    struct rlimit limit;
-    int resource;
-    resource = atoi(args[1]);
-    limit.rlim_cur = atoi(args[2]);
-    limit.rlim_max = atoi(args[3]);
-    return setrlimit(resource, &limit);
-}
-
-int do_start(int nargs, char **args)
-{
-    struct service *svc;
-    svc = service_find_by_name(args[1]);
-    if (svc) {
-        service_start(svc, NULL);
-    }
-    return 0;
-}
-
-int do_stop(int nargs, char **args)
-{
-    struct service *svc;
-    svc = service_find_by_name(args[1]);
-    if (svc) {
-        service_stop(svc);
-    }
-    return 0;
-}
-
-int do_restart(int nargs, char **args)
-{
-    struct service *svc;
-    svc = service_find_by_name(args[1]);
-    if (svc) {
-        service_stop(svc);
-        service_start(svc, NULL);
-    }
-    return 0;
-}
-
-int do_trigger(int nargs, char **args)
-{
-    action_for_each_trigger(args[1], action_add_queue_tail);
-    drain_action_queue();
-    return 0;
-}
-
 int do_symlink(int nargs, char **args)
 {
     return symlink(args[1], args[2]);
@@ -525,19 +349,6 @@ int do_sysclktz(int nargs, char **args)
     if (settimeofday(NULL, &tz))
         return -1;
     return 0;
-}
-
-int do_write(int nargs, char **args)
-{
-    return write_file(args[1], args[2]);
-}
-
-int do_copy(int nargs, char **args)
-{
-    if (nargs != 3)
-        return -1;
-
-    return __copy(args[1], args[2]);
 }
 
 int __copy(char *from, char *to)
@@ -599,120 +410,12 @@ out:
     return rc;
 }
 
-int do_chown(int nargs, char **args) {
-    /* GID is optional. */
-    if (nargs == 3) {
-        if (chown(args[2], decode_uid(args[1]), -1) < 0)
-            return -errno;
-    } else if (nargs == 4) {
-        if (chown(args[3], decode_uid(args[1]), decode_uid(args[2])))
-            return -errno;
-    } else {
-        return -1;
-    }
-    return 0;
-}
-
-static mode_t get_mode(const char *s) {
-    mode_t mode = 0;
-    while (*s) {
-        if (*s >= '0' && *s <= '7') {
-            mode = (mode<<3) | (*s-'0');
-        } else {
-            return -1;
-        }
-        s++;
-    }
-    return mode;
-}
-
-int do_chmod(int nargs, char **args) {
-    mode_t mode = get_mode(args[1]);
-    if (chmod(args[2], mode) < 0) {
-        return -errno;
-    }
-    return 0;
-}
-
 int do_loglevel(int nargs, char **args) {
     if (nargs == 2) {
         log_set_level(atoi(args[1]));
         return 0;
     }
     return -1;
-}
-
-int do_device(int nargs, char **args) {
-    int len;
-    char tmp[64];
-    char *source = args[1];
-    int prefix = 0;
-
-    if (nargs != 5)
-        return -1;
-    /* Check for wildcard '*' at the end which indicates a prefix. */
-    len = strlen(args[1]) - 1;
-    if (args[1][len] == '*') {
-        args[1][len] = '\0';
-        prefix = 1;
-    }
-    /* If path starts with mtd@ lookup the mount number. */
-    if (!strncmp(source, "mtd@", 4)) {
-        int n = mtd_name_to_number(source + 4);
-        if (n >= 0) {
-            snprintf(tmp, sizeof(tmp), "/dev/mtd/mtd%d", n);
-            source = tmp;
-        }
-    }
-    add_devperms_partners(source, get_mode(args[2]), decode_uid(args[3]),
-                          decode_uid(args[4]), prefix);
-    return 0;
-}
-
-int do_devwait(int nargs, char **args) {
-    int dev_fd, uevent_fd, rc, timeout = DEVWAIT_TIMEOUT;
-    struct pollfd ufds[1];
-
-    uevent_fd = open_uevent_socket();
-
-    ufds[0].fd = uevent_fd;
-    ufds[0].events = POLLIN;
-
-    for(;;) {
-
-        dev_fd = open(args[1], O_RDONLY);
-        if (dev_fd < 0) {
-            if (errno != ENOENT) {
-                ERROR("%s: open failed with error %d\n", __func__, errno);
-                rc = -errno;
-                break;
-            }
-        } else {
-            return 0;
-        }
-
-        ufds[0].revents = 0;
-
-        rc = poll(ufds, 1, DEVWAIT_POLL_TIME);
-        if (rc == 0) {
-            if (timeout > 0)
-                timeout -= DEVWAIT_POLL_TIME;
-            else {
-                ERROR("%s: timed out waiting on file: %s\n", __func__, args[1]);
-                rc = -ETIME;
-                break;
-            }
-            continue;
-        } else if (rc < 0) {
-            ERROR("%s: poll request failed for file: %s\n", __func__, args[1]);
-            break;
-        }
-
-        if (ufds[0].revents == POLLIN)
-            handle_device_fd(uevent_fd);
-    }
-
-    return rc;
 }
 
 int do_import_boot(int nargs, char **args)
@@ -852,7 +555,319 @@ int do_bootmgr(int nargs, char **args)
 {
     if (nargs != 2)
         return -1;
-    
-    bootmgr_start(atoi(args[1]));
+
+    if(battchg_pause)
+    {
+        INFO("Disabling bootmgr due to battchg_pause == 1 (charger plugged-in?)");
+        return 0;
+    }
+
+    int timeout = atoi(args[1]);
+    if(timeout < 0)
+    {
+        INFO("Disabling bootmgr because of timeout < 0");
+        return 0;
+    }
+
+    bootmgr_start(timeout);
     return 0;
 }
+
+#if 0
+int do_chdir(int nargs, char **args)
+{
+    chdir(args[1]);
+    return 0;
+}
+
+int do_chroot(int nargs, char **args)
+{
+    chroot(args[1]);
+    return 0;
+}
+
+int do_class_start(int nargs, char **args)
+{
+        /* Starting a class does not start services
+         * which are explicitly disabled.  They must
+         * be started individually.
+         */
+    service_for_each_class(args[1], service_start_if_not_disabled);
+    return 0;
+}
+
+int do_class_stop(int nargs, char **args)
+{
+    service_for_each_class(args[1], service_stop);
+    return 0;
+}
+
+int do_domainname(int nargs, char **args)
+{
+    return write_file("/proc/sys/kernel/domainname", args[1]);
+}
+
+/*exec <path> <arg1> <arg2> ... */
+#define MAX_PARAMETERS 64
+int do_exec(int nargs, char **args)
+{
+    pid_t pid;
+    int status, i, j;
+    char *par[MAX_PARAMETERS];
+    if (nargs > MAX_PARAMETERS)
+    {
+        return -1;
+    }
+    for(i=0, j=1; i<(nargs-1) ;i++,j++)
+    {
+        par[i] = args[j];
+    }
+    par[i] = (char*)0;
+    pid = fork();
+    if (!pid)
+    {
+        execv(par[0],par);
+    }
+    else
+    {
+        while(wait(&status)!=pid);
+    }
+    return 0;
+}
+
+int do_export(int nargs, char **args)
+{
+    add_environment(args[1], args[2]);
+    return 0;
+}
+
+int do_hostname(int nargs, char **args)
+{
+    return write_file("/proc/sys/kernel/hostname", args[1]);
+}
+
+int do_ifup(int nargs, char **args)
+{
+    return __ifupdown(args[1], 1);
+}
+
+
+static int do_insmod_inner(int nargs, char **args, int opt_len)
+{
+    char options[opt_len + 1];
+    int i;
+
+    options[0] = '\0';
+    if (nargs > 2) {
+        strcpy(options, args[2]);
+        for (i = 3; i < nargs; ++i) {
+            strcat(options, " ");
+            strcat(options, args[i]);
+        }
+    }
+
+    return insmod(args[1], options);
+}
+
+int do_insmod(int nargs, char **args)
+{
+    int i;
+    int size = 0;
+
+    if (nargs > 2) {
+        for (i = 2; i < nargs; ++i)
+            size += strlen(args[i]) + 1;
+    }
+
+    return do_insmod_inner(nargs, args, size);
+}
+
+int do_import(int nargs, char **args)
+{
+    return parse_config_file(args[1]);
+}
+
+int do_setkey(int nargs, char **args)
+{
+    struct kbentry kbe;
+    kbe.kb_table = strtoul(args[1], 0, 0);
+    kbe.kb_index = strtoul(args[2], 0, 0);
+    kbe.kb_value = strtoul(args[3], 0, 0);
+    return setkey(&kbe);
+}
+
+int do_setprop(int nargs, char **args)
+{
+    property_set(args[1], args[2]);
+    return 0;
+}
+
+int do_setrlimit(int nargs, char **args)
+{
+    struct rlimit limit;
+    int resource;
+    resource = atoi(args[1]);
+    limit.rlim_cur = atoi(args[2]);
+    limit.rlim_max = atoi(args[3]);
+    return setrlimit(resource, &limit);
+}
+
+int do_start(int nargs, char **args)
+{
+    struct service *svc;
+    svc = service_find_by_name(args[1]);
+    if (svc) {
+        service_start(svc, NULL);
+    }
+    return 0;
+}
+
+int do_stop(int nargs, char **args)
+{
+    struct service *svc;
+    svc = service_find_by_name(args[1]);
+    if (svc) {
+        service_stop(svc);
+    }
+    return 0;
+}
+
+int do_restart(int nargs, char **args)
+{
+    struct service *svc;
+    svc = service_find_by_name(args[1]);
+    if (svc) {
+        service_stop(svc);
+        service_start(svc, NULL);
+    }
+    return 0;
+}
+
+int do_trigger(int nargs, char **args)
+{
+    action_for_each_trigger(args[1], action_add_queue_tail);
+    drain_action_queue();
+    return 0;
+}
+
+int do_write(int nargs, char **args)
+{
+    return write_file(args[1], args[2]);
+}
+
+int do_copy(int nargs, char **args)
+{
+    if (nargs != 3)
+        return -1;
+
+    return __copy(args[1], args[2]);
+}
+
+int do_chown(int nargs, char **args) {
+    /* GID is optional. */
+    if (nargs == 3) {
+        if (chown(args[2], decode_uid(args[1]), -1) < 0)
+            return -errno;
+    } else if (nargs == 4) {
+        if (chown(args[3], decode_uid(args[1]), decode_uid(args[2])))
+            return -errno;
+    } else {
+        return -1;
+    }
+    return 0;
+}
+
+static mode_t get_mode(const char *s) {
+    mode_t mode = 0;
+    while (*s) {
+        if (*s >= '0' && *s <= '7') {
+            mode = (mode<<3) | (*s-'0');
+        } else {
+            return -1;
+        }
+        s++;
+    }
+    return mode;
+}
+
+int do_chmod(int nargs, char **args) {
+    mode_t mode = get_mode(args[1]);
+    if (chmod(args[2], mode) < 0) {
+        return -errno;
+    }
+    return 0;
+}
+
+int do_device(int nargs, char **args) {
+    int len;
+    char tmp[64];
+    char *source = args[1];
+    int prefix = 0;
+
+    if (nargs != 5)
+        return -1;
+    /* Check for wildcard '*' at the end which indicates a prefix. */
+    len = strlen(args[1]) - 1;
+    if (args[1][len] == '*') {
+        args[1][len] = '\0';
+        prefix = 1;
+    }
+    /* If path starts with mtd@ lookup the mount number. */
+    if (!strncmp(source, "mtd@", 4)) {
+        int n = mtd_name_to_number(source + 4);
+        if (n >= 0) {
+            snprintf(tmp, sizeof(tmp), "/dev/mtd/mtd%d", n);
+            source = tmp;
+        }
+    }
+    add_devperms_partners(source, get_mode(args[2]), decode_uid(args[3]),
+                          decode_uid(args[4]), prefix);
+    return 0;
+}
+
+int do_devwait(int nargs, char **args) {
+    int dev_fd, uevent_fd, rc, timeout = DEVWAIT_TIMEOUT;
+    struct pollfd ufds[1];
+
+    uevent_fd = open_uevent_socket();
+
+    ufds[0].fd = uevent_fd;
+    ufds[0].events = POLLIN;
+
+    for(;;) {
+
+        dev_fd = open(args[1], O_RDONLY);
+        if (dev_fd < 0) {
+            if (errno != ENOENT) {
+                ERROR("%s: open failed with error %d\n", __func__, errno);
+                rc = -errno;
+                break;
+            }
+        } else {
+            return 0;
+        }
+
+        ufds[0].revents = 0;
+
+        rc = poll(ufds, 1, DEVWAIT_POLL_TIME);
+        if (rc == 0) {
+            if (timeout > 0)
+                timeout -= DEVWAIT_POLL_TIME;
+            else {
+                ERROR("%s: timed out waiting on file: %s\n", __func__, args[1]);
+                rc = -ETIME;
+                break;
+            }
+            continue;
+        } else if (rc < 0) {
+            ERROR("%s: poll request failed for file: %s\n", __func__, args[1]);
+            break;
+        }
+
+        if (ufds[0].revents == POLLIN)
+            handle_device_fd(uevent_fd);
+    }
+
+    return rc;
+}
+#endif

@@ -1,5 +1,16 @@
 
 #ifndef KEYWORD
+int do_import_boot(int nargs, char **args);
+int do_mkdir(int nargs, char **args);
+int do_mknod(int nargs, char **args);
+int do_mount(int nargs, char **args);
+int do_symlink(int nargs, char **args);
+int do_sysclktz(int nargs, char **args);
+int do_loglevel(int nargs, char **args);
+int do_remove_rc_mounts(int nargs, char **args);
+int do_unlink(int nargs, char **args);
+int do_bootmgr(int nargs, char **args);
+/*
 int do_chroot(int nargs, char **args);
 int do_chdir(int nargs, char **args);
 int do_class_start(int nargs, char **args);
@@ -11,10 +22,6 @@ int do_hostname(int nargs, char **args);
 int do_ifup(int nargs, char **args);
 int do_insmod(int nargs, char **args);
 int do_import(int nargs, char **args);
-int do_import_boot(int nargs, char **args);
-int do_mkdir(int nargs, char **args);
-int do_mknod(int nargs, char **args);
-int do_mount(int nargs, char **args);
 int do_restart(int nargs, char **args);
 int do_setkey(int nargs, char **args);
 int do_setprop(int nargs, char **args);
@@ -22,25 +29,32 @@ int do_setrlimit(int nargs, char **args);
 int do_start(int nargs, char **args);
 int do_stop(int nargs, char **args);
 int do_trigger(int nargs, char **args);
-int do_symlink(int nargs, char **args);
-int do_sysclktz(int nargs, char **args);
 int do_write(int nargs, char **args);
 int do_copy(int nargs, char **args);
 int do_chown(int nargs, char **args);
 int do_chmod(int nargs, char **args);
-int do_loglevel(int nargs, char **args);
 int do_device(int nargs, char **args);
 int do_devwait(int nargs, char **args);
-int do_remove_rc_mounts(int nargs, char **args);
-int do_unlink(int nargs, char **args);
-int do_bootmgr(int nargs, char **args);
+*/
 
 #define __MAKE_KEYWORD_ENUM__
 #define KEYWORD(symbol, flags, nargs, func) K_##symbol,
 enum {
     K_UNKNOWN,
 #endif
-    KEYWORD(capability,  OPTION,  0, 0)
+    KEYWORD(import_boot, COMMAND, 1, do_import_boot)
+    KEYWORD(mkdir,       COMMAND, 1, do_mkdir)
+    KEYWORD(mknod,       COMMAND, 3, do_mknod)
+    KEYWORD(mount,       COMMAND, 3, do_mount)
+    KEYWORD(on,          SECTION, 0, 0)
+    KEYWORD(symlink,     COMMAND, 1, do_symlink)
+    KEYWORD(sysclktz,    COMMAND, 1, do_sysclktz)
+    KEYWORD(loglevel,    COMMAND, 1, do_loglevel)
+    KEYWORD(unlink,      COMMAND, 1, do_unlink)
+    KEYWORD(remove_rc_mounts, COMMAND,  0, do_remove_rc_mounts)
+    KEYWORD(bootmgr,     COMMAND, 1, do_bootmgr)
+
+/*    KEYWORD(capability,  OPTION,  0, 0)
     KEYWORD(chdir,       COMMAND, 1, do_chdir)
     KEYWORD(chroot,      COMMAND, 1, do_chroot)
     KEYWORD(class,       OPTION,  0, 0)
@@ -57,12 +71,7 @@ enum {
     KEYWORD(ifup,        COMMAND, 1, do_ifup)
     KEYWORD(insmod,      COMMAND, 1, do_insmod)
     KEYWORD(import,      COMMAND, 1, do_import)
-    KEYWORD(import_boot, COMMAND, 1, do_import_boot)
     KEYWORD(keycodes,    OPTION,  0, 0)
-    KEYWORD(mkdir,       COMMAND, 1, do_mkdir)
-    KEYWORD(mknod,       COMMAND, 3, do_mknod)
-    KEYWORD(mount,       COMMAND, 3, do_mount)
-    KEYWORD(on,          SECTION, 0, 0)
     KEYWORD(oneshot,     OPTION,  0, 0)
     KEYWORD(onrestart,   OPTION,  0, 0)
     KEYWORD(restart,     COMMAND, 1, do_restart)
@@ -75,20 +84,15 @@ enum {
     KEYWORD(start,       COMMAND, 1, do_start)
     KEYWORD(stop,        COMMAND, 1, do_stop)
     KEYWORD(trigger,     COMMAND, 1, do_trigger)
-    KEYWORD(symlink,     COMMAND, 1, do_symlink)
-    KEYWORD(sysclktz,    COMMAND, 1, do_sysclktz)
     KEYWORD(user,        OPTION,  0, 0)
     KEYWORD(write,       COMMAND, 2, do_write)
     KEYWORD(copy,        COMMAND, 2, do_copy)
     KEYWORD(chown,       COMMAND, 2, do_chown)
     KEYWORD(chmod,       COMMAND, 2, do_chmod)
-    KEYWORD(loglevel,    COMMAND, 1, do_loglevel)
     KEYWORD(device,      COMMAND, 4, do_device)
     KEYWORD(ioprio,      OPTION,  0, 0)
     KEYWORD(devwait,     COMMAND, 1, do_devwait)
-    KEYWORD(unlink,      COMMAND, 1, do_unlink)
-    KEYWORD(remove_rc_mounts, COMMAND,  0, do_remove_rc_mounts)
-    KEYWORD(bootmgr,     COMMAND, 1, do_bootmgr)
+*/
 #ifdef __MAKE_KEYWORD_ENUM__
     KEYWORD_COUNT,
 };

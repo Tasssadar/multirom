@@ -131,7 +131,7 @@ int lookup_keyword(const char *s)
     case 'b':
         if (!strcmp(s, "ootmgr")) return K_bootmgr;
         break;
-    case 'c':
+/*    case 'c':
         if (!strcmp(s, "opy")) return K_copy;
         if (!strcmp(s, "apability")) return K_capability;
         if (!strcmp(s, "hdir")) return K_chdir;
@@ -160,16 +160,17 @@ int lookup_keyword(const char *s)
     case 'h':
         if (!strcmp(s, "ostname")) return K_hostname;
         break;
+*/
     case 'i':
-        if (!strcmp(s, "oprio")) return K_ioprio;
-        if (!strcmp(s, "fup")) return K_ifup;
-        if (!strcmp(s, "nsmod")) return K_insmod;
+//        if (!strcmp(s, "oprio")) return K_ioprio;
+//        if (!strcmp(s, "fup")) return K_ifup;
+//        if (!strcmp(s, "nsmod")) return K_insmod;
         if (!strcmp(s, "mport_boot")) return K_import_boot;
-        if (!strcmp(s, "mport")) return K_import;
+//        if (!strcmp(s, "mport")) return K_import;
         break;
-    case 'k':
-        if (!strcmp(s, "eycodes")) return K_keycodes;
-        break;
+//    case 'k':
+//        if (!strcmp(s, "eycodes")) return K_keycodes;
+//        break;
     case 'l':
         if (!strcmp(s, "oglevel")) return K_loglevel;
         break;
@@ -180,15 +181,15 @@ int lookup_keyword(const char *s)
         break;
     case 'o':
         if (!strcmp(s, "n")) return K_on;
-        if (!strcmp(s, "neshot")) return K_oneshot;
-        if (!strcmp(s, "nrestart")) return K_onrestart;
+//        if (!strcmp(s, "neshot")) return K_oneshot;
+//        if (!strcmp(s, "nrestart")) return K_onrestart;
         break;
     case 'r':
-        if (!strcmp(s, "estart")) return K_restart;
+//        if (!strcmp(s, "estart")) return K_restart;
         if (!strcmp(s, "emove_rc_mounts")) return K_remove_rc_mounts;
         break;
     case 's':
-        if (!strcmp(s, "ervice")) return K_service;
+/*      if (!strcmp(s, "ervice")) return K_service;
         if (!strcmp(s, "etenv")) return K_setenv;
         if (!strcmp(s, "etkey")) return K_setkey;
         if (!strcmp(s, "etprop")) return K_setprop;
@@ -196,19 +197,20 @@ int lookup_keyword(const char *s)
         if (!strcmp(s, "ocket")) return K_socket;
         if (!strcmp(s, "tart")) return K_start;
         if (!strcmp(s, "top")) return K_stop;
+*/
         if (!strcmp(s, "ymlink")) return K_symlink;
         if (!strcmp(s, "ysclktz")) return K_sysclktz;
         break;
-    case 't':
-        if (!strcmp(s, "rigger")) return K_trigger;
-        break;
+//    case 't':
+//        if (!strcmp(s, "rigger")) return K_trigger;
+//        break;
     case 'u':
-        if (!strcmp(s, "ser")) return K_user;
+//        if (!strcmp(s, "ser")) return K_user;
         if (!strcmp(s, "nlink")) return K_unlink;
         break;
-    case 'w':
-        if (!strcmp(s, "rite")) return K_write;
-        break;
+//    case 'w':
+//        if (!strcmp(s, "rite")) return K_write;
+//        break;
     }
     return K_UNKNOWN;
 }
@@ -348,13 +350,14 @@ void parse_new_section(struct parse_state *state, int kw,
     printf("[ %s %s ]\n", args[0],
            nargs > 1 ? args[1] : "");
     switch(kw) {
-    case K_service:
+/*    case K_service:
         state->context = parse_service(state, nargs, args);
         if (state->context) {
             state->parse_line = parse_line_service;
             return;
         }
         break;
+*/
     case K_on:
         state->context = parse_action(state, nargs, args);
         if (state->context) {
@@ -633,7 +636,9 @@ static void parse_line_service(struct parse_state *state, int nargs, char **args
     svc->ioprio_class = IoSchedClass_NONE;
 
     kw = lookup_keyword(args[0]);
+
     switch (kw) {
+#if 0
     case K_capability:
         break;
     case K_class:
@@ -778,6 +783,7 @@ static void parse_line_service(struct parse_state *state, int nargs, char **args
             svc->uid = decode_uid(args[1]);
         }
         break;
+#endif
     default:
         parse_error(state, "invalid option '%s'\n", args[0]);
     }
@@ -826,13 +832,13 @@ static void parse_line_action(struct parse_state* state, int nargs, char **args)
         return;
     }
 
-    if (kw == K_devwait) {
+/*    if (kw == K_devwait) {
         if (!strncmp(act->name, "early-init", 10)) {
             parse_error(state, "%s in early-init prohibited\n", args[0]);
             return;
         }
     }
-
+*/
     cmd = malloc(sizeof(*cmd) + sizeof(char*) * nargs);
     cmd->func = kw_func(kw);
     cmd->nargs = nargs;
