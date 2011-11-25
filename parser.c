@@ -160,17 +160,16 @@ int lookup_keyword(const char *s)
     case 'h':
         if (!strcmp(s, "ostname")) return K_hostname;
         break;
-*/
     case 'i':
-//        if (!strcmp(s, "oprio")) return K_ioprio;
-//        if (!strcmp(s, "fup")) return K_ifup;
-//        if (!strcmp(s, "nsmod")) return K_insmod;
-        if (!strcmp(s, "mport_boot")) return K_import_boot;
-//        if (!strcmp(s, "mport")) return K_import;
+        if (!strcmp(s, "oprio")) return K_ioprio;
+        if (!strcmp(s, "fup")) return K_ifup;
+        if (!strcmp(s, "nsmod")) return K_insmod;
+        if (!strcmp(s, "mport")) return K_import;
         break;
-//    case 'k':
-//        if (!strcmp(s, "eycodes")) return K_keycodes;
-//        break;
+    case 'k':
+        if (!strcmp(s, "eycodes")) return K_keycodes;
+        break;
+*/
     case 'l':
         if (!strcmp(s, "oglevel")) return K_loglevel;
         break;

@@ -1,6 +1,5 @@
 
 #ifndef KEYWORD
-int do_import_boot(int nargs, char **args);
 int do_mkdir(int nargs, char **args);
 int do_mknod(int nargs, char **args);
 int do_mount(int nargs, char **args);
@@ -42,7 +41,6 @@ int do_devwait(int nargs, char **args);
 enum {
     K_UNKNOWN,
 #endif
-    KEYWORD(import_boot, COMMAND, 1, do_import_boot)
     KEYWORD(mkdir,       COMMAND, 1, do_mkdir)
     KEYWORD(mknod,       COMMAND, 3, do_mknod)
     KEYWORD(mount,       COMMAND, 3, do_mount)

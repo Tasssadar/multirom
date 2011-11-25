@@ -219,16 +219,17 @@ int do_mount(int nargs, char **args)
     int n, i;
 
     for (n = 4; n < nargs; n++) {
-        for (i = 0; mount_flags[i].name; i++) {
-            if(!strcmp(args[n], "multirom"))
+        if(!strcmp(args[n], "multirom"))
+        {
+            if(bootmgr_selected)
             {
-                if(!bootmgr_selected)
-                {
-                    INFO("Skipping mount because of bootmgr");
-                    return 0;
-                }
-                break;
+                INFO("Skipping mount because of bootmgr");
+                return 0;
             }
+            else
+                continue;
+        }
+        for (i = 0; mount_flags[i].name; i++) {
             if (!strcmp(args[n], mount_flags[i].name)) {
                 flags |= mount_flags[i].flag;
                 break;
@@ -416,45 +417,6 @@ int do_loglevel(int nargs, char **args) {
         return 0;
     }
     return -1;
-}
-
-int do_import_boot(int nargs, char **args)
-{
-    DIR *d = opendir(args[1]);
-    if(d == NULL)
-        return -1;
-    struct dirent *dp;
-    char to[100];
-    char from[100];
-
-    // copy init binary
-    INFO("Copy init binary to ramdisk");
-    sprintf(from, "%s/init", args[1]);
-    __copy(from, "/main_init");
-    chmod("/main_init", 0750);
-
-    // /default.prop
-    sprintf(from, "%s/default.prop", args[1]);
-    __copy(from, "/default.prop");
-
-    // /sbin/adbd
-    sprintf(from, "%s/adbd", args[1]);
-    __copy(from, "/sbin/adbd");
-
-    while(dp = readdir(d))
-    {
-        if(strstr(dp->d_name, ".rc") == NULL)
-            continue;
-
-        // copy to our ramdisk
-        INFO("Copy %s to ramdisk", dp->d_name);
-        sprintf(from, "%s/%s", args[1], dp->d_name);
-        sprintf(to, "/%s", dp->d_name);
-        __copy(from, to);
-        chmod(to, 0750);
-    }
-    closedir(d);
-    return 0;
 }
 
 // Remove system, data and cache mounts from rc files

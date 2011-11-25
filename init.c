@@ -882,7 +882,7 @@ int main(int argc, char **argv)
 
     char *cmd[] = { "main_init", (char *)0 };
     return execve("/main_init", cmd, NULL);
-#if 0
+#if 0 
     if (emmc_boot){
         action_for_each_trigger("emmc", action_add_queue_tail);
         drain_action_queue();
