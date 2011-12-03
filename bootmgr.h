@@ -2,10 +2,16 @@
 #define INIT_BOOT_MGR
 
 extern char bootmgr_selected;
+extern unsigned char bootmgr_phase;
+extern struct FB fb;
+
+#define WHITE 0xFFFF
+#define BLACK 0x0000
 
 //main
 #define BOOTMGR_MAIN 1
 #define BOOTMGR_SD_SEL 2
+#define BOOTMGR_TETRIS 3
 #define BOOTMGR_BACKUPS_MAX 128
 void bootmgr_start(unsigned short timeout_seconds);
 void bootmgr_show_rom_list();
@@ -56,7 +62,7 @@ typedef struct
     unsigned short x; // x y of top left corner
     unsigned short y;
     unsigned short color;
-    char line;
+    int8_t line;
 } bootmgr_line;
 
 typedef struct
@@ -66,7 +72,7 @@ typedef struct
     unsigned short height;
     unsigned short width;
     unsigned short color;
-    char id;
+    int8_t id;
 } bootmgr_fill;
 
 typedef struct
@@ -74,7 +80,7 @@ typedef struct
     unsigned short x; // x y of top left corner
     unsigned short y;
     char *name;
-    char id;
+    int8_t id;
 } bootmgr_img;
 
 typedef struct
@@ -89,12 +95,13 @@ typedef struct
     bootmgr_img **imgs;
 } bootmgr_display_t;
 
-bootmgr_display_t *bootmgr_display;
+extern bootmgr_display_t *bootmgr_display;
 
 inline bootmgr_line *_bootmgr_new_line();
 inline bootmgr_fill *_bootmgr_new_fill();
 inline bootmgr_img *_bootmgr_new_img();
 inline bootmgr_line *_bootmgr_get_line(char line);
 inline bootmgr_fill *_bootmgr_get_fill(char id);
+
 
 #endif

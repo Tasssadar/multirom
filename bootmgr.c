@@ -17,6 +17,7 @@
 
 #include "init.h"
 #include "bootmgr.h"
+#include "tetris.h"
 #include "keywords.h"
 #include "iso_font.h"
 
@@ -28,7 +29,7 @@ static pthread_mutex_t bootmgr_input_mutex = PTHREAD_MUTEX_INITIALIZER;
 static const char* bootmgr_bg0 = "/bmgr_imgs/init_0.rle";
 static const char* bootmgr_bg1 = "/bmgr_imgs/init_1.rle";
 static const char* bootmgr_img_folder = "/bmgr_imgs/%s";
-unsigned char phase = BOOTMGR_MAIN;
+unsigned char bootmgr_phase = BOOTMGR_MAIN;
 unsigned char total_backups = 0;
 unsigned char *backups[BOOTMGR_BACKUPS_MAX];
 unsigned char backups_loaded = 0;
@@ -40,9 +41,11 @@ struct stat s0, s1;
 int fd0, fd1;
 unsigned max_fb_size;
 
+bootmgr_display_t *bootmgr_display = NULL;
+
 inline void __bootmgr_boot()
 {
-    bootmgr_printf(-1, 20, 0xFFFF, "Booting from %s...", bootmgr_selected ? "SD-card" : "internal memory");
+    bootmgr_printf(-1, 20, WHITE, "Booting from %s...", bootmgr_selected ? "SD-card" : "internal memory");
     bootmgr_draw();
 
     bootmgr_destroy_display();
@@ -88,7 +91,7 @@ void bootmgr_start(uint16_t timeout_seconds)
         {
             if(timer%10 == 0)
             {
-                bootmgr_printf(-1, 20, 0xFFFF, "Boot from internal mem in %us", timer/10);
+                bootmgr_printf(-1, 20, WHITE, "Boot from internal mem in %us", timer/10);
                 bootmgr_draw();
             }
 
@@ -103,7 +106,7 @@ void bootmgr_start(uint16_t timeout_seconds)
 
 unsigned char bootmgr_handle_key(int key)
 {
-    switch(phase)
+    switch(bootmgr_phase)
     {
         case BOOTMGR_MAIN:
         {
@@ -114,7 +117,7 @@ unsigned char bootmgr_handle_key(int key)
                     bootmgr_selected = !bootmgr_selected;
                     break;
                 case KEY_BACK:
-                    bootmgr_printf(-1, 20, 0xFFFF, "Rebooting...");
+                    bootmgr_printf(-1, 20, WHITE, "Rebooting...");
                     bootmgr_draw();
                 case KEY_POWER:
                     bootmgr_close_framebuffer();
@@ -124,9 +127,9 @@ unsigned char bootmgr_handle_key(int key)
                 case KEY_MENU:
                     if(bootmgr_selected)
                     {
-                        phase = BOOTMGR_SD_SEL;
+                        bootmgr_phase = BOOTMGR_SD_SEL;
                         bootmgr_display->bg_img = 0;
-                        bootmgr_printf(-1, 20, 0xFFFF, "Mounting sd-ext...");
+                        bootmgr_printf(-1, 20, WHITE, "Mounting sd-ext...");
                         bootmgr_draw();
                         bootmgr_show_rom_list();
                         while(bootmgr_get_last_key() != -1); // clear key queue
@@ -136,6 +139,10 @@ unsigned char bootmgr_handle_key(int key)
                     else
                         __bootmgr_boot();
                     return 1;
+                case KEY_HOME:
+                    bootmgr_phase = BOOTMGR_TETRIS;
+                    tetris_init();
+                    break;
                 default:break;
             }
             break;
@@ -178,13 +185,13 @@ unsigned char bootmgr_handle_key(int key)
                     char *path = (char*)malloc(200);
                     if(selected == 2)
                     {
-                        bootmgr_printf(-1, 20, 0xFFFF, "Booting from SD-card...");
+                        bootmgr_printf(-1, 20, WHITE, "Booting from SD-card...");
                         sprintf(path, "/sdroot/multirom/rom");
                     }
                     else
                     {
                         sprintf(path, "/sdroot/multirom/backup/%s", backups[selected-5]);
-                        bootmgr_printf(-1, 20, 0xFFFF, "Booting \"%s\"...", backups[selected-5]);
+                        bootmgr_printf(-1, 20, WHITE, "Booting \"%s\"...", backups[selected-5]);
                     }
 
                     selected = -1;
@@ -199,12 +206,17 @@ unsigned char bootmgr_handle_key(int key)
                     bootmgr_set_lines_count(0);
                     bootmgr_set_fills_count(0);
                     bootmgr_display->bg_img = 1;
-                    phase = BOOTMGR_MAIN;
+                    bootmgr_phase = BOOTMGR_MAIN;
                     bootmgr_draw();
                     break;
                 }
                 default:break;
             }
+            break;
+        }
+        case BOOTMGR_TETRIS:
+        {
+            tetris_key(key);
             break;
         }
     }
@@ -378,15 +390,15 @@ void bootmgr_select(char line)
 {
     bootmgr_line *ln = NULL;
     if(selected != -1 && (ln = _bootmgr_get_line(selected)))
-       ln->color = 0xFFFF;
+       ln->color = WHITE;
     ln = _bootmgr_get_line(line);
     if(ln)
-        ln->color = 0x00;
+        ln->color = BLACK;
 
     if(line == -1)
         bootmgr_erase_fill(BOOTMGR_FILL_SELECT);
     else
-        bootmgr_print_fill(0, line*ISO_CHAR_HEIGHT, BOOTMGR_DIS_W, ISO_CHAR_HEIGHT, 0xFFFF, BOOTMGR_FILL_SELECT);
+        bootmgr_print_fill(0, line*ISO_CHAR_HEIGHT, BOOTMGR_DIS_W, ISO_CHAR_HEIGHT, WHITE, BOOTMGR_FILL_SELECT);
     selected = line;
 }
 
@@ -634,7 +646,7 @@ void bootmgr_draw()
     if(bootmgr_display->bg_img)
         bootmgr_show_img(0, 0, NULL);
     else
-        android_memset16(fb.bits, 0x0000, BOOTMGR_DIS_W*BOOTMGR_DIS_H*2);
+        android_memset16(fb.bits, BLACK, BOOTMGR_DIS_W*BOOTMGR_DIS_H*2);
 
     bootmgr_draw_imgs();
     bootmgr_draw_fills();
@@ -757,8 +769,8 @@ void bootmgr_show_rom_list()
         int res = do_mount(6, mount_args);
         if(res < 0)
         {
-            bootmgr_printf(-1, 20, 0xFFFF, "Failed to mount sd-ext!");
-            bootmgr_printf(-1, 21, 0xFFFF, "Press back to return.");
+            bootmgr_printf(-1, 20, WHITE, "Failed to mount sd-ext!");
+            bootmgr_printf(-1, 21, WHITE, "Press back to return.");
             return;
         }
 
@@ -789,30 +801,30 @@ void bootmgr_show_rom_list()
     bootmgr_printf(0, 0, (0x3F << 11), "Select ROM to boot. Press back to return");
     if(backups_has_active)
     {
-        bootmgr_printf(0, 2, 0xFFFF, "Current active ROM");
+        bootmgr_printf(0, 2, WHITE, "Current active ROM");
         bootmgr_select(2);
     }
     bootmgr_printf(0, 4, (0x3F << 11), "Backup folder:");
 
     uint16_t i = 0;
     for(; i <= 25 && i < total_backups; ++i)
-        bootmgr_printf(0, i + 5, 0xFFFF, "%s", backups[i]);
+        bootmgr_printf(0, i + 5, WHITE, "%s", backups[i]);
 
     if(total_backups)
     {
         if(!backups_has_active)
         {
-            bootmgr_printf(-1, 2, 0xFFFF, "No active ROM");
+            bootmgr_printf(-1, 2, WHITE, "No active ROM");
             bootmgr_select(5);
         }
         bootmgr_erase_text(20);
     }
     else if(backups_has_active)
-        bootmgr_printf(-1, 20, 0xFFFF, "No backups present.");
+        bootmgr_printf(-1, 20, WHITE, "No backups present.");
     else
     {
-        bootmgr_printf(-1, 20, 0xFFFF, "No active ROM nor backups present.");
-        bootmgr_printf(-1, 21, 0xFFFF, "Press \"back\" to return");
+        bootmgr_printf(-1, 20, WHITE, "No active ROM nor backups present.");
+        bootmgr_printf(-1, 21, WHITE, "Press \"back\" to return");
     }
 }
 
@@ -830,7 +842,7 @@ unsigned char bootmgr_boot_sd(char *path)
     strcpy(s, "/system");
     if(do_mount(5, mount_args) < 0)
     {
-        bootmgr_printf(-1, 20, 0xFFFF, "Mount %s failed", mount_args[2]);
+        bootmgr_printf(-1, 20, WHITE, "Mount %s failed", mount_args[2]);
         bootmgr_draw();
         return 0;
     }

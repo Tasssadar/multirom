@@ -11,6 +11,7 @@ LOCAL_SRC_FILES:= \
 	util.c \
 	parser.c \
 	bootmgr.c \
+	tetris.c \
 	logo.c
 
 ifeq ($(strip $(INIT_BOOTCHART)),true)

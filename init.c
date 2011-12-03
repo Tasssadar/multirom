@@ -820,6 +820,8 @@ void handle_keychord(int fd)
 
 int main(int argc, char **argv)
 {
+    srand(time(0));
+
     int device_fd = -1;
     int property_set_fd = -1;
     int signal_recv_fd = -1;
