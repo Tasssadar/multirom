@@ -1,8 +1,8 @@
 #ifndef INIT_BOOT_MGR
 #define INIT_BOOT_MGR
 
-extern char bootmgr_selected;
-extern unsigned char bootmgr_phase;
+extern uint8_t bootmgr_selected;
+extern uint8_t bootmgr_phase;
 extern struct FB fb;
 
 #define WHITE 0xFFFF
@@ -13,9 +13,9 @@ extern struct FB fb;
 #define BOOTMGR_SD_SEL 2
 #define BOOTMGR_TETRIS 3
 #define BOOTMGR_BACKUPS_MAX 128
-void bootmgr_start(unsigned short timeout_seconds);
+void bootmgr_start(uint16_t timeout_seconds);
 void bootmgr_show_rom_list();
-unsigned char bootmgr_boot_sd(char *path);
+uint8_t bootmgr_boot_sd(char *path);
 void bootmgr_import_boot(char *path);
 void bootmgr_remove_rc_mounts();
 
@@ -26,29 +26,29 @@ int ev_get(struct input_event *ev, unsigned dont_wait);
 void *bootmgr_input_thread(void *cookie);
 int bootmgr_get_last_key();
 struct input_event;
-unsigned char bootmgr_handle_key(int key);
+uint8_t bootmgr_handle_key(int key);
 
 //Drawing
 void bootmgr_init_display();
 void bootmgr_destroy_display();
 int bootmgr_open_framebuffer();
 void bootmgr_close_framebuffer();
-int bootmgr_show_img(unsigned short start_x, unsigned short start_y, char *custom_img);
-void bootmgr_set_lines_count(unsigned short c);
-void bootmgr_set_fills_count(unsigned short c);
+int bootmgr_show_img(uint16_t start_x, uint16_t start_y, char *custom_img);
+void bootmgr_set_lines_count(uint16_t c);
+void bootmgr_set_fills_count(uint16_t c);
 void bootmgr_set_imgs_count(uint16_t c);
-void bootmgr_printf(short x, char line, uint16_t color, char *what, ...);
-void bootmgr_print_img(short x, short y, char *name);
-void bootmgr_print_fill(short x, short y, short width, short height, uint16_t color, char id);
-inline void bootmgr_select(char line);
+void bootmgr_printf(short x, uint8_t line, uint16_t color, char *what, ...);
+void bootmgr_print_img(int16_t x, int16_t y, char *name);
+void bootmgr_print_fill(int16_t x, int16_t y, int16_t width, int16_t height, uint16_t color, int8_t id);
+inline void bootmgr_select(int8_t line);
 void bootmgr_draw();
 void bootmgr_draw_text();
 void bootmgr_draw_fills();
 void bootmgr_draw_imgs();
-void bootmgr_erase_text(char line);
-void bootmgr_erase_fill(char id);
+void bootmgr_erase_text(uint8_t line);
+void bootmgr_erase_fill(int8_t id);
 
-inline void _bootmgr_set_px(int x, int y, uint16_t color);
+inline void _bootmgr_set_px(uint16_t x, uint16_t y, uint16_t color);
 inline void _bootmgr_draw_char(char c, uint16_t x, uint16_t y, uint16_t color);
 
 #define BOOTMGR_FILL_SELECT 1
@@ -59,37 +59,36 @@ inline void _bootmgr_draw_char(char c, uint16_t x, uint16_t y, uint16_t color);
 typedef struct
 {
     char *text;
-    unsigned short x; // x y of top left corner
-    unsigned short y;
-    unsigned short color;
-    int8_t line;
+    uint16_t x; // x y of top left corner
+    uint16_t color;
+    uint8_t line;
 } bootmgr_line;
 
 typedef struct
 {
-    unsigned short x; // x y of top left corner
-    unsigned short y;
-    unsigned short height;
-    unsigned short width;
-    unsigned short color;
+    uint16_t x; // x y of top left corner
+    uint16_t y;
+    uint16_t height;
+    uint16_t width;
+    uint16_t color;
     int8_t id;
 } bootmgr_fill;
 
 typedef struct
 {
-    unsigned short x; // x y of top left corner
-    unsigned short y;
+    uint16_t x; // x y of top left corner
+    uint16_t y;
     char *name;
     int8_t id;
 } bootmgr_img;
 
 typedef struct
 {
-    unsigned short ln_count;
-    unsigned short fill_count;
-    unsigned short img_count;
+    uint16_t ln_count;
+    uint16_t fill_count;
+    uint16_t img_count;
 
-    unsigned char bg_img; //boolean
+    uint8_t bg_img; //boolean
     bootmgr_line **lines;
     bootmgr_fill **fills;
     bootmgr_img **imgs;
@@ -100,8 +99,8 @@ extern bootmgr_display_t *bootmgr_display;
 inline bootmgr_line *_bootmgr_new_line();
 inline bootmgr_fill *_bootmgr_new_fill();
 inline bootmgr_img *_bootmgr_new_img();
-inline bootmgr_line *_bootmgr_get_line(char line);
-inline bootmgr_fill *_bootmgr_get_fill(char id);
+inline bootmgr_line *_bootmgr_get_line(uint8_t line);
+inline bootmgr_fill *_bootmgr_get_fill(int8_t id);
 
 
 #endif

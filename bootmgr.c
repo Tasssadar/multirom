@@ -13,7 +13,6 @@
 #include <linux/input.h>
 #include <linux/kd.h>
 #include <pthread.h>
-#include <dirent.h>
 
 #include "init.h"
 #include "bootmgr.h"
@@ -21,20 +20,20 @@
 #include "keywords.h"
 #include "iso_font.h"
 
-char bootmgr_selected = 0;
-volatile char bootmgr_input_run = 1;
+uint8_t bootmgr_selected = 0;
+volatile uint8_t bootmgr_input_run = 1;
 int bootmgr_key_queue[10];
-char bootmgr_key_itr = 10;
+int8_t bootmgr_key_itr = 10;
 static pthread_mutex_t bootmgr_input_mutex = PTHREAD_MUTEX_INITIALIZER;
 static const char* bootmgr_bg0 = "/bmgr_imgs/init_0.rle";
 static const char* bootmgr_bg1 = "/bmgr_imgs/init_1.rle";
 static const char* bootmgr_img_folder = "/bmgr_imgs/%s";
-unsigned char bootmgr_phase = BOOTMGR_MAIN;
-unsigned char total_backups = 0;
-unsigned char *backups[BOOTMGR_BACKUPS_MAX];
-unsigned char backups_loaded = 0;
-unsigned char backups_has_active = 0;
-char selected = -1;
+uint8_t bootmgr_phase = BOOTMGR_MAIN;
+uint8_t total_backups = 0;
+char *backups[BOOTMGR_BACKUPS_MAX];
+uint8_t backups_loaded = 0;
+uint8_t backups_has_active = 0;
+int8_t selected = -1;
 
 struct FB fb;
 struct stat s0, s1;
@@ -57,8 +56,8 @@ void bootmgr_start(uint16_t timeout_seconds)
     bootmgr_init_display();
 
     int key = 0;
-    char last_selected = -1;
-    char key_pressed = (timeout_seconds == 0);
+    int8_t last_selected = -1;
+    uint8_t key_pressed = (timeout_seconds == 0);
     uint16_t timer = timeout_seconds*10;
 
     pthread_t t;
@@ -104,7 +103,7 @@ void bootmgr_start(uint16_t timeout_seconds)
     }
 }
 
-unsigned char bootmgr_handle_key(int key)
+uint8_t bootmgr_handle_key(int key)
 {
     switch(bootmgr_phase)
     {
@@ -196,7 +195,7 @@ unsigned char bootmgr_handle_key(int key)
 
                     selected = -1;
                     bootmgr_draw();
-                    char ret = bootmgr_boot_sd(path);
+                    uint8_t ret = bootmgr_boot_sd(path);
                     free(path);
                     return ret;
                 }
@@ -337,7 +336,7 @@ void bootmgr_destroy_display()
     bootmgr_close_framebuffer();
 }
 
-void bootmgr_printf(short x, char line, uint16_t color, char *what, ...)
+void bootmgr_printf(int16_t x, uint8_t line, uint16_t color, char *what, ...)
 {
     char txt[80];
     va_list ap;
@@ -346,12 +345,12 @@ void bootmgr_printf(short x, char line, uint16_t color, char *what, ...)
     va_end(ap);
 
     bootmgr_line *ln = NULL;
-    if(line != -1 && (ln = _bootmgr_get_line(line)))
+    if(ln = _bootmgr_get_line(line))
         free(ln->text);
     else
         ln = _bootmgr_new_line();
 
-    short text_len = strlen(txt);
+    int16_t text_len = strlen(txt);
     ln->text = malloc(text_len+1);
     strcpy(ln->text, txt);
 
@@ -363,9 +362,9 @@ void bootmgr_printf(short x, char line, uint16_t color, char *what, ...)
     ln->color = color;
 }
 
-void bootmgr_print_img(short x, short y, char *name)
+void bootmgr_print_img(int16_t x, int16_t y, char *name)
 {
-    short text_len = strlen(name);
+    int16_t text_len = strlen(name);
     bootmgr_img *img = _bootmgr_new_img();
     img->name = malloc(text_len+1);
     strcpy(img->name, name);
@@ -373,7 +372,7 @@ void bootmgr_print_img(short x, short y, char *name)
     img->y = y;
 }
 
-void bootmgr_print_fill(short x, short y, short width, short height, uint16_t color, char id)
+void bootmgr_print_fill(int16_t x, int16_t y, int16_t width, int16_t height, uint16_t color, int8_t id)
 {
     bootmgr_fill *f = NULL;
     if(id == -1 || !(f = _bootmgr_get_fill(id)))
@@ -386,7 +385,7 @@ void bootmgr_print_fill(short x, short y, short width, short height, uint16_t co
     f->id = id;
 }
 
-void bootmgr_select(char line)
+void bootmgr_select(int8_t line)
 {
     bootmgr_line *ln = NULL;
     if(selected != -1 && (ln = _bootmgr_get_line(selected)))
@@ -495,7 +494,7 @@ int bootmgr_show_img(uint16_t start_x, uint16_t start_y, char *custom_img)
     return 0;
 }
 
-void _bootmgr_set_px(int x, int y, uint16_t color)
+void _bootmgr_set_px(uint16_t x, uint16_t y, uint16_t color)
 {
     uint16_t *bits = fb.bits;
     bits += BOOTMGR_DIS_W*y + x;
@@ -672,7 +671,7 @@ bootmgr_img *_bootmgr_new_img()
     return bootmgr_display->imgs[bootmgr_display->img_count-1];
 }
 
-void bootmgr_erase_text(char line)
+void bootmgr_erase_text(uint8_t line)
 {
     bootmgr_line **tmp_lines = (bootmgr_line**)malloc(sizeof(bootmgr_line*)*(bootmgr_display->ln_count-1));
 
@@ -700,7 +699,7 @@ void bootmgr_erase_text(char line)
     --bootmgr_display->ln_count;
 }
 
-void bootmgr_erase_fill(char id)
+void bootmgr_erase_fill(int8_t id)
 {
     bootmgr_fill **tmp_fills = (bootmgr_fill**)malloc(sizeof(bootmgr_fill*)*(bootmgr_display->fill_count-1));
 
@@ -727,7 +726,7 @@ void bootmgr_erase_fill(char id)
     --bootmgr_display->fill_count;
 }
 
-bootmgr_line *_bootmgr_get_line(char line)
+bootmgr_line *_bootmgr_get_line(uint8_t line)
 {
     uint16_t i = 0;
 
@@ -739,7 +738,7 @@ bootmgr_line *_bootmgr_get_line(char line)
     return NULL;
 }
 
-bootmgr_fill *_bootmgr_get_fill(char id)
+bootmgr_fill *_bootmgr_get_fill(int8_t id)
 {
     uint16_t i = 0;
 
@@ -765,7 +764,7 @@ void bootmgr_show_rom_list()
         chown("/sdroot", uid, gid);
 
         //mount
-        static char * const mount_args[] = { NULL, "ext4", "/dev/block/mmcblk0p99", "/sdroot", "nosuid", "nodev" };
+        static const char *mount_args[] = { NULL, "ext4", "/dev/block/mmcblk0p99", "/sdroot", "nosuid", "nodev" };
         int res = do_mount(6, mount_args);
         if(res < 0)
         {
@@ -828,7 +827,7 @@ void bootmgr_show_rom_list()
     }
 }
 
-unsigned char bootmgr_boot_sd(char *path)
+uint8_t bootmgr_boot_sd(char *path)
 {
     char *p = (char*)malloc(200);
     char *s = (char*)malloc(50);

@@ -1,61 +1,78 @@
-#ifndef TETRIS_H
-#define TETRIS_H
+#ifndef _TETRIS_H
+#define _TETRIS_H
 
 #define BLOCK_SIZE 20
-#define LINES_LEVEL 7
-#define TETRIS_BORDER_TOP    -2
-#define TETRIS_BORDER_LEFT   -3
-#define TETRIS_BORDER_RIGHT  -4
-#define TETRIS_BORDER_BOTTOM -5
+#define LINES_LEVEL 7 // lines needed to proceed to next level
+#define PIECE_BLOCKS 5 // Piece is 5x5 grid
 
-#define TETRIS_W 11
+#define TETRIS_W 11 // 11x22 blocks grid
 #define TETRIS_H 22
 
-#define TETRIS_STARTED   0x01
-#define TETRIS_SPAWN_NEW 0x02
-#define TETRIS_FINISHED  0x04
+enum _borders
+{
+    TETRIS_BORDER_TOP    = -2,
+    TETRIS_BORDER_LEFT   = -3,
+    TETRIS_BORDER_RIGHT  = -4,
+    TETRIS_BORDER_BOTTOM = -5,
+};
 
-#define TETRIS_PIECE_I 0
-#define TETRIS_PIECE_J 1
-#define TETRIS_PIECE_L 2
-#define TETRIS_PIECE_O 3
-#define TETRIS_PIECE_S 4
-#define TETRIS_PIECE_T 5
-#define TETRIS_PIECE_Z 6
+enum _state
+{
+    TETRIS_STARTED   = 0x01,
+    TETRIS_SPAWN_NEW = 0x02,
+    TETRIS_FINISHED  = 0x04,
+    TETRIS_PAUSED    = 0x08,
+};
 
-#define TETRIS_DOWN      1
-#define TETRIS_LEFT      2
-#define TETRIS_RIGHT     3
-#define TETRIS_DOWN_FAST 4
+enum _pieces
+{
+    TETRIS_PIECE_I = 0,
+    TETRIS_PIECE_J,
+    TETRIS_PIECE_L,
+    TETRIS_PIECE_O,
+    TETRIS_PIECE_S,
+    TETRIS_PIECE_T,
+    TETRIS_PIECE_Z,
+    TETRIS_PIECE_MAX,
+};
+
+enum _direction
+{
+    TETRIS_DOWN = 1,
+    TETRIS_LEFT,
+    TETRIS_RIGHT,
+    TETRIS_DOWN_FAST,
+    TETRIS_UP,
+};
 
 typedef struct
 {
-    char id;
-    char type;
-    char rotation;
-    uint16_t color;
+    uint8_t type;
+    uint8_t rotation;
+    uint8_t moved;
     uint16_t x;
     uint16_t y;
-    char moved;
 } tetris_piece;
 
 void tetris_init();
 void *tetris_thread(void *cookie);
 void tetris_key(int key);
 void tetris_spawn_new();
-void tetris_draw(unsigned char move);
+void tetris_draw(uint8_t move);
 void tetris_exit();
-unsigned char tetris_can_move_piece(tetris_piece *p, char dir);
+uint8_t tetris_can_move_piece(uint8_t dir);
 void tetris_check_line();
-inline void tetris_clear(char do_free);
-inline void tetris_set_defaults();
-inline uint16_t tetris_get_color_for_type(char type);
-inline void tetris_move_piece(tetris_piece *p, char dir);
-inline void tetris_rotate_piece();
-inline void tetris_delete_if_nowhere(tetris_piece *p);
-inline void tetris_set_piece(tetris_piece *p, tetris_piece *val);
+int8_t tetris_check_border(uint8_t dir);
+void tetris_set_defaults();
+uint16_t tetris_get_color_for_type(uint8_t type);
+void tetris_rotate_piece();
+void tetris_delete_if_nowhere(tetris_piece *p);
+void tetris_set_piece(tetris_piece *p, tetris_piece *val);
+inline void tetris_clear(uint8_t do_free);
+inline void tetris_move_piece(uint8_t dir);
+inline void tetris_print_score();
 
-static const uint8_t p_shape[7][4][5][5] =
+static const uint8_t p_shape[TETRIS_PIECE_MAX][4][PIECE_BLOCKS][PIECE_BLOCKS] =
 {
     // I
     {
