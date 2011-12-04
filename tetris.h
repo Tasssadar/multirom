@@ -71,6 +71,7 @@ void tetris_set_piece(tetris_piece *p, tetris_piece *val);
 inline void tetris_clear(uint8_t do_free);
 inline void tetris_move_piece(uint8_t dir);
 inline void tetris_print_score();
+void tetris_print_batt();
 
 static const uint8_t p_shape[TETRIS_PIECE_MAX][4][PIECE_BLOCKS][PIECE_BLOCKS] =
 {

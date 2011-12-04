@@ -48,6 +48,7 @@ void tetris_init()
     bootmgr_print_fill(9,                      470, TETRIS_W*BLOCK_SIZE+1, 1,                     WHITE, TETRIS_BORDER_BOTTOM);
 
     tetris_print_score();
+    tetris_print_batt();
     bootmgr_printf(243, 1, WHITE, "Next");
     bootmgr_printf(243, 2, WHITE, "piece:");
     bootmgr_printf(10+((220 - 21*8)/2), 15, WHITE, "Press \"Home\" to start");
@@ -251,6 +252,7 @@ void tetris_draw(uint8_t move)
 
     android_memset16(fb.bits, BLACK, BOOTMGR_DIS_W*BOOTMGR_DIS_H*2);
 
+    tetris_print_batt();
     bootmgr_draw_fills();
     bootmgr_draw_text();
 
@@ -591,5 +593,17 @@ void tetris_delete_if_nowhere(tetris_piece *p)
                 found = 1;
     if(!found)
         free(p);
+}
+
+void tetris_print_batt()
+{
+    FILE *f = fopen("/sys/class/power_supply/battery/capacity", "r");
+    if(!f)
+        return;
+
+    char str[4];
+    if(fgets(str, 4, f))
+        bootmgr_printf(234, 28, WHITE, "Batt: %s%%", str);
+    fclose(f);
 }
 
