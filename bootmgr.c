@@ -5,6 +5,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/mount.h>
 #include <cutils/memory.h>
 #include <dirent.h>
 #include <sys/poll.h>
@@ -22,9 +23,11 @@
 
 uint8_t bootmgr_selected = 0;
 volatile uint8_t bootmgr_input_run = 1;
+volatile uint8_t bootmgr_time_run = 1;
 int bootmgr_key_queue[10];
 int8_t bootmgr_key_itr = 10;
 static pthread_mutex_t bootmgr_input_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t bootmgr_draw_mutex = PTHREAD_MUTEX_INITIALIZER;
 static const char* bootmgr_bg0 = "/bmgr_imgs/init_0.rle";
 static const char* bootmgr_bg1 = "/bmgr_imgs/init_1.rle";
 static const char* bootmgr_img_folder = "/bmgr_imgs/%s";
@@ -35,33 +38,40 @@ uint8_t backups_loaded = 0;
 uint8_t backups_has_active = 0;
 int8_t selected = -1;
 
+bootmgr_settings_t settings;
+
 struct FB fb;
 struct stat s0, s1;
 int fd0, fd1;
 unsigned max_fb_size;
 
 bootmgr_display_t *bootmgr_display = NULL;
+pthread_t t_time;
 
 inline void __bootmgr_boot()
 {
     bootmgr_printf(-1, 20, WHITE, "Booting from %s...", bootmgr_selected ? "SD-card" : "internal memory");
     bootmgr_draw();
 
+    bootmgr_set_time_thread(0);
+
     bootmgr_destroy_display();
     bootmgr_input_run = 0;
 }
 
-void bootmgr_start(uint16_t timeout_seconds)
+void bootmgr_start()
 {
+    bootmgr_load_settings();
     bootmgr_init_display();
 
     int key = 0;
     int8_t last_selected = -1;
-    uint8_t key_pressed = (timeout_seconds == 0);
-    uint16_t timer = timeout_seconds*10;
+    uint8_t key_pressed = (settings.timeout_seconds == -1);
+    int16_t timer = settings.timeout_seconds*10;
 
-    pthread_t t;
-    pthread_create(&t, NULL, bootmgr_input_thread, NULL);
+    pthread_t t_input;
+    pthread_create(&t_input, NULL, bootmgr_input_thread, NULL);
+    bootmgr_set_time_thread(1);
 
     while(1)
     {
@@ -103,6 +113,48 @@ void bootmgr_start(uint16_t timeout_seconds)
     }
 }
 
+void bootmgr_set_time_thread(uint8_t start)
+{
+    if(start)
+    {
+        bootmgr_time_run = 1;
+        pthread_create(&t_time, NULL, bootmgr_time_thread, NULL);
+    }
+    else
+    {
+        bootmgr_time_run = 0;
+        pthread_join(t_time, NULL);
+    }
+}
+
+void *bootmgr_time_thread(void *cookie)
+{
+    time_t tm;
+    uint8_t timer = 9;
+
+    char pct[4];
+    char status[50];
+
+    while(bootmgr_time_run)
+    {
+        if(timer == 10)
+        {
+            time(&tm);
+            bootmgr_get_file(battery_pct, &pct, 4);
+            char *n = strchr(&pct, '\n');
+            *n = NULL;
+            bootmgr_get_file(battery_status, &status, 50);
+            bootmgr_printf(0, 0, WHITE, "%2u:%02u:%02u    Battery: %s%%, %s",
+                        (tm%86400/60/60) + settings.timezone, tm%3600/60, tm%60, &pct, &status);
+            bootmgr_draw();
+            timer = 0;
+        }
+        usleep(100000);
+        ++timer;
+    }
+    return NULL;
+}
+
 uint8_t bootmgr_handle_key(int key)
 {
     switch(bootmgr_phase)
@@ -126,12 +178,15 @@ uint8_t bootmgr_handle_key(int key)
                 case KEY_MENU:
                     if(bootmgr_selected)
                     {
+                        bootmgr_set_time_thread(0);
                         bootmgr_phase = BOOTMGR_SD_SEL;
                         bootmgr_display->bg_img = 0;
                         bootmgr_printf(-1, 20, WHITE, "Mounting sd-ext...");
                         bootmgr_draw();
                         bootmgr_show_rom_list();
                         while(bootmgr_get_last_key() != -1); // clear key queue
+                        if(!total_backups && backups_has_active)
+                            return bootmgr_boot_sd();
                         bootmgr_draw();
                         break;
                     }
@@ -139,6 +194,7 @@ uint8_t bootmgr_handle_key(int key)
                         __bootmgr_boot();
                     return 1;
                 case KEY_HOME:
+                    bootmgr_set_time_thread(0);
                     bootmgr_phase = BOOTMGR_TETRIS;
                     tetris_init();
                     break;
@@ -177,28 +233,7 @@ uint8_t bootmgr_handle_key(int key)
                     break;
                 }
                 case KEY_MENU:
-                {
-                    bootmgr_set_lines_count(0);
-                    bootmgr_set_fills_count(0);
-
-                    char *path = (char*)malloc(200);
-                    if(selected == 2)
-                    {
-                        bootmgr_printf(-1, 20, WHITE, "Booting from SD-card...");
-                        sprintf(path, "/sdroot/multirom/rom");
-                    }
-                    else
-                    {
-                        sprintf(path, "/sdroot/multirom/backup/%s", backups[selected-5]);
-                        bootmgr_printf(-1, 20, WHITE, "Booting \"%s\"...", backups[selected-5]);
-                    }
-
-                    selected = -1;
-                    bootmgr_draw();
-                    uint8_t ret = bootmgr_boot_sd(path);
-                    free(path);
-                    return ret;
-                }
+                    return bootmgr_boot_sd();
                 case KEY_BACK:
                 {
                     selected = -1;
@@ -207,6 +242,7 @@ uint8_t bootmgr_handle_key(int key)
                     bootmgr_display->bg_img = 1;
                     bootmgr_phase = BOOTMGR_MAIN;
                     bootmgr_draw();
+                    bootmgr_set_time_thread(1);
                     break;
                 }
                 default:break;
@@ -642,6 +678,8 @@ void bootmgr_set_imgs_count(uint16_t c)
 
 void bootmgr_draw()
 {
+    pthread_mutex_lock(&bootmgr_draw_mutex);
+
     if(bootmgr_display->bg_img)
         bootmgr_show_img(0, 0, NULL);
     else
@@ -651,6 +689,8 @@ void bootmgr_draw()
     bootmgr_draw_fills();
     bootmgr_draw_text();
     fb_update(&fb);
+
+    pthread_mutex_unlock(&bootmgr_draw_mutex);
 }
 
 bootmgr_line *_bootmgr_new_line()
@@ -818,8 +858,9 @@ void bootmgr_show_rom_list()
         }
         bootmgr_erase_text(20);
     }
-    else if(backups_has_active)
-        bootmgr_printf(-1, 20, WHITE, "No backups present.");
+    // Useless to print this, because it will be deleted immediately
+    //else if(backups_has_active)
+    //    bootmgr_printf(-1, 19, WHITE, "No backups present.");
     else
     {
         bootmgr_printf(-1, 20, WHITE, "No active ROM nor backups present.");
@@ -827,8 +868,26 @@ void bootmgr_show_rom_list()
     }
 }
 
-uint8_t bootmgr_boot_sd(char *path)
+uint8_t bootmgr_boot_sd()
 {
+    bootmgr_set_lines_count(0);
+    bootmgr_set_fills_count(0);
+
+    char *path = (char*)malloc(200);
+    if(selected == 2)
+    {
+        bootmgr_printf(-1, 20, WHITE, "Booting from SD-card...");
+        sprintf(path, "/sdroot/multirom/rom");
+    }
+    else
+    {
+        sprintf(path, "/sdroot/multirom/backup/%s", backups[selected-5]);
+        bootmgr_printf(-1, 20, WHITE, "Booting \"%s\"...", backups[selected-5]);
+    }
+
+    selected = -1;
+    bootmgr_draw();
+
     char *p = (char*)malloc(200);
     char *s = (char*)malloc(50);
     sprintf(p, "%s/boot", path);
@@ -858,6 +917,7 @@ uint8_t bootmgr_boot_sd(char *path)
 
     free(p);
     free(s);
+    free(path);
 
     return 1;
 }
@@ -898,4 +958,61 @@ void bootmgr_import_boot(char *path)
         chmod(to, 0750);
     }
     closedir(d);
+}
+
+void bootmgr_load_settings()
+{
+    settings.timezone = 0;
+    settings.timeout_seconds = 3;
+
+    mknod("/dev/block/mmcblk0p98", (0666 | S_IFBLK), makedev(179, 1));
+    mkdir("/sdrt", (mode_t)0775);
+
+    int res = mount("/dev/block/mmcblk0p98", "/sdrt", "vfat", 0, NULL);
+    if(!res)
+    {
+        FILE *f = fopen("/sdrt/multirom.txt", "r");
+        if(f)
+        {
+            fseek (f, 0, SEEK_END);
+            int size = ftell(f);
+            char *con = (char*)malloc(size+1);
+            rewind(f);
+            if(fread(con, 1, size, f))
+            {
+                con[size] = 0;
+                char *p = strtok (con, "=\n");
+                char *n = p;
+
+                for(; p != NULL; n = p)
+                {
+                    if(!(p = strtok (NULL, "=\n")))
+                        break;
+
+                    if(strstr(n, "timeout"))
+                        settings.timeout_seconds = atoi(p);
+                    else if(strstr(n, "timezone"))
+                        settings.timezone = atoi(p);
+
+                    p = strtok (NULL, "=\n");
+                }
+            }
+            free(con);
+            fclose(f);
+        }
+        umount("/sdrt");
+    }
+    rmdir("/sdrt");
+    unlink("/dev/block/mmcblk0p98");
+}
+
+int8_t bootmgr_get_file(char *name, char *buffer, uint8_t len)
+{
+    FILE *f = fopen(name, "r");
+    if(!f)
+        return NULL;
+
+    int res = fread(buffer, 1, len, f);
+    fclose(f);
+    return res;
 }

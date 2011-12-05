@@ -5,6 +5,9 @@ extern uint8_t bootmgr_selected;
 extern uint8_t bootmgr_phase;
 extern struct FB fb;
 
+static const char *battery_pct = "/sys/class/power_supply/battery/capacity";
+static const char *battery_status = "/sys/class/power_supply/battery/status";
+
 #define WHITE 0xFFFF
 #define BLACK 0x0000
 
@@ -13,11 +16,14 @@ extern struct FB fb;
 #define BOOTMGR_SD_SEL 2
 #define BOOTMGR_TETRIS 3
 #define BOOTMGR_BACKUPS_MAX 128
-void bootmgr_start(uint16_t timeout_seconds);
+void bootmgr_start();
 void bootmgr_show_rom_list();
-uint8_t bootmgr_boot_sd(char *path);
+uint8_t bootmgr_boot_sd();
 void bootmgr_import_boot(char *path);
 void bootmgr_remove_rc_mounts();
+void *bootmgr_time_thread(void *cookie);
+inline void bootmgr_set_time_thread(uint8_t start);
+int8_t bootmgr_get_file(char *name, char *buffer, uint8_t len);
 
 //keys
 int ev_init(void);
@@ -102,5 +108,13 @@ inline bootmgr_img *_bootmgr_new_img();
 inline bootmgr_line *_bootmgr_get_line(uint8_t line);
 inline bootmgr_fill *_bootmgr_get_fill(int8_t id);
 
+
+typedef struct
+{
+    int8_t timezone;
+    int8_t timeout_seconds;
+} bootmgr_settings_t;
+
+void bootmgr_load_settings();
 
 #endif

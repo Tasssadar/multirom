@@ -144,6 +144,7 @@ void tetris_key(int key)
         }
         case KEY_VOLUMEUP:
             tetris_exit();
+            bootmgr_set_time_thread(1);
             break;
         case KEY_HOME:
         {
@@ -597,13 +598,10 @@ void tetris_delete_if_nowhere(tetris_piece *p)
 
 void tetris_print_batt()
 {
-    FILE *f = fopen("/sys/class/power_supply/battery/capacity", "r");
-    if(!f)
-        return;
-
-    char str[4];
-    if(fgets(str, 4, f))
-        bootmgr_printf(234, 28, WHITE, "Batt: %s%%", str);
-    fclose(f);
+    char pct[4];
+    bootmgr_get_file(battery_pct, &pct, 4);
+    char *n = strchr(&pct, '\n');
+    *n = NULL;
+    bootmgr_printf(234, 28, WHITE, "Batt: %s%%", &pct);
 }
 

@@ -50,7 +50,7 @@ enum {
     KEYWORD(loglevel,    COMMAND, 1, do_loglevel)
     KEYWORD(unlink,      COMMAND, 1, do_unlink)
     KEYWORD(remove_rc_mounts, COMMAND,  0, do_remove_rc_mounts)
-    KEYWORD(bootmgr,     COMMAND, 1, do_bootmgr)
+    KEYWORD(bootmgr,     COMMAND, 0, do_bootmgr)
 
 /*    KEYWORD(capability,  OPTION,  0, 0)
     KEYWORD(chdir,       COMMAND, 1, do_chdir)

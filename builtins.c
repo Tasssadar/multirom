@@ -515,23 +515,13 @@ int do_unlink(int nargs, char **args)
 
 int do_bootmgr(int nargs, char **args)
 {
-    if (nargs != 2)
-        return -1;
-
     if(battchg_pause)
     {
         INFO("Disabling bootmgr due to battchg_pause == 1 (charger plugged-in?)");
         return 0;
     }
 
-    int timeout = atoi(args[1]);
-    if(timeout < 0)
-    {
-        INFO("Disabling bootmgr because of timeout < 0");
-        return 0;
-    }
-
-    bootmgr_start(timeout);
+    bootmgr_start();
     return 0;
 }
 
