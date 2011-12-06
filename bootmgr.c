@@ -131,15 +131,17 @@ void bootmgr_set_time_thread(uint8_t start)
 void *bootmgr_time_thread(void *cookie)
 {
     time_t tm;
-    uint8_t timer = 9;
 
     char pct[5];
     char status[50];
     int8_t hours;
 
+    const uint8_t update_val = settings.show_seconds ? 10 : 600;
+    uint8_t timer = update_val;
+
     while(bootmgr_time_run)
     {
-        if(timer == 10)
+        if(timer == update_val)
         {
             time(&tm);
             bootmgr_get_file(battery_pct, &pct, 4);
@@ -152,8 +154,10 @@ void *bootmgr_time_thread(void *cookie)
             if(hours >= 24)    hours -= 24;
             else if(hours < 0) hours = 24 + hours;
 
-            bootmgr_printf(0, 0, WHITE, "%2u:%02u:%02u    Battery: %s%%, %s",
-                           hours, tm%3600/60, tm%60, &pct, &status);
+            if(settings.show_seconds)
+                bootmgr_printf(0, 0, WHITE, "%2u:%02u:%02u    Battery: %s%%, %s", hours, tm%3600/60, tm%60, &pct, &status);
+            else
+                bootmgr_printf(0, 0, WHITE, "%2u:%02u         Battery: %s%%, %s", hours, tm%3600/60, &pct, &status);
             bootmgr_draw();
             timer = 0;
         }
@@ -986,6 +990,7 @@ void bootmgr_load_settings()
 {
     settings.timezone = 0;
     settings.timeout_seconds = 3;
+    settings.show_seconds = 0;
 
     mknod("/dev/block/mmcblk0p98", (0666 | S_IFBLK), makedev(179, 1));
     mkdir("/sdrt", (mode_t)0775);
@@ -1015,6 +1020,8 @@ void bootmgr_load_settings()
                         settings.timeout_seconds = atoi(p);
                     else if(strstr(n, "timezone"))
                         settings.timezone = atoi(p);
+                    else if(strstr(n, "show_seconds"))
+                        settings.show_seconds = atoi(p);
 
                     p = strtok (NULL, "=\n");
                 }

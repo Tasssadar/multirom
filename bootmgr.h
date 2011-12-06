@@ -120,6 +120,7 @@ typedef struct
 {
     int8_t timezone;
     int8_t timeout_seconds;
+    uint8_t show_seconds;
 } bootmgr_settings_t;
 
 void bootmgr_load_settings();
