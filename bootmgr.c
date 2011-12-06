@@ -136,8 +136,8 @@ void *bootmgr_time_thread(void *cookie)
     char status[50];
     int8_t hours;
 
-    const uint8_t update_val = settings.show_seconds ? 10 : 600;
-    uint8_t timer = update_val;
+    const uint16_t update_val = settings.show_seconds ? 10 : 600;
+    uint16_t timer = update_val;
 
     while(bootmgr_time_run)
     {
