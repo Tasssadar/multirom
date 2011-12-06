@@ -124,5 +124,6 @@ typedef struct
 } bootmgr_settings_t;
 
 void bootmgr_load_settings();
+int bootmgr_toggle_sdcard(uint8_t on, uint8_t mknod_only);
 
 #endif

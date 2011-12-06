@@ -992,11 +992,7 @@ void bootmgr_load_settings()
     settings.timeout_seconds = 3;
     settings.show_seconds = 0;
 
-    mknod("/dev/block/mmcblk0p98", (0666 | S_IFBLK), makedev(179, 1));
-    mkdir("/sdrt", (mode_t)0775);
-
-    int res = mount("/dev/block/mmcblk0p98", "/sdrt", "vfat", 0, NULL);
-    if(!res)
+    if(!bootmgr_toggle_sdcard(1, 0))
     {
         FILE *f = fopen("/sdrt/multirom.txt", "r");
         if(f)
@@ -1029,10 +1025,8 @@ void bootmgr_load_settings()
             free(con);
             fclose(f);
         }
-        umount("/sdrt");
     }
-    rmdir("/sdrt");
-    unlink("/dev/block/mmcblk0p98");
+    bootmgr_toggle_sdcard(0, 0);
 }
 
 int8_t bootmgr_get_file(char *name, char *buffer, uint8_t len)
@@ -1064,7 +1058,8 @@ uint8_t bootmgr_toggle_ums()
 
     if(!ums_enabled)
     {
-        fputs("/dev/block/mmcblk0p1", f);
+        bootmgr_toggle_sdcard(1, 1);
+        fputs("/dev/block/mmcblk0p98", f);
         bootmgr_printf(-1, 20, WHITE, "USB mass storage enabled");
         bootmgr_printf(-1, 21, WHITE, "Press \"search\" again to exit");
     }
@@ -1073,6 +1068,7 @@ uint8_t bootmgr_toggle_ums()
         fputc(0, f);
         bootmgr_erase_text(20);
         bootmgr_erase_text(21);
+        bootmgr_toggle_sdcard(0, 1);
     }
     fclose(f);
 
@@ -1081,4 +1077,36 @@ uint8_t bootmgr_toggle_ums()
 
     ums_enabled = !ums_enabled;
     return 1;
+}
+
+int bootmgr_toggle_sdcard(uint8_t on, uint8_t mknod_only)
+{
+    if(on)
+    {
+        int res = mknod("/dev/block/mmcblk0p98", (0666 | S_IFBLK), makedev(179, 1));
+        if(mknod_only)
+            return res;
+
+        mkdir("/sdrt", (mode_t)0775);
+
+        uint8_t i = 0;
+        for(; i < 20; ++i)
+        {
+            res = mount("/dev/block/mmcblk0p98", "/sdrt", "vfat", 0, NULL);
+            if(!res)
+                break;
+            usleep(500000);
+        }
+        return res;
+    }
+    else
+    {
+        if(!mknod_only)
+        {
+            umount("/sdrt");
+            rmdir("/sdrt");
+        }
+        unlink("/dev/block/mmcblk0p98");
+    }
+    return 0;
 }
