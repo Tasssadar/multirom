@@ -598,7 +598,7 @@ void tetris_delete_if_nowhere(tetris_piece *p)
 
 void tetris_print_batt()
 {
-    char pct[4];
+    char pct[5];
     bootmgr_get_file(battery_pct, &pct, 4);
     char *n = strchr(&pct, '\n');
     *n = NULL;

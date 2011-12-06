@@ -11,11 +11,17 @@ static const char *battery_status = "/sys/class/power_supply/battery/status";
 #define WHITE 0xFFFF
 #define BLACK 0x0000
 
-//main
-#define BOOTMGR_MAIN 1
-#define BOOTMGR_SD_SEL 2
-#define BOOTMGR_TETRIS 3
 #define BOOTMGR_BACKUPS_MAX 128
+
+enum _bootmgr_sections
+{
+    BOOTMGR_MAIN,
+    BOOTMGR_SD_SEL,
+    BOOTMGR_TETRIS,
+    BOOTMGR_UMS,
+};
+
+//main
 void bootmgr_start();
 void bootmgr_show_rom_list();
 uint8_t bootmgr_boot_sd();
@@ -24,6 +30,7 @@ void bootmgr_remove_rc_mounts();
 void *bootmgr_time_thread(void *cookie);
 inline void bootmgr_set_time_thread(uint8_t start);
 int8_t bootmgr_get_file(char *name, char *buffer, uint8_t len);
+uint8_t bootmgr_toggle_ums();
 
 //keys
 int ev_init(void);

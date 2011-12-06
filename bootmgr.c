@@ -39,6 +39,7 @@ uint8_t backups_has_active = 0;
 int8_t selected = -1;
 
 bootmgr_settings_t settings;
+uint8_t ums_enabled = 0;
 
 struct FB fb;
 struct stat s0, s1;
@@ -132,8 +133,9 @@ void *bootmgr_time_thread(void *cookie)
     time_t tm;
     uint8_t timer = 9;
 
-    char pct[4];
+    char pct[5];
     char status[50];
+    int8_t hours;
 
     while(bootmgr_time_run)
     {
@@ -144,8 +146,14 @@ void *bootmgr_time_thread(void *cookie)
             char *n = strchr(&pct, '\n');
             *n = NULL;
             bootmgr_get_file(battery_status, &status, 50);
+
+            // Timezone lame handling
+            hours = (tm%86400/60/60) + settings.timezone;
+            if(hours >= 24)    hours -= 24;
+            else if(hours < 0) hours = 24 + hours;
+
             bootmgr_printf(0, 0, WHITE, "%2u:%02u:%02u    Battery: %s%%, %s",
-                        (tm%86400/60/60) + settings.timezone, tm%3600/60, tm%60, &pct, &status);
+                           hours, tm%3600/60, tm%60, &pct, &status);
             bootmgr_draw();
             timer = 0;
         }
@@ -198,6 +206,12 @@ uint8_t bootmgr_handle_key(int key)
                     bootmgr_phase = BOOTMGR_TETRIS;
                     tetris_init();
                     break;
+                case KEY_SEARCH:
+                {
+                    if(bootmgr_toggle_ums())
+                        bootmgr_phase = BOOTMGR_UMS;
+                    break;
+                }
                 default:break;
             }
             break;
@@ -252,6 +266,14 @@ uint8_t bootmgr_handle_key(int key)
         case BOOTMGR_TETRIS:
         {
             tetris_key(key);
+            break;
+        }
+        case BOOTMGR_UMS:
+        {
+            if(key != KEY_SEARCH)
+                break;
+            bootmgr_toggle_ums();
+            bootmgr_phase = BOOTMGR_MAIN;
             break;
         }
     }
@@ -1014,5 +1036,42 @@ int8_t bootmgr_get_file(char *name, char *buffer, uint8_t len)
 
     int res = fread(buffer, 1, len, f);
     fclose(f);
+    if(res > 0)
+        buffer[res] = 0;
     return res;
+}
+
+uint8_t bootmgr_toggle_ums()
+{
+    bootmgr_printf(-1, 21, WHITE, "%sabling USB mass storage...", ums_enabled ? "dis" : "en");
+    bootmgr_draw();
+
+    sync();
+
+    FILE *f = fopen("/sys/devices/platform/msm_hsusb/gadget/lun0/file", "w+");
+    if(!f)
+    {
+        bootmgr_erase_text(21);
+        return 0;
+    }
+
+    if(!ums_enabled)
+    {
+        fputs("/dev/block/mmcblk0p1", f);
+        bootmgr_printf(-1, 20, WHITE, "USB mass storage enabled");
+        bootmgr_printf(-1, 21, WHITE, "Press \"search\" again to exit");
+    }
+    else
+    {
+        fputc(0, f);
+        bootmgr_erase_text(20);
+        bootmgr_erase_text(21);
+    }
+    fclose(f);
+
+    bootmgr_display->bg_img = ums_enabled;
+    bootmgr_draw();
+
+    ums_enabled = !ums_enabled;
+    return 1;
 }

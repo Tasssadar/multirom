@@ -500,6 +500,7 @@ int do_remove_rc_mounts(int nargs, char **args)
         fclose(f_out);
 
         __copy(new_file, file);
+        unlink(new_file);
     }
     closedir(d);
     return 0;
