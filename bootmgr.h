@@ -119,6 +119,7 @@ inline bootmgr_fill *_bootmgr_get_fill(int8_t id);
 typedef struct
 {
     int8_t timezone;
+    int8_t timezone_mins;
     int8_t timeout_seconds;
     uint8_t show_seconds;
 } bootmgr_settings_t;

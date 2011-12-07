@@ -28,9 +28,9 @@ int bootmgr_key_queue[10];
 int8_t bootmgr_key_itr = 10;
 static pthread_mutex_t bootmgr_input_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t bootmgr_draw_mutex = PTHREAD_MUTEX_INITIALIZER;
-static const char* bootmgr_bg0 = "/bmgr_imgs/init_0.rle";
-static const char* bootmgr_bg1 = "/bmgr_imgs/init_1.rle";
-static const char* bootmgr_img_folder = "/bmgr_imgs/%s";
+const char* bootmgr_bg0 = "/bmgr_imgs/init_0.rle";
+const char* bootmgr_bg1 = "/bmgr_imgs/init_1.rle";
+const char* bootmgr_img_folder = "/bmgr_imgs/%s";
 uint8_t bootmgr_phase = BOOTMGR_MAIN;
 uint8_t total_backups = 0;
 char *backups[BOOTMGR_BACKUPS_MAX];
@@ -135,6 +135,7 @@ void *bootmgr_time_thread(void *cookie)
     char pct[5];
     char status[50];
     int8_t hours;
+    int8_t mins;
 
     const uint16_t update_val = settings.show_seconds ? 10 : 600;
     uint16_t timer = update_val;
@@ -151,13 +152,19 @@ void *bootmgr_time_thread(void *cookie)
 
             // Timezone lame handling
             hours = (tm%86400/60/60) + settings.timezone;
-            if(hours >= 24)    hours -= 24;
-            else if(hours < 0) hours = 24 + hours;
+            mins = tm%3600/60 + settings.timezone_mins;
+
+            if     (mins >= 60) { mins -= 60; ++hours; }
+            else if(mins < 0)   { mins = 60 - mins; --hours; }
+
+            if     (hours >= 24) hours -= 24;
+            else if(hours < 0)   hours = 24 + hours;
 
             if(settings.show_seconds)
-                bootmgr_printf(0, 0, WHITE, "%2u:%02u:%02u    Battery: %s%%, %s", hours, tm%3600/60, tm%60, &pct, &status);
+                bootmgr_printf(0, 0, WHITE, "%2u:%02u:%02u    Battery: %s%%, %s", hours, mins, tm%60, &pct, &status);
             else
-                bootmgr_printf(0, 0, WHITE, "%2u:%02u         Battery: %s%%, %s", hours, tm%3600/60, &pct, &status);
+                bootmgr_printf(0, 0, WHITE, "%2u:%02u         Battery: %s%%, %s", hours, mins, &pct, &status);
+
             bootmgr_draw();
             timer = 0;
         }
@@ -1015,7 +1022,11 @@ void bootmgr_load_settings()
                     if(strstr(n, "timeout"))
                         settings.timeout_seconds = atoi(p);
                     else if(strstr(n, "timezone"))
-                        settings.timezone = atoi(p);
+                    {
+                        double timezone = atof(p);
+                        settings.timezone = (int8_t)timezone;
+                        settings.timezone_mins = (timezone - settings.timezone)*60;
+                    }
                     else if(strstr(n, "show_seconds"))
                         settings.show_seconds = atoi(p);
 
