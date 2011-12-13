@@ -23,6 +23,8 @@ uint8_t level;
 uint16_t cleared;
 uint16_t update_t;
 
+const uint16_t score_coef[] = { 0, 40, 100, 300, 1200 };
+
 void tetris_init()
 {
     tetris_set_defaults();
@@ -560,15 +562,7 @@ void tetris_check_line()
 
     if(lines)
     {
-        uint16_t coef = 0;
-        switch(lines)
-        {
-            case 1: coef = 40;   break;
-            case 2: coef = 100;  break;
-            case 3: coef = 300;  break;
-            case 4: coef = 1200; break;
-        }
-        score += level*coef + coef;
+        score += level*score_coef[lines] + score_coef[lines];
         cleared += lines;
         if(cleared >= (level+1)*LINES_LEVEL)
         {

@@ -24,8 +24,11 @@
 uint8_t bootmgr_selected = 0;
 volatile uint8_t bootmgr_input_run = 1;
 volatile uint8_t bootmgr_time_run = 1;
+volatile uint8_t bootmgr_run = 1;
 int bootmgr_key_queue[10];
+uint16_t bootmgr_touch_queue[64][2];
 int8_t bootmgr_key_itr = 10;
+int8_t bootmgr_touch_itr = 64;
 static pthread_mutex_t bootmgr_input_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t bootmgr_draw_mutex = PTHREAD_MUTEX_INITIALIZER;
 const char* bootmgr_bg0 = "/bmgr_imgs/init_0.rle";
@@ -49,7 +52,7 @@ unsigned max_fb_size;
 bootmgr_display_t *bootmgr_display = NULL;
 pthread_t t_time;
 
-inline void __bootmgr_boot()
+void __bootmgr_boot()
 {
     bootmgr_printf(-1, 20, WHITE, "Booting from %s...", bootmgr_selected ? "SD-card" : "internal memory");
     bootmgr_draw();
@@ -69,12 +72,17 @@ void bootmgr_start()
     int8_t last_selected = -1;
     uint8_t key_pressed = (settings.timeout_seconds == -1);
     int16_t timer = settings.timeout_seconds*10;
+    uint16_t x, y;
+    uint8_t touch;
 
     pthread_t t_input;
     pthread_create(&t_input, NULL, bootmgr_input_thread, NULL);
     bootmgr_set_time_thread(1);
 
-    while(1)
+    bootmgr_add_touch(40,  160, 160, 290, bootmgr_touch_int, 1);
+    bootmgr_add_touch(160, 160, 279, 290, bootmgr_touch_sd,  2);
+
+    while(bootmgr_run)
     {
         if(last_selected != bootmgr_selected)
         {
@@ -83,7 +91,8 @@ void bootmgr_start()
         }
 
         key = bootmgr_get_last_key();
-        if(key != -1)
+        touch = bootmgr_get_last_touch(&x, &y);
+        if(key != -1 || touch)
         {
             if(!key_pressed)
             {
@@ -92,8 +101,11 @@ void bootmgr_start()
                 key_pressed = 1;
             }
 
-            if(bootmgr_handle_key(key))
+            if(key != -1 && bootmgr_handle_key(key))
                 return;
+
+            if(touch)
+                bootmgr_check_touch(x, y);
         }
 
         usleep(100000);
@@ -197,16 +209,8 @@ uint8_t bootmgr_handle_key(int key)
                 case KEY_MENU:
                     if(bootmgr_selected)
                     {
-                        bootmgr_set_time_thread(0);
-                        bootmgr_phase = BOOTMGR_SD_SEL;
-                        bootmgr_display->bg_img = 0;
-                        bootmgr_printf(-1, 20, WHITE, "Mounting sd-ext...");
-                        bootmgr_draw();
-                        bootmgr_show_rom_list();
-                        while(bootmgr_get_last_key() != -1); // clear key queue
-                        if(!total_backups && backups_has_active)
-                            return bootmgr_boot_sd();
-                        bootmgr_draw();
+                        if(bootmgr_show_rom_list())
+                            return 1;
                         break;
                     }
                     else
@@ -268,6 +272,8 @@ uint8_t bootmgr_handle_key(int key)
                     bootmgr_phase = BOOTMGR_MAIN;
                     bootmgr_draw();
                     bootmgr_set_time_thread(1);
+                    bootmgr_add_touch(40,  160, 160, 290, bootmgr_touch_int, 1);
+                    bootmgr_add_touch(160, 160, 279, 290, bootmgr_touch_sd,  2);
                     break;
                 }
                 default:break;
@@ -295,16 +301,33 @@ void *bootmgr_input_thread(void *cookie)
 {
     ev_init();
     struct input_event ev;
+    uint16_t x, y;
     while(bootmgr_input_run)
     {
-        do
+        ev_get(&ev, 0);
+        if(ev.type == EV_KEY && !ev.value && ev.code <= KEY_MAX)
         {
-            ev_get(&ev, 0);
-        } while (bootmgr_input_run && (ev.type != EV_KEY || ev.value != 1 || ev.code > KEY_MAX));
-        pthread_mutex_lock(&bootmgr_input_mutex);
-        if(ev.type == EV_KEY && bootmgr_key_itr > 0)
-            bootmgr_key_queue[--bootmgr_key_itr] = ev.code;
-        pthread_mutex_unlock(&bootmgr_input_mutex);
+            pthread_mutex_lock(&bootmgr_input_mutex);
+            if(bootmgr_key_itr > 0)
+                bootmgr_key_queue[--bootmgr_key_itr] = ev.code;
+            pthread_mutex_unlock(&bootmgr_input_mutex);
+        }
+        else if(ev.type == EV_ABS && ev.code == 0x30 && ev.value) //#define ABS_MT_TOUCH_MAJOR  0x30    /* Major axis of touching ellipse */
+        {
+            do { ev_get(&ev, 0); } while(ev.type != EV_ABS);
+            x = ev.value;
+            do { ev_get(&ev, 0); } while(ev.type != EV_ABS);
+            y = ev.value;
+            do { ev_get(&ev, 0); } while(ev.type != EV_SYN && ev.code != SYN_REPORT); // Wait for touch seq end
+
+            pthread_mutex_lock(&bootmgr_input_mutex);
+            if(bootmgr_touch_itr > 0)
+            {
+                bootmgr_touch_queue[--bootmgr_touch_itr][0] = x;
+                bootmgr_touch_queue[  bootmgr_touch_itr][1] = y;
+            }
+            pthread_mutex_unlock(&bootmgr_input_mutex);
+        }
     }
     ev_exit();
     return NULL;
@@ -312,10 +335,24 @@ void *bootmgr_input_thread(void *cookie)
 
 int bootmgr_get_last_key()
 {
-    pthread_mutex_lock(&bootmgr_input_mutex);
     int res = -1;
+    pthread_mutex_lock(&bootmgr_input_mutex);
     if(bootmgr_key_itr != 10)
         res = bootmgr_key_queue[bootmgr_key_itr++];
+    pthread_mutex_unlock(&bootmgr_input_mutex);
+    return res;
+}
+
+uint8_t bootmgr_get_last_touch(uint16_t *x, uint16_t *y)
+{
+    uint8_t res = 0;
+    pthread_mutex_lock(&bootmgr_input_mutex);
+    if(bootmgr_touch_itr != 64)
+    {
+        *x = bootmgr_touch_queue[bootmgr_touch_itr  ][0];
+        *y = bootmgr_touch_queue[bootmgr_touch_itr++][1];
+        res = 1;
+    }
     pthread_mutex_unlock(&bootmgr_input_mutex);
     return res;
 }
@@ -383,9 +420,11 @@ void bootmgr_init_display()
     bootmgr_display->ln_count = 0;
     bootmgr_display->fill_count = 0;
     bootmgr_display->img_count = 0;
+    bootmgr_display->touch_count = 0;
     bootmgr_display->lines = NULL;
     bootmgr_display->fills = NULL;
     bootmgr_display->imgs = NULL;
+    bootmgr_display->touches = NULL;
     bootmgr_display->bg_img = 1;
 
     if(bootmgr_open_framebuffer() != 0)
@@ -397,9 +436,7 @@ void bootmgr_init_display()
 
 void bootmgr_destroy_display()
 {
-    bootmgr_set_lines_count(0);
-    bootmgr_set_fills_count(0);
-    bootmgr_set_imgs_count(0);
+    bootmgr_clear();
     free(bootmgr_display);
 
     bootmgr_close_framebuffer();
@@ -468,6 +505,19 @@ void bootmgr_select(int8_t line)
     else
         bootmgr_print_fill(0, line*ISO_CHAR_HEIGHT, BOOTMGR_DIS_W, ISO_CHAR_HEIGHT, WHITE, BOOTMGR_FILL_SELECT);
     selected = line;
+}
+
+void bootmgr_add_touch(uint16_t x_min, uint16_t y_min, uint16_t x_max, uint16_t y_max, uint8_t (*callback)(), int8_t id)
+{
+    bootmgr_touch *t = NULL;
+    if(id == -1 || !(t = _bootmgr_get_touch(id)))
+        t = _bootmgr_new_touch();
+    t->x_min = x_min;
+    t->y_min = y_min;
+    t->x_max = x_max;
+    t->y_max = y_max;
+    t->callback = callback;
+    t->id = id;
 }
 
 int bootmgr_open_framebuffer()
@@ -709,6 +759,30 @@ void bootmgr_set_imgs_count(uint16_t c)
     bootmgr_display->img_count = c;
 }
 
+void bootmgr_set_touches_count(uint16_t c)
+{
+    bootmgr_touch **tmp_touches = bootmgr_display->touches;
+
+    bootmgr_display->touches = (bootmgr_touch**)malloc(sizeof(bootmgr_touch*)*c);
+    uint16_t itr = 0;
+    for(; itr < c; ++itr)
+    {
+        if(tmp_touches && itr < bootmgr_display->touch_count)
+            bootmgr_display->touches[itr] = tmp_touches[itr];
+        else
+            bootmgr_display->touches[itr] = (bootmgr_touch*)malloc(sizeof(bootmgr_touch));
+    }
+
+    if(tmp_touches)
+    {
+        for(; itr < bootmgr_display->touch_count; ++itr)
+            free(tmp_touches[itr]);
+        free(tmp_touches);
+    }
+
+    bootmgr_display->touch_count = c;
+}
+
 void bootmgr_draw()
 {
     pthread_mutex_lock(&bootmgr_draw_mutex);
@@ -742,6 +816,12 @@ bootmgr_img *_bootmgr_new_img()
 {
     bootmgr_set_imgs_count(bootmgr_display->img_count+1);
     return bootmgr_display->imgs[bootmgr_display->img_count-1];
+}
+
+bootmgr_touch *_bootmgr_new_touch()
+{
+    bootmgr_set_touches_count(bootmgr_display->touch_count+1);
+    return bootmgr_display->touches[bootmgr_display->touch_count-1];
 }
 
 void bootmgr_erase_text(uint8_t line)
@@ -799,6 +879,33 @@ void bootmgr_erase_fill(int8_t id)
     --bootmgr_display->fill_count;
 }
 
+void bootmgr_erase_touch(int8_t id)
+{
+    bootmgr_touch **tmp_touches = (bootmgr_touch**)malloc(sizeof(bootmgr_touch*)*(bootmgr_display->touch_count-1));
+
+    uint16_t i = 0;
+    uint16_t z = 0;
+    bootmgr_touch *c = NULL;
+
+    for(; i < bootmgr_display->touch_count; ++i)
+    {
+        c = bootmgr_display->touches[i];
+        if(c->id == id)
+        {
+            free(c);
+            continue;
+        }
+        tmp_touches[z++] = c;
+    }
+
+    if(i == z)
+        return;
+
+    free(bootmgr_display->touches);
+    bootmgr_display->touches = tmp_touches;
+    --bootmgr_display->touch_count;
+}
+
 bootmgr_line *_bootmgr_get_line(uint8_t line)
 {
     uint16_t i = 0;
@@ -823,8 +930,45 @@ bootmgr_fill *_bootmgr_get_fill(int8_t id)
     return NULL;
 }
 
-void bootmgr_show_rom_list()
+bootmgr_touch *_bootmgr_get_touch(int8_t id)
 {
+    uint16_t i = 0;
+
+    for(; i < bootmgr_display->touch_count; ++i)
+    {
+        if(bootmgr_display->touches[i]->id == id)
+             return bootmgr_display->touches[i];
+    }
+    return NULL;
+}
+
+void bootmgr_check_touch(uint16_t x, uint16_t y)
+{
+    uint16_t i = 0;
+    bootmgr_touch *c = NULL;
+    for(; i < bootmgr_display->touch_count; ++i)
+    {
+        c = bootmgr_display->touches[i];
+        if(c->x_min <= x && c->y_min <= y &&
+           c->x_max >= x && c->y_max >= y)
+        {
+            if(c->callback())
+            {
+                bootmgr_erase_touch(c->id);
+                i = 0;
+            }
+        }
+    }
+}
+
+uint8_t bootmgr_show_rom_list()
+{
+    bootmgr_set_time_thread(0);
+    bootmgr_phase = BOOTMGR_SD_SEL;
+    bootmgr_display->bg_img = 0;
+    bootmgr_printf(-1, 20, WHITE, "Mounting sd-ext...");
+    bootmgr_draw();
+
     if(!backups_loaded)
     {
         // mknod
@@ -843,7 +987,7 @@ void bootmgr_show_rom_list()
         {
             bootmgr_printf(-1, 20, WHITE, "Failed to mount sd-ext!");
             bootmgr_printf(-1, 21, WHITE, "Press back to return.");
-            return;
+            return 0;
         }
 
         DIR *dir = opendir("/sdroot/multirom/backup");
@@ -899,6 +1043,13 @@ void bootmgr_show_rom_list()
         bootmgr_printf(-1, 20, WHITE, "No active ROM nor backups present.");
         bootmgr_printf(-1, 21, WHITE, "Press \"back\" to return");
     }
+
+    while(bootmgr_get_last_key() != -1); // clear key queue
+    while(bootmgr_get_last_touch(&i, &i));     // clear touch queue
+    if(!total_backups && backups_has_active)
+        return bootmgr_boot_sd();
+    bootmgr_draw();
+    return 0;
 }
 
 uint8_t bootmgr_boot_sd()
@@ -1120,4 +1271,29 @@ int bootmgr_toggle_sdcard(uint8_t on, uint8_t mknod_only)
         unlink("/dev/block/mmcblk0p98");
     }
     return 0;
+}
+
+void bootmgr_clear()
+{
+    bootmgr_set_lines_count(0);
+    bootmgr_set_fills_count(0);
+    bootmgr_set_imgs_count(0);
+    bootmgr_set_touches_count(0);
+}
+
+uint8_t bootmgr_touch_int()
+{
+    bootmgr_selected = 0;
+    if(bootmgr_key_itr > 0)
+        --bootmgr_key_itr;
+    bootmgr_key_queue[bootmgr_key_itr] = KEY_MENU;
+    return 1;
+}
+
+uint8_t bootmgr_touch_sd()
+{
+    bootmgr_selected = 1;
+    if(bootmgr_show_rom_list())
+        bootmgr_run = 0;
+    return 1;
 }
