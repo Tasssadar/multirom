@@ -21,6 +21,9 @@
 #include "keywords.h"
 #include "iso_font.h"
 
+#define SD_EXT_BLOCK "/dev/block/mmcblk0p99"
+#define SD_FAT_BLOCK "/dev/block/mmcblk0p98"
+
 uint8_t bootmgr_selected = 0;
 volatile uint8_t bootmgr_input_run = 1;
 volatile uint8_t bootmgr_time_run = 1;
@@ -972,7 +975,7 @@ uint8_t bootmgr_show_rom_list()
     if(!backups_loaded)
     {
         // mknod
-        mknod("/dev/block/mmcblk0p99", (0666 | S_IFBLK), makedev(179, 2));
+        mknod(SD_EXT_BLOCK, (0666 | S_IFBLK), makedev(179, 2));
 
         //mkdir
         mkdir("/sdroot", (mode_t)0775);
@@ -981,8 +984,8 @@ uint8_t bootmgr_show_rom_list()
         chown("/sdroot", uid, gid);
 
         //mount
-        static const char *mount_args[] = { NULL, "ext4", "/dev/block/mmcblk0p99", "/sdroot", "nosuid", "nodev" };
-        int res = do_mount(6, mount_args);
+        static const char *mount_args[] = { NULL, "ext4", SD_EXT_BLOCK, "/sdroot", "nodev" };
+        int res = do_mount(5, mount_args);
         if(res < 0)
         {
             bootmgr_printf(-1, 20, WHITE, "Failed to mount sd-ext!");
@@ -1221,7 +1224,7 @@ uint8_t bootmgr_toggle_ums()
     if(!ums_enabled)
     {
         bootmgr_toggle_sdcard(1, 1);
-        fputs("/dev/block/mmcblk0p98", f);
+        fputs(SD_FAT_BLOCK, f);
         bootmgr_printf(-1, 20, WHITE, "USB mass storage enabled");
         bootmgr_printf(-1, 21, WHITE, "Press \"search\" again to exit");
     }
@@ -1245,7 +1248,7 @@ int bootmgr_toggle_sdcard(uint8_t on, uint8_t mknod_only)
 {
     if(on)
     {
-        int res = mknod("/dev/block/mmcblk0p98", (0666 | S_IFBLK), makedev(179, 1));
+        int res = mknod(SD_FAT_BLOCK, (0666 | S_IFBLK), makedev(179, 1));
         if(mknod_only)
             return res;
 
@@ -1254,7 +1257,7 @@ int bootmgr_toggle_sdcard(uint8_t on, uint8_t mknod_only)
         uint8_t i = 0;
         for(; i < 20; ++i)
         {
-            res = mount("/dev/block/mmcblk0p98", "/sdrt", "vfat", 0, NULL);
+            res = mount(SD_FAT_BLOCK, "/sdrt", "vfat", 0, NULL);
             if(!res)
                 break;
             usleep(500000);
@@ -1268,7 +1271,7 @@ int bootmgr_toggle_sdcard(uint8_t on, uint8_t mknod_only)
             umount("/sdrt");
             rmdir("/sdrt");
         }
-        unlink("/dev/block/mmcblk0p98");
+        unlink(SD_FAT_BLOCK);
     }
     return 0;
 }
