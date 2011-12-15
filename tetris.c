@@ -8,6 +8,7 @@
 
 #include "init.h"
 #include "bootmgr.h"
+#include "bootmgr_shared.h"
 #include "tetris.h"
 
 volatile uint8_t state;
@@ -133,7 +134,7 @@ void tetris_key(int key)
             }
             else if(state & TETRIS_STARTED)
             {
-                bootmgr_print_fill(11, 14*16, 219, 32, BLACK, 1);
+                bootmgr_print_fill(11, 14*ISO_CHAR_HEIGHT, 219, 32, BLACK, 1);
                 bootmgr_printf(10+((220 - 6*8)/2),  14, WHITE, "Paused");
                 bootmgr_printf(10+((220 - 25*8)/2), 15, WHITE, "Press \"VolDown\" to resume");
                 bootmgr_draw_fills();
@@ -228,7 +229,7 @@ void tetris_draw(uint8_t move)
         {
             if(!current->moved)
             {
-                bootmgr_print_fill(11, 14*16, 219, 32, BLACK, 1);
+                bootmgr_print_fill(11, 14*ISO_CHAR_HEIGHT, 219, 32, BLACK, 1);
                 bootmgr_printf(10+((220 - 9*8)/2),  14, WHITE, "Game over");
                 bootmgr_printf(10+((220 - 23*8)/2), 15, WHITE, "Press \"Home\" to restart");
                 bootmgr_draw_fills();
