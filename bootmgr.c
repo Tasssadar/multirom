@@ -67,7 +67,6 @@ void bootmgr_start()
     uint16_t x, y;
     uint8_t touch;
 
-    bootmgr_display = NULL;
     selected = -1;
 
     pthread_t t_input;
@@ -445,8 +444,8 @@ uint8_t bootmgr_show_rom_list()
         chown("/sdroot", uid, gid);
 
         //mount
-        static const char *mount_args[] = { NULL, "ext4", SD_EXT_BLOCK, "/sdroot", "nodev" };
-        int res = do_mount(5, mount_args);
+        static const char *mount_args[] = { NULL, "ext4", SD_EXT_BLOCK, "/sdroot" };
+        int res = do_mount(4, mount_args);
         if(res < 0)
         {
             bootmgr_printf(-1, 20, WHITE, "Failed to mount sd-ext!");
