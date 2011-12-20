@@ -6,5 +6,11 @@
 #define ISO_CHAR_HEIGHT 16
 
 bootmgr_display_t *bootmgr_display;
-
+extern bootmgr_settings_t settings;
+extern pthread_mutex_t *bootmgr_input_mutex;
+extern volatile uint8_t bootmgr_input_run;
+extern uint8_t bootmgr_phase;
+extern int8_t selected;
+extern uint8_t total_backups;
+extern uint8_t backups_has_active;
 #endif

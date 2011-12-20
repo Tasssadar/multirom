@@ -15,14 +15,13 @@
 #include "bootmgr_shared.h"
 #include "iso_font.h"
 
-const char* bootmgr_bg0 = "/bmgr_imgs/init_0.rle";
-const char* bootmgr_bg1 = "/bmgr_imgs/init_1.rle";
+const char* bootmgr_bg = "/bmgr_imgs/init.rle";
 const char* bootmgr_img_folder = "/bmgr_imgs/%s";
 static pthread_mutex_t bootmgr_draw_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct FB fb;
-struct stat s0, s1;
-int fd0, fd1;
+struct stat s;
+int fd;
 unsigned max_fb_size;
 
 void bootmgr_init_display()
@@ -102,7 +101,7 @@ void bootmgr_print_fill(int16_t x, int16_t y, int16_t width, int16_t height, uin
     f->id = id;
 }
 
-void bootmgr_add_touch(uint16_t x_min, uint16_t y_min, uint16_t x_max, uint16_t y_max, uint8_t (*callback)(), int8_t id)
+void bootmgr_add_touch(uint16_t x_min, uint16_t y_min, uint16_t x_max, uint16_t y_max, int (*callback)(), int8_t id)
 {
     bootmgr_touch *t = NULL;
     if(id == -1 || !(t = _bootmgr_get_touch(id)))
@@ -120,12 +119,11 @@ int bootmgr_open_framebuffer()
     if (vt_set_mode(1))
         return -1;
 
-    fd0 = open(bootmgr_bg0, O_RDONLY);
-    fd1 = open(bootmgr_bg1, O_RDONLY);
-    if (fd0 < 0 || fd1 < 0)
+    fd = open(bootmgr_bg, O_RDONLY);
+    if (fd < 0)
         return -1;
 
-    if (fstat(fd0, &s0) < 0 || fstat(fd1, &s1) < 0)
+    if (fstat(fd, &s) < 0)
         return -1;
 
     if (fb_open(&fb))
@@ -139,8 +137,7 @@ int bootmgr_open_framebuffer()
 void bootmgr_close_framebuffer()
 {
     fb_close(&fb);
-    close(fd0);
-    close(fd1);
+    close(fd);
 }
 
 int bootmgr_show_img(uint16_t start_x, uint16_t start_y, char *custom_img)
@@ -148,39 +145,39 @@ int bootmgr_show_img(uint16_t start_x, uint16_t start_y, char *custom_img)
     uint16_t *data, *bits, *ptr;
     uint32_t rgb32, red, green, blue, alpha;
     unsigned count, max;
-    struct stat *s = NULL;
-    int *fd = NULL;
+    struct stat *_s = NULL;
+    int *_fd = NULL;
 
     if(custom_img)
     {
         char *path = (char*)malloc(50);
         sprintf(path, bootmgr_img_folder, custom_img);
 
-        fd = malloc(sizeof(*fd));
+        _fd = malloc(sizeof(*_fd));
 
-        *fd = open(path, O_RDONLY);
+        *_fd = open(path, O_RDONLY);
         free(path);
 
-        if(*fd < 0)
+        if(*_fd < 0)
             return -1;
 
-        s = malloc(sizeof(*s));
-        if (fstat(*fd, s) < 0)
+        _s = malloc(sizeof(*_s));
+        if (fstat(*_fd, _s) < 0)
             return -1;
     }
     else
     {
-        s = bootmgr_selected ? &s1 : &s0;
-        fd = bootmgr_selected ? &fd1 : &fd0;
+        _s = &s;
+        _fd = &fd;
     }
 
-    data = mmap(0, s->st_size, PROT_READ, MAP_SHARED, *fd, 0);
+    data = mmap(0, _s->st_size, PROT_READ, MAP_SHARED, *_fd, 0);
     if (data == MAP_FAILED)
         return -1;
 
     max = max_fb_size;
     ptr = data;
-    count = s->st_size;
+    count = _s->st_size;
     bits = fb.bits;
 
     if(start_x || start_y)
@@ -197,13 +194,13 @@ int bootmgr_show_img(uint16_t start_x, uint16_t start_y, char *custom_img)
         count -= 4;
     }
 
-    munmap(data, s->st_size);
+    munmap(data, _s->st_size);
 
     if(custom_img)
     {
-        close(*fd);
-        free(s);
-        free(fd);
+        close(*_fd);
+        free(_s);
+        free(_fd);
     }
     return 0;
 }
@@ -378,12 +375,38 @@ void bootmgr_set_touches_count(uint16_t c)
     bootmgr_display->touch_count = c;
 }
 
+void bootmgr_main_draw_sel()
+{
+    static const uint16_t height = 120;
+    static const uint16_t width = 120;
+    static const uint16_t x[] = { 40,  160,  40,  160 };
+    static const uint16_t y[] = { 125, 125,  245, 245 };
+
+    uint16_t *bits;
+    uint16_t *line = fb.bits + y[bootmgr_selected]*BOOTMGR_DIS_W + x[bootmgr_selected];
+    uint16_t i,z;
+
+    for(i = 0; i < height; ++i)
+    {
+        bits = line;
+        for(z = 0; z < width; ++z)
+        {
+            android_memset16(bits, ~(*bits), 2);
+            ++bits;
+        }
+        line += BOOTMGR_DIS_W;
+    }
+}
+
 void bootmgr_draw()
 {
     pthread_mutex_lock(&bootmgr_draw_mutex);
 
     if(bootmgr_display->bg_img)
+    {
         bootmgr_show_img(0, 0, NULL);
+        bootmgr_main_draw_sel();
+    }
     else
         android_memset16(fb.bits, BLACK, BOOTMGR_DIS_W*BOOTMGR_DIS_H*2);
 
@@ -537,7 +560,7 @@ bootmgr_touch *_bootmgr_get_touch(int8_t id)
     return NULL;
 }
 
-void bootmgr_check_touch(uint16_t x, uint16_t y)
+int bootmgr_check_touch(uint16_t x, uint16_t y)
 {
     uint16_t i = 0;
     bootmgr_touch *c = NULL;
@@ -547,11 +570,11 @@ void bootmgr_check_touch(uint16_t x, uint16_t y)
         if(c->x_min <= x && c->y_min <= y &&
            c->x_max >= x && c->y_max >= y)
         {
-            if(c->callback())
-            {
+            int res = c->callback();
+            if(res & TCALL_DELETE)
                 bootmgr_erase_touch(c->id);
-                i = 0;
-            }
+            return res;
         }
     }
+    return TCALL_NONE;
 }

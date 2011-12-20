@@ -24,15 +24,10 @@
 #define SD_EXT_BLOCK "/dev/block/mmcblk0p99"
 #define SD_FAT_BLOCK "/dev/block/mmcblk0p98"
 
-uint8_t bootmgr_selected = 0;
+int8_t bootmgr_selected = 0;
 volatile uint8_t bootmgr_input_run = 1;
 volatile uint8_t bootmgr_time_run = 1;
 volatile uint8_t bootmgr_run = 1;
-int bootmgr_key_queue[10];
-uint16_t bootmgr_touch_queue[64][2];
-int8_t bootmgr_key_itr = 10;
-int8_t bootmgr_touch_itr = 64;
-static pthread_mutex_t bootmgr_input_mutex = PTHREAD_MUTEX_INITIALIZER;
 uint8_t bootmgr_phase = BOOTMGR_MAIN;
 uint8_t total_backups = 0;
 char *backups[BOOTMGR_BACKUPS_MAX];
@@ -46,7 +41,7 @@ pthread_t t_time;
 
 void __bootmgr_boot()
 {
-    bootmgr_printf(-1, 20, WHITE, "Booting from %s...", bootmgr_selected ? "SD-card" : "internal memory");
+    bootmgr_printf(-1, 25, WHITE, "Booting from internal memory...");
     bootmgr_draw();
 
     bootmgr_set_time_thread(0);
@@ -62,19 +57,16 @@ void bootmgr_start()
 
     int key = 0;
     int8_t last_selected = -1;
+    int8_t last_phase = -1;
     uint8_t key_pressed = (settings.timeout_seconds == -1);
     int16_t timer = settings.timeout_seconds*10;
     uint16_t x, y;
     uint8_t touch;
-
     selected = -1;
 
     pthread_t t_input;
     pthread_create(&t_input, NULL, bootmgr_input_thread, NULL);
     bootmgr_set_time_thread(1);
-
-    bootmgr_add_touch(40,  160, 160, 290, bootmgr_touch_int, 1);
-    bootmgr_add_touch(160, 160, 279, 290, bootmgr_touch_sd,  2);
 
     while(bootmgr_run)
     {
@@ -84,22 +76,33 @@ void bootmgr_start()
             last_selected = bootmgr_selected;
         }
 
+        if(last_phase != bootmgr_phase)
+        {
+            bootmgr_setup_touch();
+            bootmgr_draw();
+            last_phase = bootmgr_phase;
+        }
+
         key = bootmgr_get_last_key();
         touch = bootmgr_get_last_touch(&x, &y);
         if(key != -1 || touch)
         {
             if(!key_pressed)
             {
-                bootmgr_erase_text(20);
+                bootmgr_erase_text(25);
                 bootmgr_draw();
                 key_pressed = 1;
             }
 
-            if(key != -1 && bootmgr_handle_key(key))
+            if(bootmgr_handle_key(key))
                 return;
 
             if(touch)
-                bootmgr_check_touch(x, y);
+            {
+                key = bootmgr_check_touch(x, y);
+                if(key & TCALL_EXIT_MGR)
+                    return;
+            }
         }
 
         usleep(100000);
@@ -107,7 +110,7 @@ void bootmgr_start()
         {
             if(timer%10 == 0)
             {
-                bootmgr_printf(-1, 20, WHITE, "Boot from internal mem in %us", timer/10);
+                bootmgr_printf(-1, 25, WHITE, "Boot from internal mem in %us", timer/10);
                 bootmgr_draw();
             }
 
@@ -189,11 +192,19 @@ uint8_t bootmgr_handle_key(int key)
             switch(key)
             {
                 case KEY_VOLUMEDOWN:
+                {
+                   if(++bootmgr_selected == 4)
+                       bootmgr_selected = 0;
+                   break;
+                }
                 case KEY_VOLUMEUP:
-                    bootmgr_selected = !bootmgr_selected;
-                    break;
+                {
+                   if(--bootmgr_selected == -1)
+                       bootmgr_selected = 3;
+                   break;
+                }
                 case KEY_BACK:
-                    bootmgr_printf(-1, 20, WHITE, "Rebooting...");
+                    bootmgr_printf(-1, 25, WHITE, "Rebooting...");
                     bootmgr_draw();
                 case KEY_POWER:
                     bootmgr_close_framebuffer();
@@ -201,24 +212,17 @@ uint8_t bootmgr_handle_key(int key)
                     reboot(key == KEY_POWER ? RB_POWER_OFF : RB_AUTOBOOT);
                     return 1;
                 case KEY_MENU:
-                    if(bootmgr_selected)
-                    {
-                        if(bootmgr_show_rom_list())
-                            return 1;
-                        break;
-                    }
-                    else
-                        __bootmgr_boot();
-                    return 1;
-                case KEY_HOME:
-                    bootmgr_set_time_thread(0);
-                    bootmgr_phase = BOOTMGR_TETRIS;
-                    tetris_init();
-                    break;
-                case KEY_SEARCH:
                 {
-                    if(bootmgr_toggle_ums())
-                        bootmgr_phase = BOOTMGR_UMS;
+                    switch(bootmgr_selected)
+                    {
+                        case 0: __bootmgr_boot(); return 1;
+                        case 1:
+                            if(bootmgr_show_rom_list())
+                                return 1;
+                            break;
+                        case 2: bootmgr_touch_ums();    break;
+                        case 3: bootmgr_touch_tetris(); break;
+                    }
                     break;
                 }
                 default:break;
@@ -230,46 +234,16 @@ uint8_t bootmgr_handle_key(int key)
             switch(key)
             {
                 case KEY_VOLUMEDOWN:
-                {
-                    if(!total_backups)
-                        break;
-                    if(selected == 2 || (!backups_has_active && selected == total_backups+4))
-                        bootmgr_select(5);
-                    else if(selected == total_backups+4)
-                            bootmgr_select(2);
-                    else
-                        bootmgr_select(selected+1);
-                    bootmgr_draw();
+                    bootmgr_touch_sd_down();
                     break;
-                }
                 case KEY_VOLUMEUP:
-                {
-                    if(!total_backups)
-                        break;
-                    if(selected == 2 || (!backups_has_active && selected == 5))
-                        bootmgr_select(total_backups+4);
-                    else if(selected == 5)
-                        bootmgr_select(2);
-                    else
-                        bootmgr_select(selected-1);
-                    bootmgr_draw();
+                    bootmgr_touch_sd_up();
                     break;
-                }
                 case KEY_MENU:
                     return bootmgr_boot_sd();
                 case KEY_BACK:
-                {
-                    selected = -1;
-                    bootmgr_set_lines_count(0);
-                    bootmgr_set_fills_count(0);
-                    bootmgr_display->bg_img = 1;
-                    bootmgr_phase = BOOTMGR_MAIN;
-                    bootmgr_draw();
-                    bootmgr_set_time_thread(1);
-                    bootmgr_add_touch(40,  160, 160, 290, bootmgr_touch_int, 1);
-                    bootmgr_add_touch(160, 160, 279, 290, bootmgr_touch_sd,  2);
+                    bootmgr_touch_sd_exit();
                     break;
-                }
                 default:break;
             }
             break;
@@ -283,129 +257,11 @@ uint8_t bootmgr_handle_key(int key)
         {
             if(key != KEY_SEARCH)
                 break;
-            bootmgr_toggle_ums();
-            bootmgr_phase = BOOTMGR_MAIN;
+            bootmgr_touch_exit_ums();
             break;
         }
     }
     return 0;
-}
-
-void *bootmgr_input_thread(void *cookie)
-{
-    ev_init();
-    struct input_event ev;
-    uint16_t x, y;
-    while(bootmgr_input_run)
-    {
-        ev_get(&ev, 0);
-        if(ev.type == EV_KEY && !ev.value && ev.code <= KEY_MAX)
-        {
-            pthread_mutex_lock(&bootmgr_input_mutex);
-            if(bootmgr_key_itr > 0)
-                bootmgr_key_queue[--bootmgr_key_itr] = ev.code;
-            pthread_mutex_unlock(&bootmgr_input_mutex);
-        }
-        else if(ev.type == EV_ABS && ev.code == 0x30 && ev.value) //#define ABS_MT_TOUCH_MAJOR  0x30    /* Major axis of touching ellipse */
-        {
-            do { ev_get(&ev, 0); } while(ev.type != EV_ABS);
-            x = ev.value;
-            do { ev_get(&ev, 0); } while(ev.type != EV_ABS);
-            y = ev.value;
-            do { ev_get(&ev, 0); } while(ev.type != EV_SYN && ev.code != SYN_REPORT); // Wait for touch seq end
-
-            pthread_mutex_lock(&bootmgr_input_mutex);
-            if(bootmgr_touch_itr > 0)
-            {
-                bootmgr_touch_queue[--bootmgr_touch_itr][0] = x;
-                bootmgr_touch_queue[  bootmgr_touch_itr][1] = y;
-            }
-            pthread_mutex_unlock(&bootmgr_input_mutex);
-        }
-    }
-    ev_exit();
-    return NULL;
-}
-
-int bootmgr_get_last_key()
-{
-    int res = -1;
-    pthread_mutex_lock(&bootmgr_input_mutex);
-    if(bootmgr_key_itr != 10)
-        res = bootmgr_key_queue[bootmgr_key_itr++];
-    pthread_mutex_unlock(&bootmgr_input_mutex);
-    return res;
-}
-
-uint8_t bootmgr_get_last_touch(uint16_t *x, uint16_t *y)
-{
-    uint8_t res = 0;
-    pthread_mutex_lock(&bootmgr_input_mutex);
-    if(bootmgr_touch_itr != 64)
-    {
-        *x = bootmgr_touch_queue[bootmgr_touch_itr  ][0];
-        *y = bootmgr_touch_queue[bootmgr_touch_itr++][1];
-        res = 1;
-    }
-    pthread_mutex_unlock(&bootmgr_input_mutex);
-    return res;
-}
-
-#define MAX_DEVICES 16
-
-static struct pollfd ev_fds[MAX_DEVICES];
-static unsigned ev_count = 0;
-
-int ev_init(void)
-{
-    DIR *dir;
-    struct dirent *de;
-    int fd;
-
-    dir = opendir("/dev/input");
-    if(dir != 0) {
-        while((de = readdir(dir))) {
-//            fprintf(stderr,"/dev/input/%s\n", de->d_name);
-            if(strncmp(de->d_name,"event",5)) continue;
-            fd = openat(dirfd(dir), de->d_name, O_RDONLY);
-            if(fd < 0) continue;
-
-            ev_fds[ev_count].fd = fd;
-            ev_fds[ev_count].events = POLLIN;
-            ev_count++;
-            if(ev_count == MAX_DEVICES) break;
-        }
-    }
-
-    return 0;
-}
-
-void ev_exit(void)
-{
-    while (ev_count > 0) {
-        close(ev_fds[--ev_count].fd);
-    }
-}
-
-int ev_get(struct input_event *ev, unsigned dont_wait)
-{
-    int r;
-    unsigned n;
-
-    do {
-        r = poll(ev_fds, ev_count, dont_wait ? 0 : -1);
-
-        if(r > 0) {
-            for(n = 0; n < ev_count; n++) {
-                if(ev_fds[n].revents & POLLIN) {
-                    r = read(ev_fds[n].fd, ev, sizeof(*ev));
-                    if(r == sizeof(*ev)) return 0;
-                }
-            }
-        }
-    } while(dont_wait == 0);
-
-    return -1;
 }
 
 void bootmgr_select(int8_t line)
@@ -612,6 +468,7 @@ void bootmgr_load_settings()
     settings.timezone = 0;
     settings.timeout_seconds = 3;
     settings.show_seconds = 0;
+    settings.touch_ui = 1;
 
     if(!bootmgr_toggle_sdcard(1, 0))
     {
@@ -643,6 +500,8 @@ void bootmgr_load_settings()
                     }
                     else if(strstr(n, "show_seconds"))
                         settings.show_seconds = atoi(p);
+                    else if(strstr(n, "touch_ui"))
+                        settings.touch_ui = atoi(p);
 
                     p = strtok (NULL, "=\n");
                 }
@@ -658,7 +517,7 @@ int8_t bootmgr_get_file(char *name, char *buffer, uint8_t len)
 {
     FILE *f = fopen(name, "r");
     if(!f)
-        return NULL;
+        return 0;
 
     int res = fread(buffer, 1, len, f);
     fclose(f);
@@ -742,21 +601,4 @@ void bootmgr_clear()
     bootmgr_set_fills_count(0);
     bootmgr_set_imgs_count(0);
     bootmgr_set_touches_count(0);
-}
-
-uint8_t bootmgr_touch_int()
-{
-    bootmgr_selected = 0;
-    if(bootmgr_key_itr > 0)
-        --bootmgr_key_itr;
-    bootmgr_key_queue[bootmgr_key_itr] = KEY_MENU;
-    return 1;
-}
-
-uint8_t bootmgr_touch_sd()
-{
-    bootmgr_selected = 1;
-    if(bootmgr_show_rom_list())
-        bootmgr_run = 0;
-    return 1;
 }

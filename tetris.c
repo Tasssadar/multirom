@@ -13,7 +13,7 @@
 
 volatile uint8_t state;
 volatile uint8_t run_thread;
-static pthread_mutex_t tetris_draw_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t *tetris_draw_mutex;
 
 tetris_piece *current; // Piece which is currently in air
 tetris_piece *preview;
@@ -29,7 +29,7 @@ const uint16_t score_coef[] = { 0, 40, 100, 300, 1200 };
 void tetris_init()
 {
     tetris_set_defaults();
-
+    
     pieces = (tetris_piece***)malloc(sizeof(tetris_piece*)*TETRIS_W);
     uint16_t y, z;
     for(y = 0; y < TETRIS_W; ++y)
@@ -39,6 +39,7 @@ void tetris_init()
             pieces[y][z] = NULL;
     }
 
+    pthread_mutex_init(tetris_draw_mutex, NULL);
     t_tetris = (pthread_t*)malloc(sizeof(pthread_t));
     pthread_create(t_tetris, NULL, tetris_thread, NULL);
 
@@ -75,6 +76,8 @@ void tetris_exit()
     run_thread = 0;
     pthread_join(t_tetris, NULL);
     free(t_tetris);
+
+    pthread_mutex_destroy(tetris_draw_mutex);
 
     tetris_clear(1);
 
@@ -166,10 +169,10 @@ void tetris_key(int key)
             }
             else
             {
-                pthread_mutex_lock(&tetris_draw_mutex);
+                pthread_mutex_lock(tetris_draw_mutex);
                 tetris_move_piece(TETRIS_DOWN_FAST);
                 tetris_draw(0);
-                pthread_mutex_unlock(&tetris_draw_mutex);
+                pthread_mutex_unlock(tetris_draw_mutex);
             }
             break;
         }
@@ -177,10 +180,10 @@ void tetris_key(int key)
         {
             if(state & TETRIS_STARTED)
             {
-                pthread_mutex_lock(&tetris_draw_mutex);
+                pthread_mutex_lock(tetris_draw_mutex);
                 tetris_rotate_piece();
                 tetris_draw(0);
-                pthread_mutex_unlock(&tetris_draw_mutex);
+                pthread_mutex_unlock(tetris_draw_mutex);
             }
             break;
         }
@@ -189,11 +192,11 @@ void tetris_key(int key)
         {
             if(state & TETRIS_STARTED)
             {
-                pthread_mutex_lock(&tetris_draw_mutex);
+                pthread_mutex_lock(tetris_draw_mutex);
                 if(tetris_can_move_piece(key == KEY_MENU ? TETRIS_LEFT : TETRIS_RIGHT))
                     tetris_move_piece(key == KEY_MENU ? TETRIS_LEFT : TETRIS_RIGHT);
                 tetris_draw(0);
-                pthread_mutex_unlock(&tetris_draw_mutex);
+                pthread_mutex_unlock(tetris_draw_mutex);
             }
             break;
         }
@@ -224,7 +227,7 @@ void tetris_draw(uint8_t move)
 {
     if(move && current)
     {
-        pthread_mutex_lock(&tetris_draw_mutex);
+        pthread_mutex_lock(tetris_draw_mutex);
         if(!tetris_can_move_piece(TETRIS_DOWN))
         {
             if(!current->moved)
@@ -236,7 +239,7 @@ void tetris_draw(uint8_t move)
                 bootmgr_draw_text();
                 fb_update(&fb);
                 state = TETRIS_FINISHED;
-                pthread_mutex_unlock(&tetris_draw_mutex);
+                pthread_mutex_unlock(tetris_draw_mutex);
                 return;
             }
 
@@ -251,7 +254,7 @@ void tetris_draw(uint8_t move)
         }
         else
             tetris_move_piece(TETRIS_DOWN);
-        pthread_mutex_unlock(&tetris_draw_mutex);
+        pthread_mutex_unlock(tetris_draw_mutex);
     }
 
     android_memset16(fb.bits, BLACK, BOOTMGR_DIS_W*BOOTMGR_DIS_H*2);
