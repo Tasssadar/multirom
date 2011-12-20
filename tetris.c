@@ -8,11 +8,12 @@
 
 #include "init.h"
 #include "bootmgr.h"
+#include "bootmgr_shared.h"
 #include "tetris.h"
 
 volatile uint8_t state;
 volatile uint8_t run_thread;
-static pthread_mutex_t tetris_draw_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t *tetris_draw_mutex;
 
 tetris_piece *current; // Piece which is currently in air
 tetris_piece *preview;
@@ -23,10 +24,12 @@ uint8_t level;
 uint16_t cleared;
 uint16_t update_t;
 
+const uint16_t score_coef[] = { 0, 40, 100, 300, 1200 };
+
 void tetris_init()
 {
     tetris_set_defaults();
-
+    
     pieces = (tetris_piece***)malloc(sizeof(tetris_piece*)*TETRIS_W);
     uint16_t y, z;
     for(y = 0; y < TETRIS_W; ++y)
@@ -36,6 +39,7 @@ void tetris_init()
             pieces[y][z] = NULL;
     }
 
+    pthread_mutex_init(tetris_draw_mutex, NULL);
     t_tetris = (pthread_t*)malloc(sizeof(pthread_t));
     pthread_create(t_tetris, NULL, tetris_thread, NULL);
 
@@ -72,6 +76,8 @@ void tetris_exit()
     run_thread = 0;
     pthread_join(t_tetris, NULL);
     free(t_tetris);
+
+    pthread_mutex_destroy(tetris_draw_mutex);
 
     tetris_clear(1);
 
@@ -131,7 +137,7 @@ void tetris_key(int key)
             }
             else if(state & TETRIS_STARTED)
             {
-                bootmgr_print_fill(11, 14*16, 219, 32, BLACK, 1);
+                bootmgr_print_fill(11, 14*ISO_CHAR_HEIGHT, 219, 32, BLACK, 1);
                 bootmgr_printf(10+((220 - 6*8)/2),  14, WHITE, "Paused");
                 bootmgr_printf(10+((220 - 25*8)/2), 15, WHITE, "Press \"VolDown\" to resume");
                 bootmgr_draw_fills();
@@ -163,10 +169,10 @@ void tetris_key(int key)
             }
             else
             {
-                pthread_mutex_lock(&tetris_draw_mutex);
+                pthread_mutex_lock(tetris_draw_mutex);
                 tetris_move_piece(TETRIS_DOWN_FAST);
                 tetris_draw(0);
-                pthread_mutex_unlock(&tetris_draw_mutex);
+                pthread_mutex_unlock(tetris_draw_mutex);
             }
             break;
         }
@@ -174,10 +180,10 @@ void tetris_key(int key)
         {
             if(state & TETRIS_STARTED)
             {
-                pthread_mutex_lock(&tetris_draw_mutex);
+                pthread_mutex_lock(tetris_draw_mutex);
                 tetris_rotate_piece();
                 tetris_draw(0);
-                pthread_mutex_unlock(&tetris_draw_mutex);
+                pthread_mutex_unlock(tetris_draw_mutex);
             }
             break;
         }
@@ -186,11 +192,11 @@ void tetris_key(int key)
         {
             if(state & TETRIS_STARTED)
             {
-                pthread_mutex_lock(&tetris_draw_mutex);
+                pthread_mutex_lock(tetris_draw_mutex);
                 if(tetris_can_move_piece(key == KEY_MENU ? TETRIS_LEFT : TETRIS_RIGHT))
                     tetris_move_piece(key == KEY_MENU ? TETRIS_LEFT : TETRIS_RIGHT);
                 tetris_draw(0);
-                pthread_mutex_unlock(&tetris_draw_mutex);
+                pthread_mutex_unlock(tetris_draw_mutex);
             }
             break;
         }
@@ -221,19 +227,19 @@ void tetris_draw(uint8_t move)
 {
     if(move && current)
     {
-        pthread_mutex_lock(&tetris_draw_mutex);
+        pthread_mutex_lock(tetris_draw_mutex);
         if(!tetris_can_move_piece(TETRIS_DOWN))
         {
             if(!current->moved)
             {
-                bootmgr_print_fill(11, 14*16, 219, 32, BLACK, 1);
+                bootmgr_print_fill(11, 14*ISO_CHAR_HEIGHT, 219, 32, BLACK, 1);
                 bootmgr_printf(10+((220 - 9*8)/2),  14, WHITE, "Game over");
                 bootmgr_printf(10+((220 - 23*8)/2), 15, WHITE, "Press \"Home\" to restart");
                 bootmgr_draw_fills();
                 bootmgr_draw_text();
                 fb_update(&fb);
                 state = TETRIS_FINISHED;
-                pthread_mutex_unlock(&tetris_draw_mutex);
+                pthread_mutex_unlock(tetris_draw_mutex);
                 return;
             }
 
@@ -248,7 +254,7 @@ void tetris_draw(uint8_t move)
         }
         else
             tetris_move_piece(TETRIS_DOWN);
-        pthread_mutex_unlock(&tetris_draw_mutex);
+        pthread_mutex_unlock(tetris_draw_mutex);
     }
 
     android_memset16(fb.bits, BLACK, BOOTMGR_DIS_W*BOOTMGR_DIS_H*2);
@@ -560,15 +566,7 @@ void tetris_check_line()
 
     if(lines)
     {
-        uint16_t coef = 0;
-        switch(lines)
-        {
-            case 1: coef = 40;   break;
-            case 2: coef = 100;  break;
-            case 3: coef = 300;  break;
-            case 4: coef = 1200; break;
-        }
-        score += level*coef + coef;
+        score += level*score_coef[lines] + score_coef[lines];
         cleared += lines;
         if(cleared >= (level+1)*LINES_LEVEL)
         {

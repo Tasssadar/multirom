@@ -11,6 +11,8 @@ LOCAL_SRC_FILES:= \
 	util.c \
 	parser.c \
 	bootmgr.c \
+	bootmgr_drawing.c \
+	bootmgr_input.c \
 	tetris.c \
 	logo.c
 
