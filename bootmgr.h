@@ -39,6 +39,7 @@ int8_t bootmgr_get_file(char *name, char *buffer, uint8_t len);
 uint8_t bootmgr_toggle_ums();
 inline void __bootmgr_boot();
 void bootmgr_load_settings();
+void bootmgr_save_settings();
 int bootmgr_toggle_sdcard(uint8_t on, uint8_t mknod_only);
 
 //keys
@@ -163,6 +164,7 @@ typedef struct
     int8_t timeout_seconds;
     uint8_t show_seconds;
     uint8_t touch_ui;
+    uint32_t tetris_max_score;
 } bootmgr_settings_t;
 
 #endif

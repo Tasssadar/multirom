@@ -469,6 +469,7 @@ void bootmgr_load_settings()
     settings.timeout_seconds = 3;
     settings.show_seconds = 0;
     settings.touch_ui = 1;
+    settings.tetris_max_score = 0;
 
     if(!bootmgr_toggle_sdcard(1, 0))
     {
@@ -502,12 +503,40 @@ void bootmgr_load_settings()
                         settings.show_seconds = atoi(p);
                     else if(strstr(n, "touch_ui"))
                         settings.touch_ui = atoi(p);
+                    else if(strstr(n, "tetris_max_score"))
+                        settings.tetris_max_score = atoi(p);
 
                     p = strtok (NULL, "=\n");
                 }
             }
             free(con);
             fclose(f);
+        }
+    }
+    bootmgr_toggle_sdcard(0, 0);
+}
+
+void bootmgr_save_settings()
+{
+    if(!bootmgr_toggle_sdcard(1, 0))
+    {
+        FILE *f = fopen("/sdrt/multirom.txt", "w");
+        if(f)
+        {
+            char *line = (char*)malloc(30);
+            sprintf(line, "timeout = %u\r\n", settings.timeout_seconds);
+            fputs(line, f);
+            float timezone = settings.timezone + settings.timezone_mins/60.f;
+            sprintf(line, "timezone = %.2f\r\n", timezone);
+            fputs(line, f);
+            sprintf(line, "show_seconds = %u\r\n", (uint8_t)settings.show_seconds);
+            fputs(line, f);
+            sprintf(line, "touch_ui = %u\r\n", (uint8_t)settings.touch_ui);
+            fputs(line, f);
+            sprintf(line, "tetris_max_score = %u\r\n", settings.tetris_max_score);
+            fputs(line, f);
+            fclose(f);
+            free(line);
         }
     }
     bootmgr_toggle_sdcard(0, 0);
