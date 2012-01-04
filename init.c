@@ -33,6 +33,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/reboot.h>
+#include <dirent.h>
 
 #include <cutils/sockets.h>
 #include <cutils/iosched_policy.h>
@@ -417,7 +418,6 @@ static int wait_for_one_process(int block)
 static void restart_service_if_needed(struct service *svc)
 {
     time_t next_start_time = svc->time_started + 5;
-
     if (next_start_time <= gettime()) {
         svc->flags &= (~SVC_RESTARTING);
         service_start(svc, NULL);
@@ -435,6 +435,7 @@ static void restart_processes()
     process_needs_restart = 0;
     service_for_each_flags(SVC_RESTARTING,
                            restart_service_if_needed);
+    
 }
 
 static int signal_fd = -1;
@@ -818,6 +819,83 @@ void handle_keychord(int fd)
     }
 }
 
+void copy_to_orig()
+{
+    DIR *d = opendir("/");
+    if(d == NULL)
+        return;
+
+    struct dirent *dp;
+    char to[100];
+    char from[100];
+
+    const char *files[] = { "/main_init", "/default.prop", "/sbin/adbd" };
+    int i = 0;
+    for(; i < 3; ++i)
+    {
+        if(i == 2)
+            strcpy(to, "/origBootFiles/adbd");
+        else
+            sprintf(to, "/origBootFiles%s", files[i]);
+        ERROR("copy %s to %s", files[i], to);
+        __copy((char*)files[i], to);
+    }
+
+    while(dp = readdir(d))
+    {
+        if(strstr(dp->d_name, ".rc") == NULL)
+            continue;
+
+        sprintf(from, "/%s", dp->d_name);
+        sprintf(to, "/origBootFiles/%s", dp->d_name);
+        __copy(from, to);
+    }
+    closedir(d);
+}
+
+void copy_from_orig()
+{
+    DIR *d = opendir("/origBootFiles");
+    if(d == NULL)
+        return;
+
+    struct dirent *dp;
+    char to[100];
+    char from[100];
+
+    while(dp = readdir(d))
+    {
+        if (dp->d_name[0] == '.')
+            continue;
+        if(strstr(dp->d_name, "adbd") != NULL)
+            strcpy(to, "/sbin/adbd");
+        else
+            sprintf(to, "/%s", dp->d_name);
+        sprintf(from, "/origBootFiles/%s", dp->d_name);
+        __copy(from, to);
+        chmod(to, 0750);
+    }
+    closedir(d);
+}
+
+void run()
+{
+    INFO("reading preinit config file\n");
+
+    action_for_each_trigger("pre-init", action_add_queue_tail);
+    drain_action_queue();
+
+    char *cmd[] = { "main_init", (char *)0 };
+    pid_t pID = fork();
+    if(pID == 0)
+    {
+        execve("/main_init", cmd, NULL);
+        _exit(-1);
+    }
+    int status;
+    while(waitpid(pID, &status, WNOHANG) == 0) { sleep(1); }
+}
+
 int main(int argc, char **argv)
 {
     srand(time(0));
@@ -875,15 +953,45 @@ int main(int argc, char **argv)
     INFO("device init\n");
     device_fd = device_init();
 
-    INFO("reading preinit config file\n");
+    mkdir("/origBootFiles", 0755);
+    mount("tmpfs", "/origBootFiles", "tmpfs", 0, 0);
+
+    copy_to_orig();
+    __copy(INIT_IMAGE_FILE, "/init.rle.bak");
 
     parse_config_file("/preinit.rc");
 
-    action_for_each_trigger("pre-init", action_add_queue_tail);
-    drain_action_queue();
+    while(1)
+    {
+        run();
+        kill(-1, SIGKILL);
+        int status;
+        while(wait(&status) > 0) { }
 
-    char *cmd[] = { "main_init", (char *)0 };
-    return execve("/main_init", cmd, NULL);
+        sync();
+        const char* umount_loc[] = {"/system/sd", "/data/local/mnt", "/data", "/lgdrm",  "/system",
+                                    "/cache", "/sdcard", "/sdroot", "/sd-ext",
+                                    "/mnt/sdcard/.android_secure", "/mnt/sdcard",
+                                    "/mnt/secure/asec", "/mnt/asec", "/mnt/obb", };
+        int i = 0;
+        for(; i < 14; ++i)
+        {
+            int res = umount(umount_loc[i]);
+            if(res < -1)
+            {
+                ERROR("umount %s %i: %s", umount_loc[i], res, strerror(res));
+                umount2(umount_loc[i], MNT_DETACH);
+            }
+        } 
+        unlink("/dev/block/mmcblk0p99");
+        unlink("/dev/block/mmcblk0p97");
+        rmdir("/sd-ext");
+        rmdir("/sdroot");
+        __copy("/init.rle.bak", INIT_IMAGE_FILE);
+        copy_from_orig();
+        usleep(500000);
+    }
+    return 0;
 #if 0 
     if (emmc_boot){
         action_for_each_trigger("emmc", action_add_queue_tail);

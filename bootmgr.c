@@ -39,19 +39,17 @@ bootmgr_settings_t settings;
 uint8_t ums_enabled = 0;
 pthread_t t_time;
 
-void __bootmgr_boot()
-{
-    bootmgr_printf(-1, 25, WHITE, "Booting from internal memory...");
-    bootmgr_draw();
-
-    bootmgr_set_time_thread(0);
-
-    bootmgr_destroy_display();
-    bootmgr_input_run = 0;
-}
-
 void bootmgr_start()
 {
+    bootmgr_selected = 0;
+    bootmgr_input_run = 1;
+    bootmgr_run = 1;
+    bootmgr_time_run = 1;
+    bootmgr_phase = BOOTMGR_MAIN;
+    total_backups = 0;
+    backups_loaded = 0;
+    backups_has_active = 0;
+
     bootmgr_load_settings();
     bootmgr_init_display();
 
@@ -63,7 +61,6 @@ void bootmgr_start()
     uint16_t x, y;
     uint8_t touch;
     selected = -1;
-
     pthread_t t_input;
     pthread_create(&t_input, NULL, bootmgr_input_thread, NULL);
     bootmgr_set_time_thread(1);
@@ -95,13 +92,13 @@ void bootmgr_start()
             }
 
             if(bootmgr_handle_key(key))
-                return;
+                break;
 
             if(touch)
             {
                 key = bootmgr_check_touch(x, y);
                 if(key & TCALL_EXIT_MGR)
-                    return;
+                    break;
             }
         }
 
@@ -116,11 +113,26 @@ void bootmgr_start()
 
             if(--timer <= 0)
             {
-                __bootmgr_boot();
-                return;
+                bootmgr_boot_internal();
+                break;
             }
         }
     }
+    bootmgr_exit();
+}
+
+void bootmgr_exit()
+{
+    bootmgr_set_time_thread(0);
+
+    bootmgr_destroy_display();
+    bootmgr_input_run = 0;
+}
+
+void bootmgr_boot_internal()
+{
+    bootmgr_printf(-1, 25, WHITE, "Booting from internal memory...");
+    bootmgr_draw();
 }
 
 void bootmgr_set_time_thread(uint8_t start)
@@ -215,7 +227,7 @@ uint8_t bootmgr_handle_key(int key)
                 {
                     switch(bootmgr_selected)
                     {
-                        case 0: __bootmgr_boot(); return 1;
+                        case 0: bootmgr_boot_internal(); return 1;
                         case 1:
                             if(bootmgr_show_rom_list())
                                 return 1;

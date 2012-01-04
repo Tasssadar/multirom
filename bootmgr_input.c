@@ -12,6 +12,7 @@
 
 #include "bootmgr.h"
 #include "bootmgr_shared.h"
+#include "init.h"
 
 #define MAX_DEVICES 16
 
@@ -26,13 +27,16 @@ pthread_mutex_t *bootmgr_input_mutex;
 
 void *bootmgr_input_thread(void *cookie)
 {
+    bootmgr_key_itr = 10;
+    bootmgr_touch_itr = 64;
+
     ev_init();
     struct input_event ev;
     uint16_t x, y;
     pthread_mutex_init(bootmgr_input_mutex, NULL);
     struct timeval tv;
     struct timeval tv_last;
-    gettimeofday(&tv_last, NULL);
+    gettimeofday(&tv_last, NULL);    
 
     while(bootmgr_input_run)
     {
@@ -104,7 +108,8 @@ int ev_init(void)
     DIR *dir;
     struct dirent *de;
     int fd;
-
+    ev_count = 0;
+    
     dir = opendir("/dev/input");
     if(dir != 0) {
         while((de = readdir(dir))) {
@@ -118,6 +123,7 @@ int ev_init(void)
             ev_count++;
             if(ev_count == MAX_DEVICES) break;
         }
+        closedir(dir);
     }
 
     return 0;
@@ -190,7 +196,7 @@ void bootmgr_setup_touch()
 int bootmgr_touch_int()
 {
     bootmgr_selected = 0;
-    __bootmgr_boot();
+    bootmgr_boot_internal();
     return TCALL_EXIT_MGR;
 }
 
