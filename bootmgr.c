@@ -24,7 +24,7 @@
 #define SD_EXT_BLOCK "/dev/block/mmcblk0p99"
 #define SD_FAT_BLOCK "/dev/block/mmcblk0p98"
 
-const static char* BRIGHT_FILE = "/sys/devices/platform/i2c-gpio.2/i2c-2/2-0060/leds/lcd-backlight/brightness";
+static const char* BRIGHT_FILE = "/sys/devices/platform/i2c-gpio.2/i2c-2/2-0060/leds/lcd-backlight/brightness";
 
 int8_t bootmgr_selected = 0;
 volatile uint8_t bootmgr_input_run = 1;
@@ -40,17 +40,6 @@ int8_t selected;
 bootmgr_settings_t settings;
 uint8_t ums_enabled = 0;
 pthread_t t_time;
-
-void __bootmgr_boot()
-{
-    bootmgr_printf(-1, 25, WHITE, "Booting from internal memory...");
-    bootmgr_draw();
-
-    bootmgr_set_time_thread(0);
-
-    bootmgr_destroy_display();
-    bootmgr_input_run = 0;
-}
 
 void bootmgr_start()
 {
@@ -99,13 +88,13 @@ void bootmgr_start()
             }
 
             if(bootmgr_handle_key(key))
-                return;
+                break;
 
             if(touch)
             {
                 key = bootmgr_check_touch(x, y);
                 if(key & TCALL_EXIT_MGR)
-                    return;
+                    break;
             }
         }
 
@@ -120,11 +109,20 @@ void bootmgr_start()
 
             if(--timer <= 0)
             {
-                __bootmgr_boot();
-                return;
+                bootmgr_boot_internal();
+                break;
             }
         }
     }
+    bootmgr_exit();
+}
+
+void bootmgr_exit()
+{
+    bootmgr_set_time_thread(0);
+
+    bootmgr_destroy_display();
+    bootmgr_input_run = 0;
 }
 
 void bootmgr_set_time_thread(uint8_t start)
@@ -219,7 +217,7 @@ uint8_t bootmgr_handle_key(int key)
                 {
                     switch(bootmgr_selected)
                     {
-                        case 0: __bootmgr_boot(); return 1;
+                        case 0: bootmgr_boot_internal(); return 1;
                         case 1:
                             if(bootmgr_show_rom_list())
                                 return 1;
@@ -651,4 +649,10 @@ void bootmgr_set_brightness(uint8_t pct)
         value = 255;
     fprintf(f, "%u", value);
     fclose(f);
+}
+
+void bootmgr_boot_internal()
+{
+    bootmgr_printf(-1, 25, WHITE, "Booting from internal memory...");
+    bootmgr_draw();
 }

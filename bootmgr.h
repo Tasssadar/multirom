@@ -29,7 +29,9 @@ enum _bootmgr_touch_res
 
 //main
 void bootmgr_start();
+void bootmgr_exit();
 uint8_t bootmgr_show_rom_list();
+void bootmgr_boot_internal();
 uint8_t bootmgr_boot_sd();
 void bootmgr_import_boot(char *path);
 void bootmgr_remove_rc_mounts();
