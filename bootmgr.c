@@ -24,6 +24,8 @@
 #define SD_EXT_BLOCK "/dev/block/mmcblk0p99"
 #define SD_FAT_BLOCK "/dev/block/mmcblk0p98"
 
+const static char* BRIGHT_FILE = "/sys/devices/platform/i2c-gpio.2/i2c-2/2-0060/leds/lcd-backlight/brightness";
+
 int8_t bootmgr_selected = 0;
 volatile uint8_t bootmgr_input_run = 1;
 volatile uint8_t bootmgr_time_run = 1;
@@ -54,6 +56,8 @@ void bootmgr_start()
 {
     bootmgr_load_settings();
     bootmgr_init_display();
+
+    bootmgr_set_brightness(settings.brightness);
 
     int key = 0;
     int8_t last_selected = -1;
@@ -470,6 +474,7 @@ void bootmgr_load_settings()
     settings.show_seconds = 0;
     settings.touch_ui = 1;
     settings.tetris_max_score = 0;
+    settings.brightness = 100;
 
     if(!bootmgr_toggle_sdcard(1, 0))
     {
@@ -505,6 +510,8 @@ void bootmgr_load_settings()
                         settings.touch_ui = atoi(p);
                     else if(strstr(n, "tetris_max_score"))
                         settings.tetris_max_score = atoi(p);
+                    else if(strstr(n, "brightness"))
+                        settings.brightness = atoi(p);
 
                     p = strtok (NULL, "=\n");
                 }
@@ -534,6 +541,8 @@ void bootmgr_save_settings()
             sprintf(line, "touch_ui = %u\r\n", (uint8_t)settings.touch_ui);
             fputs(line, f);
             sprintf(line, "tetris_max_score = %u\r\n", settings.tetris_max_score);
+            fputs(line, f);
+            sprintf(line, "brightness = %u\r\n", settings.brightness);
             fputs(line, f);
             fclose(f);
             free(line);
@@ -630,4 +639,16 @@ void bootmgr_clear()
     bootmgr_set_fills_count(0);
     bootmgr_set_imgs_count(0);
     bootmgr_set_touches_count(0);
+}
+
+void bootmgr_set_brightness(uint8_t pct)
+{
+    FILE *f = fopen(BRIGHT_FILE, "w");
+    if(!f)
+        return;
+    unsigned short value = 30 + (225*pct)/100;
+    if(value > 255)
+        value = 255;
+    fprintf(f, "%u", value);
+    fclose(f);
 }
