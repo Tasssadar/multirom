@@ -24,7 +24,7 @@
 #define SD_EXT_BLOCK "/dev/block/mmcblk0p99"
 #define SD_FAT_BLOCK "/dev/block/mmcblk0p98"
 
-const static char* BRIGHT_FILE = "/sys/devices/platform/i2c-gpio.2/i2c-2/2-0060/leds/lcd-backlight/brightness";
+static const char* BRIGHT_FILE = "/sys/devices/platform/i2c-gpio.2/i2c-2/2-0060/leds/lcd-backlight/brightness";
 
 int8_t bootmgr_selected = 0;
 volatile uint8_t bootmgr_input_run = 1;
@@ -131,12 +131,6 @@ void bootmgr_exit()
 
     bootmgr_destroy_display();
     bootmgr_input_run = 0;
-}
-
-void bootmgr_boot_internal()
-{
-    bootmgr_printf(-1, 25, WHITE, "Booting from internal memory...");
-    bootmgr_draw();
 }
 
 void bootmgr_set_time_thread(uint8_t start)
@@ -663,4 +657,10 @@ void bootmgr_set_brightness(uint8_t pct)
         value = 255;
     fprintf(f, "%u", value);
     fclose(f);
+}
+
+void bootmgr_boot_internal()
+{
+    bootmgr_printf(-1, 25, WHITE, "Booting from internal memory...");
+    bootmgr_draw();
 }
