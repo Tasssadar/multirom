@@ -118,6 +118,7 @@ int ev_init(void)
             ev_count++;
             if(ev_count == MAX_DEVICES) break;
         }
+        closedir(dir);
     }
 
     return 0;
@@ -190,7 +191,7 @@ void bootmgr_setup_touch()
 int bootmgr_touch_int()
 {
     bootmgr_selected = 0;
-    __bootmgr_boot();
+    bootmgr_boot_internal();
     return TCALL_EXIT_MGR;
 }
 

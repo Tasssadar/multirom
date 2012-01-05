@@ -24,6 +24,8 @@
 #define SD_EXT_BLOCK "/dev/block/mmcblk0p99"
 #define SD_FAT_BLOCK "/dev/block/mmcblk0p98"
 
+static const char* BRIGHT_FILE = "/sys/devices/platform/i2c-gpio.2/i2c-2/2-0060/leds/lcd-backlight/brightness";
+
 int8_t bootmgr_selected = 0;
 volatile uint8_t bootmgr_input_run = 1;
 volatile uint8_t bootmgr_time_run = 1;
@@ -39,21 +41,12 @@ bootmgr_settings_t settings;
 uint8_t ums_enabled = 0;
 pthread_t t_time;
 
-void __bootmgr_boot()
-{
-    bootmgr_printf(-1, 25, WHITE, "Booting from internal memory...");
-    bootmgr_draw();
-
-    bootmgr_set_time_thread(0);
-
-    bootmgr_destroy_display();
-    bootmgr_input_run = 0;
-}
-
 void bootmgr_start()
 {
     bootmgr_load_settings();
     bootmgr_init_display();
+
+    bootmgr_set_brightness(settings.brightness);
 
     int key = 0;
     int8_t last_selected = -1;
@@ -95,13 +88,13 @@ void bootmgr_start()
             }
 
             if(bootmgr_handle_key(key))
-                return;
+                break;
 
             if(touch)
             {
                 key = bootmgr_check_touch(x, y);
                 if(key & TCALL_EXIT_MGR)
-                    return;
+                    break;
             }
         }
 
@@ -116,11 +109,20 @@ void bootmgr_start()
 
             if(--timer <= 0)
             {
-                __bootmgr_boot();
-                return;
+                bootmgr_boot_internal();
+                break;
             }
         }
     }
+    bootmgr_exit();
+}
+
+void bootmgr_exit()
+{
+    bootmgr_set_time_thread(0);
+
+    bootmgr_destroy_display();
+    bootmgr_input_run = 0;
 }
 
 void bootmgr_set_time_thread(uint8_t start)
@@ -215,7 +217,7 @@ uint8_t bootmgr_handle_key(int key)
                 {
                     switch(bootmgr_selected)
                     {
-                        case 0: __bootmgr_boot(); return 1;
+                        case 0: bootmgr_boot_internal(); return 1;
                         case 1:
                             if(bootmgr_show_rom_list())
                                 return 1;
@@ -469,6 +471,8 @@ void bootmgr_load_settings()
     settings.timeout_seconds = 3;
     settings.show_seconds = 0;
     settings.touch_ui = 1;
+    settings.tetris_max_score = 0;
+    settings.brightness = 100;
 
     if(!bootmgr_toggle_sdcard(1, 0))
     {
@@ -502,12 +506,44 @@ void bootmgr_load_settings()
                         settings.show_seconds = atoi(p);
                     else if(strstr(n, "touch_ui"))
                         settings.touch_ui = atoi(p);
+                    else if(strstr(n, "tetris_max_score"))
+                        settings.tetris_max_score = atoi(p);
+                    else if(strstr(n, "brightness"))
+                        settings.brightness = atoi(p);
 
                     p = strtok (NULL, "=\n");
                 }
             }
             free(con);
             fclose(f);
+        }
+    }
+    bootmgr_toggle_sdcard(0, 0);
+}
+
+void bootmgr_save_settings()
+{
+    if(!bootmgr_toggle_sdcard(1, 0))
+    {
+        FILE *f = fopen("/sdrt/multirom.txt", "w");
+        if(f)
+        {
+            char *line = (char*)malloc(30);
+            sprintf(line, "timeout = %u\r\n", settings.timeout_seconds);
+            fputs(line, f);
+            float timezone = settings.timezone + settings.timezone_mins/60.f;
+            sprintf(line, "timezone = %.2f\r\n", timezone);
+            fputs(line, f);
+            sprintf(line, "show_seconds = %u\r\n", (uint8_t)settings.show_seconds);
+            fputs(line, f);
+            sprintf(line, "touch_ui = %u\r\n", (uint8_t)settings.touch_ui);
+            fputs(line, f);
+            sprintf(line, "tetris_max_score = %u\r\n", settings.tetris_max_score);
+            fputs(line, f);
+            sprintf(line, "brightness = %u\r\n", settings.brightness);
+            fputs(line, f);
+            fclose(f);
+            free(line);
         }
     }
     bootmgr_toggle_sdcard(0, 0);
@@ -601,4 +637,22 @@ void bootmgr_clear()
     bootmgr_set_fills_count(0);
     bootmgr_set_imgs_count(0);
     bootmgr_set_touches_count(0);
+}
+
+void bootmgr_set_brightness(uint8_t pct)
+{
+    FILE *f = fopen(BRIGHT_FILE, "w");
+    if(!f)
+        return;
+    unsigned short value = 30 + (225*pct)/100;
+    if(value > 255)
+        value = 255;
+    fprintf(f, "%u", value);
+    fclose(f);
+}
+
+void bootmgr_boot_internal()
+{
+    bootmgr_printf(-1, 25, WHITE, "Booting from internal memory...");
+    bootmgr_draw();
 }

@@ -130,7 +130,6 @@ int bootmgr_open_framebuffer()
         return -1;
 
     max_fb_size = fb_width(&fb) * fb_height(&fb);
-
     return 0;
 }
 

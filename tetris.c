@@ -232,7 +232,15 @@ void tetris_draw(uint8_t move)
         {
             if(!current->moved)
             {
-                bootmgr_print_fill(11, 14*ISO_CHAR_HEIGHT, 219, 32, BLACK, 1);
+                uint8_t lines = 2;
+                if(settings.tetris_max_score < score)
+                {
+                    ++lines;
+                    settings.tetris_max_score = score;
+                    bootmgr_save_settings();
+                    bootmgr_printf(10+((220 - 15*8)/2), 16, WHITE, "New high score!");
+                }
+                bootmgr_print_fill(11, 14*ISO_CHAR_HEIGHT, 219, lines*ISO_CHAR_HEIGHT, BLACK, 1);
                 bootmgr_printf(10+((220 - 9*8)/2),  14, WHITE, "Game over");
                 bootmgr_printf(10+((220 - 23*8)/2), 15, WHITE, "Press \"Home\" to restart");
                 bootmgr_draw_fills();
@@ -579,7 +587,7 @@ void tetris_check_line()
 
 void tetris_print_score()
 {
-    bootmgr_printf(10, 0, WHITE, "Score: %5u   Level: %2u", score, level);
+    bootmgr_printf(10, 0, WHITE, "Score: %5u   Level: %2u Max: %u", score, level, settings.tetris_max_score);
 }
 
 void tetris_delete_if_nowhere(tetris_piece *p)

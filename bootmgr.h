@@ -29,7 +29,9 @@ enum _bootmgr_touch_res
 
 //main
 void bootmgr_start();
+void bootmgr_exit();
 uint8_t bootmgr_show_rom_list();
+void bootmgr_boot_internal();
 uint8_t bootmgr_boot_sd();
 void bootmgr_import_boot(char *path);
 void bootmgr_remove_rc_mounts();
@@ -39,7 +41,9 @@ int8_t bootmgr_get_file(char *name, char *buffer, uint8_t len);
 uint8_t bootmgr_toggle_ums();
 inline void __bootmgr_boot();
 void bootmgr_load_settings();
+void bootmgr_save_settings();
 int bootmgr_toggle_sdcard(uint8_t on, uint8_t mknod_only);
+void bootmgr_set_brightness(uint8_t pct);
 
 //keys
 int ev_init(void);
@@ -163,6 +167,8 @@ typedef struct
     int8_t timeout_seconds;
     uint8_t show_seconds;
     uint8_t touch_ui;
+    uint32_t tetris_max_score;
+    uint8_t brightness;
 } bootmgr_settings_t;
 
 #endif
