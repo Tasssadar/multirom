@@ -569,7 +569,19 @@ uint8_t bootmgr_toggle_ums()
 
     sync();
 
-    FILE *f = fopen("/sys/devices/platform/msm_hsusb/gadget/lun0/file", "w+");
+    static const char* gadget_files[] =
+    {
+        "/sys/devices/platform/msm_hsusb/gadget/lun0/file",
+        "/sys/devices/platform/usb_mass_storage/lun0/file",
+        NULL
+    };
+
+    FILE *f = NULL;
+
+    uint8_t i = 0;
+    for(; gadget_files[i] != NULL && f == NULL; ++i)
+        f = fopen(gadget_files[i], "w+");
+
     if(!f)
     {
         bootmgr_erase_text(21);
