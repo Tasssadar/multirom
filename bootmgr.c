@@ -208,10 +208,10 @@ uint8_t bootmgr_handle_key(int key)
                 case KEY_BACK:
                     bootmgr_printf(-1, 25, WHITE, "Rebooting...");
                     bootmgr_draw();
+                    __reboot(LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, LINUX_REBOOT_CMD_RESTART2, "recovery");
+                    break;
                 case KEY_POWER:
-                    bootmgr_close_framebuffer();
-                    bootmgr_input_run = 0;
-                    reboot(key == KEY_POWER ? RB_POWER_OFF : RB_AUTOBOOT);
+                    reboot(RB_POWER_OFF);
                     return 1;
                 case KEY_MENU:
                 {
