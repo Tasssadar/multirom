@@ -14,6 +14,7 @@
 #include <linux/input.h>
 #include <linux/kd.h>
 #include <pthread.h>
+#include <hardware_legacy/power.h>
 
 #include "init.h"
 #include "bootmgr.h"
@@ -24,7 +25,7 @@
 #define SD_EXT_BLOCK "/dev/block/mmcblk0p99"
 #define SD_FAT_BLOCK "/dev/block/mmcblk0p98"
 
-static const char* BRIGHT_FILE = "/sys/devices/platform/i2c-gpio.2/i2c-2/2-0060/leds/lcd-backlight/brightness";
+
 
 int8_t bootmgr_selected = 0;
 volatile uint8_t bootmgr_input_run = 1;
@@ -36,6 +37,7 @@ char *backups[BOOTMGR_BACKUPS_MAX];
 uint8_t backups_loaded = 0;
 uint8_t backups_has_active = 0;
 int8_t selected;
+char sleep_mode = 0;
 
 bootmgr_settings_t settings;
 uint8_t ums_enabled = 0;
@@ -90,7 +92,7 @@ void bootmgr_start()
             if(bootmgr_handle_key(key))
                 break;
 
-            if(touch)
+            if(touch && !sleep_mode)
             {
                 key = bootmgr_check_touch(x, y);
                 if(key & TCALL_EXIT_MGR)
@@ -187,6 +189,12 @@ void *bootmgr_time_thread(void *cookie)
 
 uint8_t bootmgr_handle_key(int key)
 {
+    if(sleep_mode)
+    {
+        bootmgr_do_sleep(0);
+        return 0;
+    }
+
     switch(bootmgr_phase)
     {
         case BOOTMGR_MAIN:
@@ -210,9 +218,16 @@ uint8_t bootmgr_handle_key(int key)
                     bootmgr_draw();
                     __reboot(LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, LINUX_REBOOT_CMD_RESTART2, "recovery");
                     break;
+                case KEY_END:
+                {
+                    bootmgr_do_sleep(!sleep_mode);
+                    break;
+                }
                 case KEY_POWER:
+                {
                     reboot(RB_POWER_OFF);
                     return 1;
+                }
                 case KEY_MENU:
                 {
                     switch(bootmgr_selected)
@@ -227,7 +242,7 @@ uint8_t bootmgr_handle_key(int key)
                     }
                     break;
                 }
-                default:break;
+                default: break;
             }
             break;
         }
@@ -264,6 +279,26 @@ uint8_t bootmgr_handle_key(int key)
         }
     }
     return 0;
+}
+
+void bootmgr_do_sleep(char on)
+{
+    FILE *file = fopen("/sys/devices/platform/mddi_hitachi_hvga.10/lcd_onoff", "w");
+    fputc(on ? '0' : '1', file);
+    fclose(file);
+
+    if(!on)
+        bootmgr_set_brightness(settings.brightness);
+    else
+        bootmgr_set_brightness_helper(0);
+
+    sleep_mode = on;
+
+    if(!on)
+    {
+        usleep(500000);
+        bootmgr_touch_itr = 64;
+    }
 }
 
 void bootmgr_select(int8_t line)
@@ -653,12 +688,29 @@ void bootmgr_clear()
 
 void bootmgr_set_brightness(uint8_t pct)
 {
-    FILE *f = fopen(BRIGHT_FILE, "w");
-    if(!f)
-        return;
     unsigned short value = 30 + (225*pct)/100;
     if(value > 255)
         value = 255;
+    
+    bootmgr_set_brightness_helper(value);
+}
+
+void bootmgr_set_brightness_helper(uint16_t value)
+{
+    static const char* BRIGHT_FILE[] =
+    {
+        "/sys/devices/platform/i2c-gpio.2/i2c-2/2-0060/leds/lcd-backlight/brightness",
+        "/sys/devices/platform/i2c-gpio.2/i2c-2/2-0060/leds/lcd-backlight/device/leds/lcd-backlight/brightness",
+    };
+
+    FILE *f = NULL;
+    char i = 0;
+    for(; !f && i < 2; ++i)
+        f = fopen(BRIGHT_FILE[i], "w");
+
+    if(!f)
+        return;
+
     fprintf(f, "%u", value);
     fclose(f);
 }

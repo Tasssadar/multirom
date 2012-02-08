@@ -44,6 +44,8 @@ void bootmgr_load_settings();
 void bootmgr_save_settings();
 int bootmgr_toggle_sdcard(uint8_t on, uint8_t mknod_only);
 void bootmgr_set_brightness(uint8_t pct);
+void bootmgr_set_brightness_helper(uint16_t value);
+void bootmgr_do_sleep(char on);
 
 //keys
 int ev_init(void);
