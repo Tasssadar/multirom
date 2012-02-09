@@ -217,7 +217,7 @@ uint8_t bootmgr_handle_key(int key)
                     bootmgr_printf(-1, 25, WHITE, "Rebooting...");
                     bootmgr_draw();
                     __reboot(LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2, LINUX_REBOOT_CMD_RESTART2, "recovery");
-                    break;
+                    return 1;
                 case KEY_END:
                 {
                     bootmgr_do_sleep(!sleep_mode);
