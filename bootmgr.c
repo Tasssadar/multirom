@@ -40,11 +40,13 @@ int8_t selected;
 char sleep_mode = 0;
 
 bootmgr_settings_t settings;
+
 uint8_t ums_enabled = 0;
 pthread_t t_time;
 
 void bootmgr_start()
 {
+    settings.default_boot_sd = (char*)malloc(256);
     bootmgr_load_settings();
     bootmgr_init_display();
 
@@ -62,6 +64,8 @@ void bootmgr_start()
     pthread_t t_input;
     pthread_create(&t_input, NULL, bootmgr_input_thread, NULL);
     bootmgr_set_time_thread(1);
+
+    bootmgr_selected = settings.default_boot;
 
     while(bootmgr_run)
     {
@@ -105,14 +109,24 @@ void bootmgr_start()
         {
             if(timer%10 == 0)
             {
-                bootmgr_printf(-1, 25, WHITE, "Boot from internal mem in %us", timer/10);
+                bootmgr_printf(-1, 25, WHITE, "Boot from %s in %us", bootmgr_selected == 0 ? "internal mem" : "SD card", timer/10);
                 bootmgr_draw();
             }
 
             if(--timer <= 0)
             {
-                bootmgr_boot_internal();
-                break;
+                bootmgr_erase_text(25);
+                if(bootmgr_selected == 0)
+                {
+                    bootmgr_boot_internal();
+                    break;
+                }
+                else
+                {
+                    if(bootmgr_boot_sd_auto())
+                        break;
+                }
+                key_pressed = 1;
             }
         }
     }
@@ -125,6 +139,8 @@ void bootmgr_exit()
 
     bootmgr_destroy_display();
     bootmgr_input_run = 0;
+
+    free(settings.default_boot_sd);
 }
 
 void bootmgr_set_time_thread(uint8_t start)
@@ -509,6 +525,8 @@ void bootmgr_load_settings()
     settings.tetris_max_score = 0;
     settings.brightness = 100;
 
+    strcpy(settings.default_boot_sd, "");
+
     if(!bootmgr_toggle_sdcard(1, 0))
     {
         FILE *f = fopen("/sdrt/multirom.txt", "r");
@@ -545,6 +563,35 @@ void bootmgr_load_settings()
                         settings.tetris_max_score = atoi(p);
                     else if(strstr(n, "brightness"))
                         settings.brightness = atoi(p);
+                    else if(strstr(n, "default_boot_sd"))
+                    {
+                        char *buff = (char*)malloc(256);
+                        strcpy(buff, p);
+
+                        char *first = strchr(buff, '"');
+                        if(first == NULL)
+                        {
+                            free(buff);
+                            continue;
+                        }
+
+                        char *second = strchr(first+1, '"');
+                        if(second == NULL)
+                        {
+                            free(buff);
+                            continue;
+                        }
+                        *second = 0;
+
+                        strcpy(settings.default_boot_sd, first+1);
+                        free(buff);
+                    }
+                    else if(strstr(n, "default_boot"))
+                    {
+                        settings.default_boot = atoi(p);
+                        if(settings.default_boot > 1)
+                            settings.default_boot = 0;
+                    }
 
                     p = strtok (NULL, "=\n");
                 }
@@ -576,6 +623,10 @@ void bootmgr_save_settings()
             sprintf(line, "tetris_max_score = %u\r\n", settings.tetris_max_score);
             fputs(line, f);
             sprintf(line, "brightness = %u\r\n", settings.brightness);
+            fputs(line, f);
+            sprintf(line, "default_boot = %u\r\n", settings.default_boot);
+            fputs(line, f);
+            sprintf(line, "default_boot_sd = \"%s\"\r\n", settings.default_boot_sd);
             fputs(line, f);
             fclose(f);
             free(line);
@@ -719,4 +770,34 @@ void bootmgr_boot_internal()
 {
     bootmgr_printf(-1, 25, WHITE, "Booting from internal memory...");
     bootmgr_draw();
+}
+
+uint8_t bootmgr_boot_sd_auto()
+{
+    if(bootmgr_show_rom_list())
+        return 1;
+
+    if(strlen(settings.default_boot_sd) != 0)
+    {
+        uint8_t i = 0;
+        for(; i <= 25 && i < total_backups; ++i)
+        {
+            if(strcmp(backups[i], settings.default_boot_sd) == 0)
+            {
+                selected = i+5;
+                i = 0xFF;
+                break;
+            }
+        }
+
+        if(i == 0xFF)
+            return bootmgr_boot_sd();
+    }
+
+    if(backups_has_active)
+    {
+        selected = 2;
+        return bootmgr_boot_sd();
+    }
+    return 0;
 }
