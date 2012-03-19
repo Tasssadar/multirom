@@ -44,11 +44,11 @@ void *bootmgr_input_thread(void *cookie)
         if(ev.type == EV_KEY && !ev.value && ev.code <= KEY_MAX)
         {
             pthread_mutex_lock(bootmgr_input_mutex);
-            if(bootmgr_key_itr > 0)
+            if(bootmgr_key_itr > 0 && ev.code != -1)
                 bootmgr_key_queue[--bootmgr_key_itr] = ev.code;
             pthread_mutex_unlock(bootmgr_input_mutex);
         }
-        else if(ev.type == EV_ABS && ev.code == 0x30 && ev.value) //#define ABS_MT_TOUCH_MAJOR  0x30    /* Major axis of touching ellipse */
+        else if(!sleep_mode && ev.type == EV_ABS && ev.code == 0x30 && ev.value) //#define ABS_MT_TOUCH_MAJOR  0x30    /* Major axis of touching ellipse */
         {
             gettimeofday(&tv, NULL);
             int32_t ms = (tv.tv_sec - tv_last.tv_sec)*1000+(tv.tv_usec-tv_last.tv_usec)/1000;

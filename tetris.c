@@ -161,6 +161,7 @@ void tetris_key(int key)
                     tetris_clear(0);
                     tetris_set_defaults();
                     bootmgr_erase_text(14);
+                    bootmgr_erase_text(16);
                     bootmgr_erase_fill(1);
                     tetris_print_score();
                 }

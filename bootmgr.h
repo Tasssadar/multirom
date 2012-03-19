@@ -44,6 +44,9 @@ void bootmgr_load_settings();
 void bootmgr_save_settings();
 int bootmgr_toggle_sdcard(uint8_t on, uint8_t mknod_only);
 void bootmgr_set_brightness(uint8_t pct);
+void bootmgr_set_brightness_helper(uint16_t value);
+void bootmgr_do_sleep(char on);
+uint8_t bootmgr_boot_sd_auto();
 
 //keys
 int ev_init(void);
@@ -169,6 +172,8 @@ typedef struct
     uint8_t touch_ui;
     uint32_t tetris_max_score;
     uint8_t brightness;
+    uint8_t default_boot;
+    char *default_boot_sd;
 } bootmgr_settings_t;
 
 #endif

@@ -18,7 +18,7 @@ LOCAL_SRC_FILES:= \
 
 ifeq ($(strip $(INIT_BOOTCHART)),true)
 LOCAL_SRC_FILES += bootchart.c
-LOCAL_CFLAGS    += -DBOOTCHART=1
+LOCAL_CFLAGS    += -DBOOTCHART=0
 endif
 ifeq ($(BOARD_USES_QCOM_AUDIO_V2), true)
     LOCAL_CFLAGS += -DAUDIOV2

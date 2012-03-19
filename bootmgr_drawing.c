@@ -67,6 +67,9 @@ void bootmgr_printf(int16_t x, uint8_t line, uint16_t color, char *what, ...)
         ln = _bootmgr_new_line();
 
     int16_t text_len = strlen(txt);
+    if(text_len > 39)
+        text_len = 39;
+
     ln->text = malloc(text_len+1);
     strcpy(ln->text, txt);
 
