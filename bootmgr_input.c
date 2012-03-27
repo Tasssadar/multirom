@@ -172,7 +172,7 @@ void bootmgr_setup_touch()
             bootmgr_add_touch(40,  125, 160, 245, bootmgr_touch_int,    1);
             bootmgr_add_touch(160, 125, 280, 245, bootmgr_touch_sd,     2);
             bootmgr_add_touch(40,  245, 160, 365, bootmgr_touch_ums,    3);
-            bootmgr_add_touch(160, 245, 280, 365, bootmgr_touch_tetris, 4);
+            bootmgr_add_touch(160, 245, 280, 365, bootmgr_touch_misc,   4);
             break;
         case BOOTMGR_UMS:
             bootmgr_add_touch(80, 370, 240, 410, bootmgr_touch_exit_ums, 1);
@@ -195,6 +195,17 @@ void bootmgr_setup_touch()
         case BOOTMGR_CHARGER:
         {
             bootmgr_add_touch(80, 370, 240, 410, bootmgr_touch_exit_charger, 1);
+            bootmgr_print_fill(80, 370, 160, 40, WHITE, 24);
+            bootmgr_printf(-1, 24, BLACK, "Back to main menu");
+            break;
+        }
+        case BOOTMGR_MISC:
+        {
+            int itr = 0;
+            for(; misc_callbacks[itr] != NULL; ++itr)
+                bootmgr_add_touch(0, itr*ISO_CHAR_HEIGHT*3, BOOTMGR_DIS_W, (itr+1)*ISO_CHAR_HEIGHT*3, misc_callbacks[itr], itr);
+
+            bootmgr_add_touch(80, 370, 240, 410, bootmgr_touch_exit_misc, itr);
             bootmgr_print_fill(80, 370, 160, 40, WHITE, 24);
             bootmgr_printf(-1, 24, BLACK, "Back to main menu");
             break;
@@ -226,12 +237,10 @@ int bootmgr_touch_ums()
     return TCALL_DELETE;
 }
 
-int bootmgr_touch_tetris()
+int bootmgr_touch_misc()
 {
     bootmgr_selected = 3;
-    bootmgr_set_time_thread(0);
-    bootmgr_phase = BOOTMGR_TETRIS;
-    tetris_init();
+    bootmgr_misc_init();
     return TCALL_DELETE;
 }
 
@@ -294,5 +303,11 @@ int bootmgr_touch_sd_exit()
 int bootmgr_touch_exit_charger()
 {
     bootmgr_charger_destroy();
+    return TCALL_DELETE;
+}
+
+int bootmgr_touch_exit_misc()
+{
+    bootmgr_misc_destroy();
     return TCALL_DELETE;
 }

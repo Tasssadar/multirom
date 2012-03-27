@@ -28,11 +28,12 @@ volatile char run_charger_thread = 1;
 void bootmgr_charger_init()
 {
     bootmgr_clear();
-    //bootmgr_set_time_thread(0);
+    bootmgr_set_time_thread(1);
     bootmgr_phase = BOOTMGR_CHARGER;
     bootmgr_display->bg_img = 0;
 
     bootmgr_print_img(0, battery_offset, "battery.rle", 1);
+    bootmgr_print_img(0, battery_offset-20, "charger.rle", 2);
     bootmgr_update_battery_status();
 
     run_charger_thread = 1;
@@ -41,14 +42,14 @@ void bootmgr_charger_init()
 
 void bootmgr_charger_destroy()
 {
+    run_charger_thread = 0;
     bootmgr_clear();
 
     bootmgr_display->bg_img = 1;
     bootmgr_phase = BOOTMGR_MAIN;
     bootmgr_draw();
-    bootmgr_set_time_thread(1);
 
-    run_charger_thread = 0;
+    pthread_join(t_charger, NULL);
 }
 
 uint8_t bootmgr_charger_key(int key)
@@ -83,6 +84,10 @@ void bootmgr_update_battery_status()
 
     bootmgr_printf(-1, 14, WHITE, "%u%%, %s", percent, status);
     bootmgr_update_battery_fill(percent);
+
+    bootmgr_img *img = _bootmgr_get_img(2);
+    img->show = (strstr(status, "Charging") == status);
+
     bootmgr_draw();
 }
 

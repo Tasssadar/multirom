@@ -27,7 +27,7 @@
 
 int8_t bootmgr_selected = 0;
 volatile uint8_t bootmgr_input_run = 1;
-volatile uint8_t bootmgr_time_run = 1;
+volatile uint8_t bootmgr_time_run = 0;
 volatile uint8_t bootmgr_run = 1;
 uint8_t bootmgr_phase = BOOTMGR_MAIN;
 uint8_t total_backups = 0;
@@ -155,6 +155,9 @@ void bootmgr_exit()
 
 void bootmgr_set_time_thread(uint8_t start)
 {
+    if(start == bootmgr_time_run)
+        return;
+
     if(start)
     {
         bootmgr_time_run = 1;
@@ -269,7 +272,7 @@ uint8_t bootmgr_handle_key(int key)
                                 return 1;
                             break;
                         case 2: bootmgr_touch_ums();    break;
-                        case 3: bootmgr_touch_tetris(); break;
+                        case 3: bootmgr_touch_misc(); break;
                     }
                     break;
                 }
@@ -313,10 +316,8 @@ uint8_t bootmgr_handle_key(int key)
             bootmgr_touch_exit_ums();
             break;
         }
-        case BOOTMGR_CHARGER:
-        {
-            return bootmgr_charger_key(key);
-        }
+        case BOOTMGR_CHARGER: return bootmgr_charger_key(key);
+        case BOOTMGR_MISC:    return bootmgr_misc_key(key);
     }
     return 0;
 }

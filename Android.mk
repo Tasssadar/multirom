@@ -14,6 +14,7 @@ LOCAL_SRC_FILES:= \
 	bootmgr_drawing.c \
 	bootmgr_input.c \
 	bootmgr_charger.c \
+	bootmgr_misc.c \
 	tetris.c \
 	logo.c
 

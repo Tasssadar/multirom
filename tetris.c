@@ -28,8 +28,10 @@ const uint16_t score_coef[] = { 0, 40, 100, 300, 1200 };
 
 void tetris_init()
 {
+    bootmgr_set_time_thread(0);
+    bootmgr_phase = BOOTMGR_TETRIS;
+
     tetris_set_defaults();
-    
     pieces = (tetris_piece***)malloc(sizeof(tetris_piece*)*TETRIS_W);
     uint16_t y, z;
     for(y = 0; y < TETRIS_W; ++y)

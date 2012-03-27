@@ -20,6 +20,7 @@ enum _bootmgr_sections
     BOOTMGR_TETRIS,
     BOOTMGR_UMS,
     BOOTMGR_CHARGER,
+    BOOTMGR_MISC,
 };
 
 enum _bootmgr_touch_res
@@ -64,6 +65,27 @@ void bootmgr_update_battery_status();
 void bootmgr_update_battery_fill(int pct);
 void *bootmgr_charger_thread(void *cookie);
 int bootmgr_get_battery_pct();
+
+//misc
+void bootmgr_misc_init();
+void bootmgr_misc_destroy();
+uint8_t bootmgr_misc_key(int key);
+void bootmgr_misc_draw_items();
+
+inline int bootmgr_misc_charger();
+inline int bootmgr_misc_tetris();
+inline int bootmgr_misc_reboot();
+inline int bootmgr_misc_recovery();
+inline int bootmgr_misc_bootloader();
+
+static const void (*misc_callbacks[])() = {
+    bootmgr_misc_charger,
+    bootmgr_misc_tetris,
+    bootmgr_misc_reboot,
+    bootmgr_misc_recovery,
+    bootmgr_misc_bootloader,
+    NULL
+};
 
 //keys
 int ev_init(void);
@@ -115,8 +137,9 @@ inline int bootmgr_touch_sd_down();
 inline int bootmgr_touch_sd_select();
 inline int bootmgr_touch_sd_exit();
 inline int bootmgr_touch_ums();
-inline int bootmgr_touch_tetris();
+inline int bootmgr_touch_misc();
 inline int bootmgr_touch_exit_charger();
+inline int bootmgr_touch_exit_misc();
 
 #define BOOTMGR_FILL_SELECT 1
 
