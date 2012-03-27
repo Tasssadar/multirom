@@ -49,6 +49,8 @@ void add_environment(const char *name, const char *value);
 
 extern int init_module(void *, unsigned long, const char *);
 
+uint8_t disable_lg_charger = 0;
+
 static int write_file(const char *path, const char *value)
 {
     int fd, ret, len;
@@ -426,6 +428,9 @@ inline unsigned char __commentLine(char *line)
       (strstr(line, "/system") || strstr(line, "/data") || strstr(line, "/cache")))
         return 1;
 
+    if(disable_lg_charger && strstr(line, "chargerlogo"))
+        return 2;
+
     // Useless?
     //if(strstr(line, "mkdir /data") || strstr(line, "mkdir /system") || strstr(line, "mkdir /cache"))
     //    return 1;
@@ -464,6 +469,7 @@ int do_remove_rc_mounts(int nargs, char **args)
         if(f == NULL || f_out == NULL) continue;
 
         char first_done = 0;
+        unsigned char comment = 0;
         while(1)
         {
            c = fgetc(f);
@@ -480,15 +486,15 @@ int do_remove_rc_mounts(int nargs, char **args)
            {
                line[itr] = 0; // null-terminated string
 
-               if(__commentLine(line))
+               if((comment = __commentLine(line)))
                {
-                   if(first_done)
-                       fputc((int)'#', f_out);
-                   else
+                   if(!first_done || comment == 2)
                    {
                        first_done = 1;
                        fputs("\n export DUMMY_LINE_INGORE_IT 1 \n#", f_out);
                    }
+                   else
+                       fputc((int)'#', f_out);
                }
                fwrite(line, 1, itr, f_out);
                itr = 0;
@@ -516,13 +522,7 @@ int do_unlink(int nargs, char **args)
 
 int do_bootmgr(int nargs, char **args)
 {
-    if(battchg_pause)
-    {
-        INFO("Disabling bootmgr due to battchg_pause == 1 (charger plugged-in?)");
-        return 0;
-    }
-
-    bootmgr_start();
+    bootmgr_start(battchg_pause);
     return 0;
 }
 

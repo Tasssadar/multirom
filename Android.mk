@@ -13,6 +13,7 @@ LOCAL_SRC_FILES:= \
 	bootmgr.c \
 	bootmgr_drawing.c \
 	bootmgr_input.c \
+	bootmgr_charger.c \
 	tetris.c \
 	logo.c
 

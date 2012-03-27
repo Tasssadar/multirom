@@ -81,14 +81,18 @@ void bootmgr_printf(int16_t x, uint8_t line, uint16_t color, char *what, ...)
     ln->color = color;
 }
 
-void bootmgr_print_img(int16_t x, int16_t y, char *name)
+void bootmgr_print_img(int16_t x, int16_t y, char *name, int8_t id)
 {
     int16_t text_len = strlen(name);
-    bootmgr_img *img = _bootmgr_new_img();
+    bootmgr_img *img = NULL;
+    if(id == -1 || !(img = _bootmgr_get_img(id)))
+        img = _bootmgr_new_img();
     img->name = malloc(text_len+1);
     strcpy(img->name, name);
     img->x = x;
     img->y = y;
+    img->id = id;
+    img->show = 1;
 }
 
 void bootmgr_print_fill(int16_t x, int16_t y, int16_t width, int16_t height, uint16_t color, int8_t id)
@@ -245,6 +249,11 @@ void bootmgr_draw_text()
     }
 }
 
+void bootmgr_fill_fb_black()
+{
+    android_memset16(fb.bits, BLACK, BOOTMGR_DIS_W*BOOTMGR_DIS_H*2);
+}
+
 void bootmgr_draw_fills()
 {
     uint16_t i,z;
@@ -271,7 +280,8 @@ void bootmgr_draw_imgs()
     for(; i < bootmgr_display->img_count; ++i)
     {
         c = bootmgr_display->imgs[i];
-        bootmgr_show_img(c->x, c->y, c->name);
+        if(c->show)
+            bootmgr_show_img(c->x, c->y, c->name);
     }
 }
 
@@ -410,7 +420,7 @@ void bootmgr_draw()
         bootmgr_main_draw_sel();
     }
     else
-        android_memset16(fb.bits, BLACK, BOOTMGR_DIS_W*BOOTMGR_DIS_H*2);
+        bootmgr_fill_fb_black();
 
     bootmgr_draw_imgs();
     bootmgr_draw_fills();
@@ -558,6 +568,18 @@ bootmgr_touch *_bootmgr_get_touch(int8_t id)
     {
         if(bootmgr_display->touches[i]->id == id)
              return bootmgr_display->touches[i];
+    }
+    return NULL;
+}
+
+bootmgr_img *_bootmgr_get_img(int8_t id)
+{
+    uint16_t i = 0;
+
+    for(; i < bootmgr_display->img_count; ++i)
+    {
+        if(bootmgr_display->imgs[i]->id == id)
+             return bootmgr_display->imgs[i];
     }
     return NULL;
 }

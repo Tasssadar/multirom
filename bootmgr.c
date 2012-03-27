@@ -25,8 +25,6 @@
 #define SD_EXT_BLOCK "/dev/block/mmcblk0p99"
 #define SD_FAT_BLOCK "/dev/block/mmcblk0p98"
 
-
-
 int8_t bootmgr_selected = 0;
 volatile uint8_t bootmgr_input_run = 1;
 volatile uint8_t bootmgr_time_run = 1;
@@ -44,7 +42,7 @@ bootmgr_settings_t settings;
 uint8_t ums_enabled = 0;
 pthread_t t_time;
 
-void bootmgr_start()
+void bootmgr_start(int charger)
 {
     settings.default_boot_sd = (char*)malloc(256);
     bootmgr_load_settings();
@@ -66,6 +64,18 @@ void bootmgr_start()
     bootmgr_set_time_thread(1);
 
     bootmgr_selected = settings.default_boot;
+
+    if(charger && (settings.charger_settings & CHARGER_AUTO_START))
+    {
+        char status[50];
+        bootmgr_get_file(battery_status, status, 50);
+        if(strstr(status, "Charging") == status)
+        {
+            key_pressed = 1;
+            bootmgr_charger_init();
+        }
+    }
+    disable_lg_charger = (settings.charger_settings & CHARGER_DISABLE_LG);
 
     while(bootmgr_run)
     {
@@ -161,23 +171,28 @@ void *bootmgr_time_thread(void *cookie)
 {
     time_t tm;
 
-    char pct[5];
     char status[50];
     int8_t hours;
     int8_t mins;
+    int battery;
 
     const uint16_t update_val = settings.show_seconds ? 10 : 600;
     uint16_t timer = update_val;
 
     while(bootmgr_time_run)
     {
+        if(sleep_mode)
+        {
+            usleep(500000);
+            continue;
+        }
+
         if(timer == update_val)
         {
             time(&tm);
-            bootmgr_get_file(battery_pct, &pct, 4);
-            char *n = strchr(&pct, '\n');
-            *n = NULL;
-            bootmgr_get_file(battery_status, &status, 50);
+
+            battery = bootmgr_get_battery_pct();
+            bootmgr_get_file(battery_status, status, 50);
 
             // Timezone lame handling
             hours = (tm%86400/60/60) + settings.timezone;
@@ -190,9 +205,9 @@ void *bootmgr_time_thread(void *cookie)
             else if(hours < 0)   hours = 24 + hours;
 
             if(settings.show_seconds)
-                bootmgr_printf(0, 0, WHITE, "%2u:%02u:%02u    Battery: %s%%, %s", hours, mins, tm%60, &pct, &status);
+                bootmgr_printf(0, 0, WHITE, "%2u:%02u:%02u    Battery: %u%%, %s", hours, mins, tm%60, battery, status);
             else
-                bootmgr_printf(0, 0, WHITE, "%2u:%02u         Battery: %s%%, %s", hours, mins, &pct, &status);
+                bootmgr_printf(0, 0, WHITE, "%2u:%02u         Battery: %u%%, %s", hours, mins, battery, status);
 
             bootmgr_draw();
             timer = 0;
@@ -258,6 +273,11 @@ uint8_t bootmgr_handle_key(int key)
                     }
                     break;
                 }
+                case KEY_SEARCH:
+                {
+                    bootmgr_charger_init();
+                    break;
+                }
                 default: break;
             }
             break;
@@ -293,15 +313,25 @@ uint8_t bootmgr_handle_key(int key)
             bootmgr_touch_exit_ums();
             break;
         }
+        case BOOTMGR_CHARGER:
+        {
+            bootmgr_charger_key(key);
+            break;
+        }
     }
     return 0;
 }
 
 void bootmgr_do_sleep(char on)
 {
+    bootmgr_fill_fb_black();
+    fb_update(&fb);
+
     FILE *file = fopen("/sys/devices/platform/mddi_hitachi_hvga.10/lcd_onoff", "w");
     fputc(on ? '0' : '1', file);
     fclose(file);
+
+    bootmgr_draw();
 
     if(!on)
         bootmgr_set_brightness(settings.brightness);
@@ -313,7 +343,7 @@ void bootmgr_do_sleep(char on)
     if(!on)
     {
         usleep(500000);
-        bootmgr_touch_itr = 64;
+        bootmgr_reset_input_iters();
     }
 }
 
@@ -524,6 +554,7 @@ void bootmgr_load_settings()
     settings.touch_ui = 1;
     settings.tetris_max_score = 0;
     settings.brightness = 100;
+    settings.charger_settings = (CHARGER_AUTO_START | CHARGER_DISABLE_LG);
 
     strcpy(settings.default_boot_sd, "");
 
@@ -592,6 +623,8 @@ void bootmgr_load_settings()
                         if(settings.default_boot > 1)
                             settings.default_boot = 0;
                     }
+                    else if(strstr(n, "charger_settings"))
+                        settings.charger_settings = atoi(p);
 
                     p = strtok (NULL, "=\n");
                 }
@@ -610,26 +643,19 @@ void bootmgr_save_settings()
         FILE *f = fopen("/sdrt/multirom.txt", "w");
         if(f)
         {
-            char *line = (char*)malloc(30);
-            sprintf(line, "timeout = %u\r\n", settings.timeout_seconds);
-            fputs(line, f);
             float timezone = settings.timezone + settings.timezone_mins/60.f;
-            sprintf(line, "timezone = %.2f\r\n", timezone);
-            fputs(line, f);
-            sprintf(line, "show_seconds = %u\r\n", (uint8_t)settings.show_seconds);
-            fputs(line, f);
-            sprintf(line, "touch_ui = %u\r\n", (uint8_t)settings.touch_ui);
-            fputs(line, f);
-            sprintf(line, "tetris_max_score = %u\r\n", settings.tetris_max_score);
-            fputs(line, f);
-            sprintf(line, "brightness = %u\r\n", settings.brightness);
-            fputs(line, f);
-            sprintf(line, "default_boot = %u\r\n", settings.default_boot);
-            fputs(line, f);
-            sprintf(line, "default_boot_sd = \"%s\"\r\n", settings.default_boot_sd);
-            fputs(line, f);
+
+            fprintf(f, "timeout = %u\r\n", settings.timeout_seconds);
+            fprintf(f, "timezone = %.2f\r\n", timezone);
+            fprintf(f, "show_seconds = %u\r\n", (uint8_t)settings.show_seconds);
+            fprintf(f, "touch_ui = %u\r\n", (uint8_t)settings.touch_ui);
+            fprintf(f, "tetris_max_score = %u\r\n", settings.tetris_max_score);
+            fprintf(f, "brightness = %u\r\n", settings.brightness);
+            fprintf(f, "default_boot = %u\r\n", settings.default_boot);
+            fprintf(f, "default_boot_sd = \"%s\"\r\n", settings.default_boot_sd);
+            fprintf(f, "charger_settings = %u\r\b", settings.charger_settings);
+
             fclose(f);
-            free(line);
         }
     }
     bootmgr_toggle_sdcard(0, 0);

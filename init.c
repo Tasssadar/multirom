@@ -600,6 +600,10 @@ static void import_kernel_nv(char *name, int in_qemu)
             if (!strcmp(value,"true")) {
                 battchg_pause = 1;
             }
+        } else if(!strcmp(name,"lge.reboot")) {
+            if (!strcmp(value,"pwroff")) {
+                battchg_pause = 1;
+            }
         } else {
             qemu_cmdline(name, value);
         }
@@ -878,6 +882,8 @@ int main(int argc, char **argv)
     INFO("reading preinit config file\n");
 
     parse_config_file("/preinit.rc");
+
+    import_kernel_cmdline(0);
 
     action_for_each_trigger("pre-init", action_add_queue_tail);
     drain_action_queue();

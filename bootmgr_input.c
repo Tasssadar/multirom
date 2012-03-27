@@ -75,6 +75,14 @@ void *bootmgr_input_thread(void *cookie)
     return NULL;
 }
 
+void bootmgr_reset_input_iters()
+{
+    pthread_mutex_lock(bootmgr_input_mutex);
+    bootmgr_key_itr = 10;
+    bootmgr_touch_itr = 64;
+    pthread_mutex_unlock(bootmgr_input_mutex);
+}
+
 int bootmgr_get_last_key()
 {
     int res = -1;
@@ -184,6 +192,13 @@ void bootmgr_setup_touch()
             bootmgr_print_fill(240, 430, 78, 49, WHITE, 31);
             break;
         }
+        case BOOTMGR_CHARGER:
+        {
+            bootmgr_add_touch(80, 370, 240, 410, bootmgr_touch_exit_charger, 1);
+            bootmgr_print_fill(80, 370, 160, 40, WHITE, 24);
+            bootmgr_printf(-1, 24, BLACK, "Back to main menu");
+            break;
+        }
     }
 }
 
@@ -274,4 +289,10 @@ int bootmgr_touch_sd_exit()
     bootmgr_draw();
     bootmgr_set_time_thread(1);
     return TCALL_NONE;
+}
+
+int bootmgr_touch_exit_charger()
+{
+    bootmgr_charger_destroy();
+    return TCALL_DELETE;
 }
