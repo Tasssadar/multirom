@@ -42,6 +42,8 @@ bootmgr_settings_t settings;
 uint8_t ums_enabled = 0;
 pthread_t t_time;
 
+uint8_t force_update_time = 0;
+
 void bootmgr_start(int charger)
 {
     settings.default_boot_sd = (char*)malloc(256);
@@ -190,7 +192,7 @@ void *bootmgr_time_thread(void *cookie)
             continue;
         }
 
-        if(timer == update_val)
+        if(timer == update_val || force_update_time)
         {
             time(&tm);
 
@@ -214,6 +216,7 @@ void *bootmgr_time_thread(void *cookie)
 
             bootmgr_draw();
             timer = 0;
+            force_update_time = 0;
         }
         usleep(100000);
         ++timer;
@@ -324,26 +327,28 @@ uint8_t bootmgr_handle_key(int key)
 
 void bootmgr_do_sleep(char on)
 {
+    if(sleep_mode == on)
+        return;
+
+    FILE *file = fopen("/sys/power/state", "w");
+    fputs(on ? "mem" : "on", file);
+    fclose(file);
+
+    usleep(500000);
+
     bootmgr_fill_fb_black();
     fb_update(&fb);
 
-    FILE *file = fopen("/sys/devices/platform/mddi_hitachi_hvga.10/lcd_onoff", "w");
-    fputc(on ? '0' : '1', file);
-    fclose(file);
+    usleep(100000);
 
     bootmgr_draw();
-
-    if(!on)
-        bootmgr_set_brightness(settings.brightness);
-    else
-        bootmgr_set_brightness_helper(0);
 
     sleep_mode = on;
 
     if(!on)
     {
-        usleep(500000);
         bootmgr_reset_input_iters();
+        force_update_time = 1;
     }
 }
 

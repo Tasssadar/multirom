@@ -87,6 +87,10 @@ void tetris_exit()
     bootmgr_set_lines_count(0);
     bootmgr_set_fills_count(0);
     bootmgr_phase = BOOTMGR_MAIN;
+
+    bootmgr_set_time_thread(1);
+    force_update_time = 1;
+
     bootmgr_draw();
 }
 
@@ -151,9 +155,10 @@ void tetris_key(int key)
             break;
         }
         case KEY_VOLUMEUP:
+        {
             tetris_exit();
-            bootmgr_set_time_thread(1);
             break;
+        }
         case KEY_HOME:
         {
             if(!(state & TETRIS_STARTED))
@@ -607,10 +612,6 @@ void tetris_delete_if_nowhere(tetris_piece *p)
 
 void tetris_print_batt()
 {
-    char pct[5];
-    bootmgr_get_file(battery_pct, &pct, 4);
-    char *n = strchr(&pct, '\n');
-    *n = NULL;
-    bootmgr_printf(234, 28, WHITE, "Batt: %s%%", &pct);
+    bootmgr_printf(234, 28, WHITE, "Batt: %u%%", bootmgr_get_battery_pct());
 }
 

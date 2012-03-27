@@ -49,6 +49,7 @@ void bootmgr_charger_destroy()
     bootmgr_phase = BOOTMGR_MAIN;
     bootmgr_draw();
 
+    force_update_time = 1;
     pthread_join(t_charger, NULL);
 }
 

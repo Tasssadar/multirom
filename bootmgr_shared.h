@@ -16,5 +16,6 @@ extern uint8_t backups_has_active;
 extern int8_t bootmgr_touch_itr;
 extern int8_t bootmgr_key_itr;
 extern char sleep_mode;
+extern uint8_t force_update_time;
 
 #endif

@@ -51,6 +51,7 @@ void bootmgr_misc_destroy()
     bootmgr_draw();
 
     bootmgr_set_time_thread(1);
+    force_update_time = 1;
 }
 
 void bootmgr_misc_draw_items()
