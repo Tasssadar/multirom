@@ -65,6 +65,11 @@ uint8_t bootmgr_charger_key(int key)
             bootmgr_charger_destroy();
             break;
         }
+        case KEY_POWER:
+        {
+            reboot(RB_POWER_OFF);
+            return 1;
+        }
     }
     return 0;
 }

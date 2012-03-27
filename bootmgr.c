@@ -315,8 +315,7 @@ uint8_t bootmgr_handle_key(int key)
         }
         case BOOTMGR_CHARGER:
         {
-            bootmgr_charger_key(key);
-            break;
+            return bootmgr_charger_key(key);
         }
     }
     return 0;
