@@ -37,7 +37,7 @@ void *bootmgr_input_thread(void *cookie)
     while(bootmgr_input_run)
     {
         ev_get(&ev, 0);
-        if(ev.type == EV_KEY && !ev.value && ev.code <= KEY_MAX)
+        if(ev.type == EV_KEY && (!ev.value || ev.code == KEY_POWER) && ev.code <= KEY_MAX)
         {
             pthread_mutex_lock(bootmgr_input_mutex);
             if(bootmgr_key_itr > 0 && ev.code != -1)
