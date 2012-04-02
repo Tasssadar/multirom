@@ -75,7 +75,7 @@ void *bootmgr_input_thread(void *cookie)
     return NULL;
 }
 
-void bootmgr_reset_input_iters()
+void bootmgr_reset_input_iters(void)
 {
     pthread_mutex_lock(bootmgr_input_mutex);
     bootmgr_key_itr = 10;
@@ -83,7 +83,7 @@ void bootmgr_reset_input_iters()
     pthread_mutex_unlock(bootmgr_input_mutex);
 }
 
-int bootmgr_get_last_key()
+int bootmgr_get_last_key(void)
 {
     int res = -1;
     pthread_mutex_lock(bootmgr_input_mutex);
@@ -160,7 +160,7 @@ int ev_get(struct input_event *ev, unsigned dont_wait)
     return -1;
 }
 
-void bootmgr_setup_touch()
+void bootmgr_setup_touch(void)
 {
     if(!settings.touch_ui)
         return;
@@ -214,14 +214,14 @@ void bootmgr_setup_touch()
 }
 
 // Touch callbacks
-int bootmgr_touch_int()
+int bootmgr_touch_int(void)
 {
     bootmgr_selected = 0;
     bootmgr_boot_internal();
     return TCALL_EXIT_MGR;
 }
 
-int bootmgr_touch_sd()
+int bootmgr_touch_sd(void)
 {
     bootmgr_selected = 1;
     if(bootmgr_show_rom_list())
@@ -229,7 +229,7 @@ int bootmgr_touch_sd()
     return TCALL_DELETE;
 }
 
-int bootmgr_touch_ums()
+int bootmgr_touch_ums(void)
 {
     bootmgr_selected = 2;
     if(bootmgr_toggle_ums())
@@ -237,14 +237,14 @@ int bootmgr_touch_ums()
     return TCALL_DELETE;
 }
 
-int bootmgr_touch_misc()
+int bootmgr_touch_misc(void)
 {
     bootmgr_selected = 3;
     bootmgr_misc_init();
     return TCALL_DELETE;
 }
 
-int bootmgr_touch_exit_ums()
+int bootmgr_touch_exit_ums(void)
 {
     bootmgr_toggle_ums();
     bootmgr_phase = BOOTMGR_MAIN;
@@ -253,7 +253,7 @@ int bootmgr_touch_exit_ums()
     return TCALL_DELETE;
 }
 
-int bootmgr_touch_sd_up()
+int bootmgr_touch_sd_up(void)
 {
     if(!total_backups)
         return TCALL_NONE;
@@ -267,7 +267,7 @@ int bootmgr_touch_sd_up()
     return TCALL_NONE;
 }
 
-int bootmgr_touch_sd_down()
+int bootmgr_touch_sd_down(void)
 {
     if(!total_backups)
         return TCALL_NONE;
@@ -281,14 +281,14 @@ int bootmgr_touch_sd_down()
     return TCALL_NONE;
 }
 
-int bootmgr_touch_sd_select()
+int bootmgr_touch_sd_select(void)
 {
     if(bootmgr_boot_sd())
         return TCALL_EXIT_MGR;
     return TCALL_NONE;
 }
 
-int bootmgr_touch_sd_exit()
+int bootmgr_touch_sd_exit(void)
 {
     selected = -1;
     bootmgr_set_lines_count(0);
@@ -300,13 +300,13 @@ int bootmgr_touch_sd_exit()
     return TCALL_NONE;
 }
 
-int bootmgr_touch_exit_charger()
+int bootmgr_touch_exit_charger(void)
 {
     bootmgr_charger_destroy();
     return TCALL_DELETE;
 }
 
-int bootmgr_touch_exit_misc()
+int bootmgr_touch_exit_misc(void)
 {
     bootmgr_misc_destroy();
     return TCALL_DELETE;

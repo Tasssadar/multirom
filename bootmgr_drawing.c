@@ -24,7 +24,7 @@ struct stat s;
 int fd;
 unsigned max_fb_size;
 
-void bootmgr_init_display()
+void bootmgr_init_display(void)
 {
     bootmgr_display = (bootmgr_display_t*)malloc(sizeof(bootmgr_display_t));
     bootmgr_display->ln_count = 0;
@@ -44,7 +44,7 @@ void bootmgr_init_display()
     }
 }
 
-void bootmgr_destroy_display()
+void bootmgr_destroy_display(void)
 {
     bootmgr_clear();
     free(bootmgr_display);
@@ -121,7 +121,7 @@ void bootmgr_add_touch(uint16_t x_min, uint16_t y_min, uint16_t x_max, uint16_t 
     t->id = id;
 }
 
-int bootmgr_open_framebuffer()
+int bootmgr_open_framebuffer(void)
 {
     if (vt_set_mode(1))
         return -1;
@@ -140,7 +140,7 @@ int bootmgr_open_framebuffer()
     return 0;
 }
 
-void bootmgr_close_framebuffer()
+void bootmgr_close_framebuffer(void)
 {
     fb_close(&fb);
     close(fd);
@@ -232,7 +232,7 @@ void _bootmgr_draw_char(char c, uint16_t x, uint16_t y, uint16_t color)
     }
 }
 
-void bootmgr_draw_text()
+void bootmgr_draw_text(void)
 {
     uint16_t i,z,y;
     bootmgr_line *c = NULL;
@@ -249,12 +249,12 @@ void bootmgr_draw_text()
     }
 }
 
-void bootmgr_fill_fb_black()
+void bootmgr_fill_fb_black(void)
 {
     android_memset16(fb.bits, BLACK, BOOTMGR_DIS_W*BOOTMGR_DIS_H*2);
 }
 
-void bootmgr_draw_fills()
+void bootmgr_draw_fills(void)
 {
     uint16_t i,z;
     bootmgr_fill *c = NULL;
@@ -273,7 +273,7 @@ void bootmgr_draw_fills()
     }
 }
 
-void bootmgr_draw_imgs()
+void bootmgr_draw_imgs(void)
 {
     bootmgr_img *c = NULL;
     uint16_t i = 0;
@@ -387,7 +387,7 @@ void bootmgr_set_touches_count(uint16_t c)
     bootmgr_display->touch_count = c;
 }
 
-void bootmgr_main_draw_sel()
+void bootmgr_main_draw_sel(void)
 {
     static const uint16_t height = 120;
     static const uint16_t width = 120;
@@ -410,7 +410,7 @@ void bootmgr_main_draw_sel()
     }
 }
 
-void bootmgr_draw()
+void bootmgr_draw(void)
 {
     pthread_mutex_lock(&bootmgr_draw_mutex);
 
@@ -430,25 +430,25 @@ void bootmgr_draw()
     pthread_mutex_unlock(&bootmgr_draw_mutex);
 }
 
-bootmgr_line *_bootmgr_new_line()
+bootmgr_line *_bootmgr_new_line(void)
 {
     bootmgr_set_lines_count(bootmgr_display->ln_count+1);
     return bootmgr_display->lines[bootmgr_display->ln_count-1];
 }
 
-bootmgr_fill *_bootmgr_new_fill()
+bootmgr_fill *_bootmgr_new_fill(void)
 {
     bootmgr_set_fills_count(bootmgr_display->fill_count+1);
     return bootmgr_display->fills[bootmgr_display->fill_count-1];
 }
 
-bootmgr_img *_bootmgr_new_img()
+bootmgr_img *_bootmgr_new_img(void)
 {
     bootmgr_set_imgs_count(bootmgr_display->img_count+1);
     return bootmgr_display->imgs[bootmgr_display->img_count-1];
 }
 
-bootmgr_touch *_bootmgr_new_touch()
+bootmgr_touch *_bootmgr_new_touch(void)
 {
     bootmgr_set_touches_count(bootmgr_display->touch_count+1);
     return bootmgr_display->touches[bootmgr_display->touch_count-1];

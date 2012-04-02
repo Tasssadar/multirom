@@ -145,7 +145,7 @@ void bootmgr_start(int charger)
     bootmgr_exit();
 }
 
-void bootmgr_exit()
+void bootmgr_exit(void)
 {
     bootmgr_set_time_thread(0);
 
@@ -368,7 +368,7 @@ void bootmgr_select(int8_t line)
     selected = line;
 }
 
-uint8_t bootmgr_show_rom_list()
+uint8_t bootmgr_show_rom_list(void)
 {
     bootmgr_set_time_thread(0);
     bootmgr_phase = BOOTMGR_SD_SEL;
@@ -459,7 +459,7 @@ uint8_t bootmgr_show_rom_list()
     return 0;
 }
 
-uint8_t bootmgr_boot_sd()
+uint8_t bootmgr_boot_sd(void)
 {
     bootmgr_set_lines_count(0);
     bootmgr_set_fills_count(0);
@@ -551,7 +551,7 @@ void bootmgr_import_boot(char *path)
     closedir(d);
 }
 
-void bootmgr_load_settings()
+void bootmgr_load_settings(void)
 {
     settings.timezone = 0;
     settings.timeout_seconds = 3;
@@ -641,7 +641,7 @@ void bootmgr_load_settings()
     bootmgr_toggle_sdcard(0, 0);
 }
 
-void bootmgr_save_settings()
+void bootmgr_save_settings(void)
 {
     if(!bootmgr_toggle_sdcard(1, 0))
     {
@@ -679,7 +679,7 @@ int8_t bootmgr_get_file(char *name, char *buffer, uint8_t len)
     return res;
 }
 
-uint8_t bootmgr_toggle_ums()
+uint8_t bootmgr_toggle_ums(void)
 {
     bootmgr_printf(-1, 21, WHITE, "%sabling USB mass storage...", ums_enabled ? "dis" : "en");
     bootmgr_draw();
@@ -760,7 +760,7 @@ int bootmgr_toggle_sdcard(uint8_t on, uint8_t mknod_only)
     return 0;
 }
 
-void bootmgr_clear()
+void bootmgr_clear(void)
 {
     bootmgr_set_lines_count(0);
     bootmgr_set_fills_count(0);
@@ -797,13 +797,13 @@ void bootmgr_set_brightness_helper(uint16_t value)
     fclose(f);
 }
 
-void bootmgr_boot_internal()
+void bootmgr_boot_internal(void)
 {
     bootmgr_printf(-1, 25, WHITE, "Booting from internal memory...");
     bootmgr_draw();
 }
 
-uint8_t bootmgr_boot_sd_auto()
+uint8_t bootmgr_boot_sd_auto(void)
 {
     if(bootmgr_show_rom_list())
         return 1;

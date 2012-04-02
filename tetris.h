@@ -54,24 +54,24 @@ typedef struct
     uint16_t y;
 } tetris_piece;
 
-void tetris_init();
+void tetris_init(void);
 void *tetris_thread(void *cookie);
 void tetris_key(int key);
-void tetris_spawn_new();
+void tetris_spawn_new(void);
 void tetris_draw(uint8_t move);
-void tetris_exit();
+void tetris_exit(void);
 uint8_t tetris_can_move_piece(uint8_t dir);
-void tetris_check_line();
+void tetris_check_line(void);
 int8_t tetris_check_border(uint8_t dir);
-void tetris_set_defaults();
+void tetris_set_defaults(void);
 uint16_t tetris_get_color_for_type(uint8_t type);
-void tetris_rotate_piece();
+void tetris_rotate_piece(void);
 void tetris_delete_if_nowhere(tetris_piece *p);
 void tetris_set_piece(tetris_piece *p, tetris_piece *val);
 inline void tetris_clear(uint8_t do_free);
 inline void tetris_move_piece(uint8_t dir);
-inline void tetris_print_score();
-void tetris_print_batt();
+inline void tetris_print_score(void);
+void tetris_print_batt(void);
 
 static const uint8_t p_shape[TETRIS_PIECE_MAX][4][PIECE_BLOCKS][PIECE_BLOCKS] =
 {

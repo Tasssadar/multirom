@@ -32,7 +32,7 @@ static const char *names[] = {
 
 uint8_t current_selection = 0;
 
-void bootmgr_misc_init()
+void bootmgr_misc_init(void)
 {
     bootmgr_clear();
     bootmgr_set_time_thread(0);
@@ -42,7 +42,7 @@ void bootmgr_misc_init()
     bootmgr_misc_draw_items();
 }
 
-void bootmgr_misc_destroy()
+void bootmgr_misc_destroy(void)
 {
     bootmgr_clear();
 
@@ -54,7 +54,7 @@ void bootmgr_misc_destroy()
     force_update_time = 1;
 }
 
-void bootmgr_misc_draw_items()
+void bootmgr_misc_draw_items(void)
 {
     int y = current_selection*ISO_CHAR_HEIGHT*3;
     int itr = 0;
@@ -97,19 +97,19 @@ uint8_t bootmgr_misc_key(int key)
     return 0;
 }
 
-int bootmgr_misc_charger()
+int bootmgr_misc_charger(void)
 {
     bootmgr_charger_init();
     return TCALL_DELETE;
 }
 
-int bootmgr_misc_tetris()
+int bootmgr_misc_tetris(void)
 {
     tetris_init();
     return TCALL_DELETE;
 }
 
-int bootmgr_misc_reboot()
+int bootmgr_misc_reboot(void)
 {
     bootmgr_printf(-1, 25, WHITE, "Rebooting...");
     bootmgr_draw();
@@ -117,7 +117,7 @@ int bootmgr_misc_reboot()
     return TCALL_DELETE;
 }
 
-int bootmgr_misc_recovery()
+int bootmgr_misc_recovery(void)
 {
     bootmgr_printf(-1, 25, WHITE, "Rebooting to recovery...");
     bootmgr_draw();
@@ -125,7 +125,7 @@ int bootmgr_misc_recovery()
     return TCALL_DELETE;
 }
 
-int bootmgr_misc_bootloader()
+int bootmgr_misc_bootloader(void)
 {
     bootmgr_printf(-1, 25, WHITE, "Rebooting to bootloader...");
     bootmgr_draw();

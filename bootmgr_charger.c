@@ -25,7 +25,7 @@ static const int battery_fill_offset_x = 60;
 pthread_t t_charger;
 volatile char run_charger_thread = 1;
 
-void bootmgr_charger_init()
+void bootmgr_charger_init(void)
 {
     bootmgr_clear();
     bootmgr_set_time_thread(1);
@@ -40,7 +40,7 @@ void bootmgr_charger_init()
     pthread_create(&t_charger, NULL, bootmgr_charger_thread, NULL);
 }
 
-void bootmgr_charger_destroy()
+void bootmgr_charger_destroy(void)
 {
     run_charger_thread = 0;
     bootmgr_clear();
@@ -76,7 +76,7 @@ uint8_t bootmgr_charger_key(int key)
     return 0;
 }
 
-void bootmgr_update_battery_status()
+void bootmgr_update_battery_status(void)
 {
     static char status[50];
     bootmgr_get_file(battery_status, status, 50);
@@ -100,7 +100,7 @@ void bootmgr_update_battery_fill(int pct)
     bootmgr_print_fill(battery_fill_offset_x, y, w, 80, WHITE, 1);
 }
 
-int bootmgr_get_battery_pct()
+int bootmgr_get_battery_pct(void)
 {
     static char pct[5];
     bootmgr_get_file(battery_pct, pct, 4);

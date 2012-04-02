@@ -38,47 +38,47 @@ enum _bootmgr_charger_settings
 
 //main
 void bootmgr_start(int charger);
-void bootmgr_exit();
-uint8_t bootmgr_show_rom_list();
-void bootmgr_boot_internal();
-uint8_t bootmgr_boot_sd();
+void bootmgr_exit(void);
+uint8_t bootmgr_show_rom_list(void);
+void bootmgr_boot_internal(void);
+uint8_t bootmgr_boot_sd(void);
 void bootmgr_import_boot(char *path);
-void bootmgr_remove_rc_mounts();
+void bootmgr_remove_rc_mounts(void);
 void *bootmgr_time_thread(void *cookie);
 inline void bootmgr_set_time_thread(uint8_t start);
 int8_t bootmgr_get_file(char *name, char *buffer, uint8_t len);
-uint8_t bootmgr_toggle_ums();
-inline void __bootmgr_boot();
-void bootmgr_load_settings();
-void bootmgr_save_settings();
+uint8_t bootmgr_toggle_ums(void);
+inline void __bootmgr_boot(void);
+void bootmgr_load_settings(void);
+void bootmgr_save_settings(void);
 int bootmgr_toggle_sdcard(uint8_t on, uint8_t mknod_only);
 void bootmgr_set_brightness(uint8_t pct);
 void bootmgr_set_brightness_helper(uint16_t value);
 void bootmgr_do_sleep(char on);
-uint8_t bootmgr_boot_sd_auto();
+uint8_t bootmgr_boot_sd_auto(void);
 
 //charger
-void bootmgr_charger_init();
-void bootmgr_charger_destroy();
+void bootmgr_charger_init(void);
+void bootmgr_charger_destroy(void);
 uint8_t bootmgr_charger_key(int key);
-void bootmgr_update_battery_status();
+void bootmgr_update_battery_status(void);
 void bootmgr_update_battery_fill(int pct);
 void *bootmgr_charger_thread(void *cookie);
-int bootmgr_get_battery_pct();
+int bootmgr_get_battery_pct(void);
 
 //misc
-void bootmgr_misc_init();
-void bootmgr_misc_destroy();
+void bootmgr_misc_init(void);
+void bootmgr_misc_destroy(void);
 uint8_t bootmgr_misc_key(int key);
-void bootmgr_misc_draw_items();
+void bootmgr_misc_draw_items(void);
 
-inline int bootmgr_misc_charger();
-inline int bootmgr_misc_tetris();
-inline int bootmgr_misc_reboot();
-inline int bootmgr_misc_recovery();
-inline int bootmgr_misc_bootloader();
+inline int bootmgr_misc_charger(void);
+inline int bootmgr_misc_tetris(void);
+inline int bootmgr_misc_reboot(void);
+inline int bootmgr_misc_recovery(void);
+inline int bootmgr_misc_bootloader(void);
 
-static const void (*misc_callbacks[])() = {
+static int (*misc_callbacks[])(void) = {
     bootmgr_misc_charger,
     bootmgr_misc_tetris,
     bootmgr_misc_reboot,
@@ -92,20 +92,20 @@ int ev_init(void);
 void ev_exit(void);
 int ev_get(struct input_event *ev, unsigned dont_wait);
 void *bootmgr_input_thread(void *cookie);
-int bootmgr_get_last_key();
+int bootmgr_get_last_key(void);
 struct input_event;
 uint8_t bootmgr_handle_key(int key);
 uint8_t bootmgr_get_last_touch(uint16_t *x, uint16_t *y);
-void bootmgr_setup_touch();
-void bootmgr_reset_input_iters();
+void bootmgr_setup_touch(void);
+void bootmgr_reset_input_iters(void);
 
 //Drawing
-void bootmgr_init_display();
-void bootmgr_destroy_display();
-int bootmgr_open_framebuffer();
-void bootmgr_close_framebuffer();
+void bootmgr_init_display(void);
+void bootmgr_destroy_display(void);
+int bootmgr_open_framebuffer(void);
+void bootmgr_close_framebuffer(void);
 int bootmgr_show_img(uint16_t start_x, uint16_t start_y, char *custom_img);
-void bootmgr_main_draw_sel();
+void bootmgr_main_draw_sel(void);
 void bootmgr_set_lines_count(uint16_t c);
 void bootmgr_set_fills_count(uint16_t c);
 void bootmgr_set_imgs_count(uint16_t c);
@@ -113,33 +113,33 @@ void bootmgr_set_touches_count(uint16_t c);
 void bootmgr_printf(short x, uint8_t line, uint16_t color, char *what, ...);
 void bootmgr_print_img(int16_t x, int16_t y, char *name, int8_t id);
 void bootmgr_print_fill(int16_t x, int16_t y, int16_t width, int16_t height, uint16_t color, int8_t id);
-void bootmgr_add_touch(uint16_t x_min, uint16_t y_min, uint16_t x_max, uint16_t y_max, int (*callback)(), int8_t id);
+void bootmgr_add_touch(uint16_t x_min, uint16_t y_min, uint16_t x_max, uint16_t y_max, int (*callback)(void), int8_t id);
 inline void bootmgr_select(int8_t line);
-void bootmgr_draw();
-void bootmgr_draw_text();
-void bootmgr_draw_fills();
-void bootmgr_draw_imgs();
+void bootmgr_draw(void);
+void bootmgr_draw_text(void);
+void bootmgr_draw_fills(void);
+void bootmgr_draw_imgs(void);
 void bootmgr_erase_text(uint8_t line);
 void bootmgr_erase_fill(int8_t id);
 void bootmgr_erase_touch(int8_t id);
 int bootmgr_check_touch(uint16_t x, uint16_t y);
-void bootmgr_fill_fb_black();
+void bootmgr_fill_fb_black(void);
 
 inline void _bootmgr_set_px(uint16_t x, uint16_t y, uint16_t color);
 inline void _bootmgr_draw_char(char c, uint16_t x, uint16_t y, uint16_t color);
-inline void bootmgr_clear();
+inline void bootmgr_clear(void);
 
-inline int bootmgr_touch_int();
-inline int bootmgr_touch_sd();
-inline int bootmgr_touch_exit_ums();
-inline int bootmgr_touch_sd_up();
-inline int bootmgr_touch_sd_down();
-inline int bootmgr_touch_sd_select();
-inline int bootmgr_touch_sd_exit();
-inline int bootmgr_touch_ums();
-inline int bootmgr_touch_misc();
-inline int bootmgr_touch_exit_charger();
-inline int bootmgr_touch_exit_misc();
+inline int bootmgr_touch_int(void);
+inline int bootmgr_touch_sd(void);
+inline int bootmgr_touch_exit_ums(void);
+inline int bootmgr_touch_sd_up(void);
+inline int bootmgr_touch_sd_down(void);
+inline int bootmgr_touch_sd_select(void);
+inline int bootmgr_touch_sd_exit(void);
+inline int bootmgr_touch_ums(void);
+inline int bootmgr_touch_misc(void);
+inline int bootmgr_touch_exit_charger(void);
+inline int bootmgr_touch_exit_misc(void);
 
 #define BOOTMGR_FILL_SELECT 1
 
@@ -180,7 +180,7 @@ typedef struct
     uint16_t x_max;
     uint16_t y_max;
     int8_t id;
-    int (*callback)();
+    int (*callback)(void);
 } bootmgr_touch;
 
 typedef struct
@@ -199,10 +199,10 @@ typedef struct
 
 extern bootmgr_display_t *bootmgr_display;
 
-inline bootmgr_line *_bootmgr_new_line();
-inline bootmgr_fill *_bootmgr_new_fill();
-inline bootmgr_touch *_bootmgr_new_touch();
-inline bootmgr_img *_bootmgr_new_img();
+inline bootmgr_line *_bootmgr_new_line(void);
+inline bootmgr_fill *_bootmgr_new_fill(void);
+inline bootmgr_touch *_bootmgr_new_touch(void);
+inline bootmgr_img *_bootmgr_new_img(void);
 inline bootmgr_line *_bootmgr_get_line(uint8_t line);
 inline bootmgr_fill *_bootmgr_get_fill(int8_t id);
 inline bootmgr_touch *_bootmgr_get_touch(int8_t id);

@@ -26,7 +26,7 @@ uint16_t update_t;
 
 const uint16_t score_coef[] = { 0, 40, 100, 300, 1200 };
 
-void tetris_init()
+void tetris_init(void)
 {
     bootmgr_set_time_thread(0);
     bootmgr_phase = BOOTMGR_TETRIS;
@@ -61,7 +61,7 @@ void tetris_init()
     bootmgr_draw();
 }
 
-void tetris_set_defaults()
+void tetris_set_defaults(void)
 {
     run_thread = 1;
     state = 0;
@@ -73,7 +73,7 @@ void tetris_set_defaults()
     update_t = 500;
 }
 
-void tetris_exit()
+void tetris_exit(void)
 {
     run_thread = 0;
     pthread_join(t_tetris, NULL);
@@ -336,7 +336,7 @@ void tetris_draw(uint8_t move)
     fb_update(&fb);
 }
 
-void tetris_spawn_new()
+void tetris_spawn_new(void)
 {
     uint8_t type;
     uint8_t rotation;
@@ -500,7 +500,7 @@ void tetris_move_piece( uint8_t dir)
     current->moved = 1;
 }
 
-void tetris_rotate_piece()
+void tetris_rotate_piece(void)
 {
     uint8_t rot = current->rotation;
     uint8_t x_o = current->x;
@@ -553,7 +553,7 @@ void tetris_rotate_piece()
     }
 }
 
-void tetris_check_line()
+void tetris_check_line(void)
 {
     uint8_t broken;
     uint8_t lines = 0;
@@ -593,7 +593,7 @@ void tetris_check_line()
     }
 }
 
-void tetris_print_score()
+void tetris_print_score(void)
 {
     bootmgr_printf(10, 0, WHITE, "Score: %5u   Level: %2u Max: %u", score, level, settings.tetris_max_score);
 }
@@ -610,7 +610,7 @@ void tetris_delete_if_nowhere(tetris_piece *p)
         free(p);
 }
 
-void tetris_print_batt()
+void tetris_print_batt(void)
 {
     bootmgr_printf(234, 28, WHITE, "Batt: %u%%", bootmgr_get_battery_pct());
 }
