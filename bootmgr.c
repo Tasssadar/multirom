@@ -15,6 +15,7 @@
 #include <linux/kd.h>
 #include <pthread.h>
 #include <hardware_legacy/power.h>
+#include <sys/klog.h>
 
 #include "init.h"
 #include "bootmgr.h"
@@ -560,6 +561,7 @@ void bootmgr_load_settings(void)
     settings.tetris_max_score = 0;
     settings.brightness = 100;
     settings.charger_settings = (CHARGER_AUTO_START | CHARGER_DISABLE_LG);
+    settings.debug = 0;
 
     strcpy(settings.default_boot_sd, "");
 
@@ -630,6 +632,8 @@ void bootmgr_load_settings(void)
                     }
                     else if(strstr(n, "charger_settings"))
                         settings.charger_settings = atoi(p);
+                    else if(strstr(n, "debug"))
+                        settings.debug = atoi(p);
 
                     p = strtok (NULL, "=\n");
                 }
@@ -831,4 +835,82 @@ uint8_t bootmgr_boot_sd_auto(void)
         return bootmgr_boot_sd();
     }
     return 0;
+}
+
+#define DMESG_SIZE (256*1024)
+void bootmgr_debug(void)
+{
+    if(!settings.debug)
+        return;
+
+    bootmgr_toggle_sdcard(1, 0);
+
+    char path[256];
+    FILE *in_file = NULL;
+    FILE *out_file = NULL;
+    int path_len = 0;
+
+    // create folders
+    mkdir("/sdrt/multirom", (mode_t)0777);
+    sprintf(path, "/sdrt/multirom/debug_%u", time(0));
+    mkdir(path, (mode_t)0777);
+
+    path_len = strlen(path);
+    path[path_len++] = '/';
+    path[path_len] = 0;
+
+    // dmesg
+    strcat(path, "dmesg.txt");
+    out_file = fopen(path, "w");
+    if(out_file)
+    {
+        char buff[DMESG_SIZE] = { 0 };
+        int res = klogctl(3, buff, DMESG_SIZE);
+        if(res != -1)
+            fwrite(buff, 1, res, out_file);
+        else
+            fputs("Could not get dmesg!\n", out_file);
+        fclose(out_file);
+    }
+    path[path_len] = 0;
+
+    // rc files
+    DIR *d = opendir("/");
+    if(d != NULL)
+    {
+        char root_path[256] = { '/', 0 };
+        char line_buff[1000];
+        struct dirent *dp = NULL;
+        while(dp = readdir(d))
+        {
+            if(!strstr(dp->d_name, ".rc"))
+                continue;
+
+            strcat(root_path, dp->d_name);
+            in_file = fopen(root_path, "r");
+            if(!in_file)
+                goto clear_str;
+
+            strcat(path, dp->d_name);
+            out_file = fopen(path, "w");
+            if(!out_file)
+                goto clear_out_str;
+
+            while(fgets(line_buff, 1000, in_file))
+                fputs(line_buff, out_file);
+
+            fclose(out_file);
+clear_out_str:
+            path[path_len] = 0;
+            fclose(in_file);
+clear_str:
+            root_path[1] = 0;
+        }
+
+        closedir(d);
+    }
+
+    sync();
+
+    bootmgr_toggle_sdcard(0, 0);
 }

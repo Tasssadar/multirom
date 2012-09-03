@@ -56,6 +56,7 @@ void bootmgr_set_brightness(uint8_t pct);
 void bootmgr_set_brightness_helper(uint16_t value);
 void bootmgr_do_sleep(char on);
 uint8_t bootmgr_boot_sd_auto(void);
+void bootmgr_debug(void);
 
 //charger
 void bootmgr_charger_init(void);
@@ -220,6 +221,7 @@ typedef struct
     uint8_t default_boot;
     char *default_boot_sd;
     uint8_t charger_settings;
+    uint8_t debug;
 } bootmgr_settings_t;
 
 #endif

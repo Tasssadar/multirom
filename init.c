@@ -888,6 +888,8 @@ int main(int argc, char **argv)
     action_for_each_trigger("pre-init", action_add_queue_tail);
     drain_action_queue();
 
+    bootmgr_debug();
+
     char *cmd[] = { "main_init", (char *)0 };
     return execve("/main_init", cmd, NULL);
 #if 0 
