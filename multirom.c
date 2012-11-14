@@ -505,7 +505,8 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     int res = multirom_check_bootimg(s, to_boot);
     if(res == -1)
         return -1;
-    else if(res == 1)
+
+    if(res == 1)
         exit |= EXIT_REBOOT;
 
     if(to_boot == s->current_rom)
@@ -519,13 +520,15 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
         (to_boot->type == ROM_UBUNTU_INTERNAL || to_boot->type == ROM_DEFAULT))
     {
         struct multirom_rom *in_root = multirom_get_rom_in_root(s);
-        if(in_root)
+        if(!in_root)
         {
-            multirom_move_out_of_root(in_root);
-            multirom_move_to_root(to_boot);
+            ERROR("No rom in root!");
+            return -1;
         }
-        else
-            fb_printf("Failed to move rom from root!!\n");
+
+        if (multirom_move_out_of_root(in_root) == -1 ||
+            multirom_move_to_root(to_boot) == -1)
+            return -1;
     }
 
     // fix ubuntu ramdisk permissions
@@ -537,7 +540,9 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
         case ROM_ANDROID_INTERNAL:
             if(!(exit & EXIT_REBOOT))
                 exit &= ~(EXIT_UMOUNT);
-            multirom_prep_android_mounts(to_boot);
+
+            if(multirom_prep_android_mounts(to_boot) == -1)
+                return -1;
             break;
     }
 
@@ -608,7 +613,7 @@ int multirom_check_bootimg(struct multirom_status *s, struct multirom_rom *rom)
     return 0;
 }
 
-void multirom_move_out_of_root(struct multirom_rom *rom)
+int multirom_move_out_of_root(struct multirom_rom *rom)
 {
     fb_debug("Moving ROM %s out of root...\n", rom->name);
 
@@ -621,7 +626,7 @@ void multirom_move_out_of_root(struct multirom_rom *rom)
     if(!d)
     {
         fb_debug("Failed to open /realdata!\n");
-        return;
+        return -1;
     }
 
     //              0           1     2            3
@@ -642,7 +647,7 @@ void multirom_move_out_of_root(struct multirom_rom *rom)
             fb_debug("Move failed %d\n%s\n%s\n%s\n%s\n", res, cmd[0], cmd[1], cmd[2], cmd[3]);
             free(cmd[2]);
             closedir(d);
-            return;
+            return -1;
         }
     }
     closedir(d);
@@ -650,9 +655,11 @@ void multirom_move_out_of_root(struct multirom_rom *rom)
 
     sprintf(path_to, "%sroms/%s/%s", MULTIROM_FOLDER, rom->name, IN_ROOT);
     unlink(path_to);
+
+    return 0;
 }
 
-void multirom_move_to_root(struct multirom_rom *rom)
+int multirom_move_to_root(struct multirom_rom *rom)
 {
     fb_debug("Moving ROM %s to root...\n", rom->name);
 
@@ -663,7 +670,7 @@ void multirom_move_to_root(struct multirom_rom *rom)
     if(!d)
     {
         fb_debug("Failed to open %s!\n", path_from);
-        return;
+        return -1;
     }
 
     //              0           1     2            3
@@ -684,7 +691,7 @@ void multirom_move_to_root(struct multirom_rom *rom)
             fb_debug("Move failed %d\n%s\n%s\n%s\n%s\n", res, cmd[0], cmd[1], cmd[2], cmd[3]);
             free(cmd[2]);
             closedir(d);
-            return;
+            return -1;
         }
     }
     closedir(d);
@@ -693,6 +700,8 @@ void multirom_move_to_root(struct multirom_rom *rom)
     FILE *f = fopen(path_from, "w");
     if(f)
         fclose(f);
+
+    return 0;
 }
 
 void multirom_free_status(struct multirom_status *s)
@@ -722,7 +731,7 @@ int multirom_init_fb()
 
 #define EXEC_MASK (S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP)
 
-void multirom_prep_android_mounts(struct multirom_rom *rom)
+int multirom_prep_android_mounts(struct multirom_rom *rom)
 {
     char in[128];
     char out[128];
@@ -731,7 +740,10 @@ void multirom_prep_android_mounts(struct multirom_rom *rom)
 
     DIR *d = opendir(folder);
     if(!d)
-        return;
+    {
+        ERROR("Failed to open rom folder %s", folder);
+        return -1;
+    }
 
     struct dirent *dp = NULL;
 
@@ -822,8 +834,14 @@ void multirom_prep_android_mounts(struct multirom_rom *rom)
     {
         sprintf(from, "%sroms/%s/%s", MULTIROM_FOLDER, rom->name, folders[i]);
         sprintf(to, "/%s", folders[i]);
-        mount(from, to, "ext4", flags[i], ""); 
+
+        if(mount(from, to, "ext4", flags[i], "") < 0)
+        {
+            ERROR("Failed to mount %s to %s (%d: %s)", from, to, errno, strerror(errno));
+            return -1;
+        }
     }
+    return 0;
 }
 
 void multirom_fix_ubuntu_permissions()
