@@ -2,6 +2,7 @@
 
 #include "checkbox.h"
 #include "input.h"
+#include "util.h"
 
 #define BORDER_SIZE 2
 #define BORDER_PADDING 2
@@ -112,8 +113,11 @@ int checkbox_touch_handler(touch_event *ev, void *data)
 
     if(ev->changed & TCHNG_REMOVED)
     {
-        (*box->clicked)(box->selected == NULL);
-        checkbox_select(box, (box->selected == NULL));
+        if(in_rect(ev->x, ev->y, box->x-TOUCH, box->y-TOUCH, CHECKBOX_SIZE+TOUCH*2, CHECKBOX_SIZE+TOUCH*2))
+        {
+            (*box->clicked)(box->selected == NULL);
+            checkbox_select(box, (box->selected == NULL));
+        }
 
         fb_rm_rect(box->hover);
         box->hover = NULL;

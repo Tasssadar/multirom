@@ -19,10 +19,8 @@
 
 #include <cutils/klog.h>
 
-#define ERROR(x...)   KLOG_ERROR("init", x)
-#define NOTICE(x...)  KLOG_NOTICE("init", x)
-#define INFO(x...)    KLOG_ERROR("init", x)
-
-#define LOG_UEVENTS        1  /* log uevent messages if 1. verbose */
+#define ERROR(x...)   KLOG_ERROR("multirom", x)
+#define NOTICE(x...)  KLOG_NOTICE("multirom", x)
+#define INFO(x...)    KLOG_ERROR("multirom", x)
 
 #endif

@@ -114,7 +114,6 @@ int main()
     ERROR("Done initializing");
 
     chmod("/busybox", EXEC_MASK);
-    chmod("/main_init", EXEC_MASK);
 
     int ok = 1;
     if(wait_for_file(DATA_DEV, 5) < 0)
@@ -160,6 +159,8 @@ int main()
     umount("/sys");
     rmdir("/proc");
     rmdir("/sys");
+
+    chmod("/main_init", EXEC_MASK);
 
     // run the main init
     char *cmd[] = { "/main_init", (char *)0 };

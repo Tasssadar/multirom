@@ -62,6 +62,8 @@ int multirom_move_to_root(struct multirom_rom *rom);
 void multirom_free_status(struct multirom_status *s);
 int multirom_init_fb();
 int multirom_prep_android_mounts(struct multirom_rom *rom);
+int multirom_create_media_link(void);
+int multirom_get_api_level(const char *path);
 int multirom_get_rom_type(struct multirom_rom *rom);
 
 /*

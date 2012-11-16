@@ -321,7 +321,8 @@ void sanitize(char *s)
         s++;
     *s = 0;
 }
-void make_link(const char *oldpath, const char *newpath)
+
+int make_link(const char *oldpath, const char *newpath)
 {
     int ret;
     char buf[256];
@@ -330,19 +331,28 @@ void make_link(const char *oldpath, const char *newpath)
 
     slash = strrchr(newpath, '/');
     if (!slash)
-        return;
+        return -1;
+
     width = slash - newpath;
     if (width <= 0 || width > (int)sizeof(buf) - 1)
-        return;
+        return -1;
+
     memcpy(buf, newpath, width);
     buf[width] = 0;
     ret = mkdir_recursive(buf, 0755);
     if (ret)
+    {
         ERROR("Failed to create directory %s: %s (%d)\n", buf, strerror(errno), errno);
+        return -1;
+    }
 
     ret = symlink(oldpath, newpath);
     if (ret && errno != EEXIST)
+    {
         ERROR("Failed to symlink %s to %s: %s (%d)\n", oldpath, newpath, strerror(errno), errno);
+        return -1;
+    }
+    return 0;
 }
 
 void remove_link(const char *oldpath, const char *newpath)

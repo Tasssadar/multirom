@@ -593,12 +593,17 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
             multirom_fix_ubuntu_permissions();
             break;
         case ROM_ANDROID_INTERNAL:
+        {
             if(!(exit & EXIT_REBOOT))
                 exit &= ~(EXIT_UMOUNT);
 
             if(multirom_prep_android_mounts(to_boot) == -1)
                 return -1;
+
+            if(multirom_create_media_link() == -1)
+                return -1;
             break;
+        }
     }
 
     return exit;
@@ -845,10 +850,13 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
                 }
                 fputc((int)'#', f_out);
             }
-            // sdcard tool does not like symlinks
-            else if(strstr(line, "/sdcard /data/media"))
+            // fixup sdcard tool
+            else if(strstr(line, "service sdcard") == line)
             {
-                char *p = strtok(line, " ");
+                // not needed, now I use bind insead of link
+                // so just put the line as is
+                fputs(line, f_out);
+                /*char *p = strtok(line, " ");
                 while(p)
                 {
                     if(strcmp(p, "/data/media") == 0)
@@ -858,12 +866,12 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
 
                     if((p = strtok(NULL, " ")))
                         fputc((int)' ', f_out);
-                }
+                }*/
 
                 // put it to main class and skip next line,
                 // it does not start on CM10 when it is in late_start, wtf?
                 fputs("    class main\n", f_out);
-                fgets(line, sizeof(line), f_in);
+                fgets(line, sizeof(line), f_in); // skip next line, should be "class late_start"
                 continue;
             }
             fputs(line, f_out);
@@ -897,6 +905,79 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
         }
     }
     return 0;
+}
+
+int multirom_create_media_link(void)
+{
+    int media_new = 0;
+    int api_level = multirom_get_api_level("/system/build.prop");
+    if(api_level <= 0)
+        return -1;
+
+    struct stat info;
+    if(stat(REALDATA"/media/0", &info) >= 0)
+        media_new = 1;
+
+    static const char *paths[] = {
+        REALDATA"/media",      // 0
+        REALDATA"/media/0",    // 1
+
+        "/data/media",         // 2
+        "/data/media/0",       // 3
+    };
+
+    int from, to;
+
+    if(api_level <= 16)
+    {
+        to = 2;
+        if(!media_new) from = 0;
+        else           from = 1;
+    }
+    else if(api_level >= 17)
+    {
+        from = 0;
+        if(!media_new) to = 3;
+        else           to = 2;
+    }
+
+    ERROR("Making media dir: api %d, media_new %d, %s to %s", api_level, media_new, paths[from], paths[to]);
+    if(mkdir_recursive(paths[to], 0775) == -1)
+    {
+        ERROR("Failed to make media dir");
+        return -1;
+    }
+
+    if(mount(paths[from], paths[to], "ext4", MS_BIND, "") < 0)
+    {
+        ERROR("Failed to bind media folder %d (%s)", errno, strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
+int multirom_get_api_level(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    if(!f)
+    {
+        ERROR("Could not open %s to read api level!", path);
+        return -1;
+    }
+
+    int res = -1;
+    char line[256];
+    while(res == -1 && (fgets(line, sizeof(line), f)))
+    {
+        if(strstr(line, "ro.build.version.sdk=") == line)
+            res = atoi(strchr(line, '=')+1);
+    }
+    fclose(f);
+
+    if(res == 0)
+        ERROR("Invalid ro.build.version.sdk line in build.prop");
+
+    return res;
 }
 
 void multirom_fix_ubuntu_permissions()
