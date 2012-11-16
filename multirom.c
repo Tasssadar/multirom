@@ -159,8 +159,8 @@ void multirom_emergency_reboot(void)
 
 static int compare_rom_names(const void *a, const void *b)
 {
-    struct multirom_rom *rom_a = (struct multirom_rom *)(*((void**)a));
-    struct multirom_rom *rom_b = (struct multirom_rom *)(*((void**)b));
+    struct multirom_rom *rom_a = *((struct multirom_rom **)a);
+    struct multirom_rom *rom_b = *((struct multirom_rom **)b);
     return strcoll(rom_a->name, rom_b->name);
 }
 
