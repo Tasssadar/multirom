@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <pthread.h>
+#include <dirent.h>
 
 #include "multirom_ui.h"
 #include "framebuffer.h"
@@ -23,6 +24,25 @@ static struct multirom_status *mrom_status = NULL;
 static struct multirom_rom *selected_rom = NULL;
 
 static pthread_mutex_t rom_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static void list_block(void)
+{
+    ERROR("Listing /dev/block");
+    DIR *d = opendir("/dev/block");
+    if(!d)
+    {
+        ERROR("Failed to open /dev/block");
+        return;
+    }
+    
+    struct dirent *dr;
+    while((dr = readdir(d)))
+    {
+        ERROR("/dev/block/%s (%d)", dr->d_name, dr->d_type);
+    }
+    
+    closedir(d);
+}
 
 struct multirom_rom *multirom_ui(struct multirom_status *s)
 {
@@ -48,8 +68,15 @@ struct multirom_rom *multirom_ui(struct multirom_status *s)
             run = 0;
         pthread_mutex_unlock(&rom_mutex);
 
-        if(get_last_key() == KEY_POWER)
-            run = 0;
+        switch(get_last_key())
+        {
+            case KEY_POWER:
+                run = 0;
+                break;
+            case KEY_VOLUMEUP:
+                list_block();
+                break;
+        }
     }
 
     stop_input_thread();
@@ -118,6 +145,8 @@ void multirom_ui_destroy_tab(int tab)
             tab_data = NULL;
             break;
         case TAB_MISC:
+            multirom_ui_tab_misc_destroy(tab_data);
+            tab_data = NULL;
             break;
     }
 }
@@ -142,6 +171,7 @@ void multirom_ui_switch(int tab)
             tab_data = multirom_ui_tab_rom_init(tab);
             break;
         case TAB_MISC:
+            tab_data = multirom_ui_tab_misc_init();
             break;
     }
 
@@ -202,6 +232,9 @@ int multirom_ui_touch_handler(touch_event *ev, void *data)
 #define BOOTBTN_W 300
 #define BOOTBTN_H 80
 
+#define REFRESHBTN_W 400
+#define REFRESHBTN_H 60
+
 typedef struct 
 {
     listview *list;
@@ -229,6 +262,9 @@ void *multirom_ui_tab_rom_init(int tab_type)
     t->list->y = HEADER_HEIGHT+ROMS_HEADER_H;
     t->list->w = fb_width;
     t->list->h = fb_height - t->list->y - ROMS_FOOTER_H-20;
+
+    if(tab_type == TAB_USB) // space for refresh btn
+        t->list->h -= REFRESHBTN_H+20;
 
     t->list->item_draw = &rom_item_draw;
     t->list->item_hide = &rom_item_hide;
@@ -281,7 +317,18 @@ void *multirom_ui_tab_rom_init(int tab_type)
     button_enable(b, !has_roms);
     list_add(b, &t->buttons);
 
-    // TODO: refresh btn
+    if(tab_type == TAB_USB)
+    {
+        b = malloc(sizeof(button));
+        memset(b, 0, sizeof(button));
+        b->x = fb_width/2 - REFRESHBTN_W/2;
+        b->y = base_y - REFRESHBTN_H - 20;
+        b->w = REFRESHBTN_W;
+        b->h = REFRESHBTN_H;
+        b->clicked = &multirom_ui_tab_rom_refresh_usb;
+        button_init_ui(b, "Refresh", SIZE_BIG);
+        list_add(b, &t->buttons);
+    }
 
     return t;
 }
@@ -317,7 +364,7 @@ void multirom_ui_tab_rom_selected(listview_item *prev, listview_item *now)
     fb_draw();
 }
 
-void multirom_ui_tab_rom_boot_btn()
+void multirom_ui_tab_rom_boot_btn(void)
 {
     if(!tab_data)
         return;
@@ -333,4 +380,51 @@ void multirom_ui_tab_rom_boot_btn()
     pthread_mutex_lock(&rom_mutex);
     selected_rom = rom;
     pthread_mutex_unlock(&rom_mutex);
+}
+
+void multirom_ui_tab_rom_refresh_usb(void)
+{
+    
+}
+
+#define MISC_HEADER_H 90
+typedef struct 
+{
+    button **buttons;
+    void **ui_elements;
+    checkbox *c;
+} tab_misc;
+
+static void checkbox_text(int checked)
+{
+    
+}
+
+void *multirom_ui_tab_misc_init(void)
+{
+    tab_misc *t = malloc(sizeof(tab_misc));
+    memset(t, 0, sizeof(tab_misc));
+
+    const char *settings_text = "Settings";
+    int x = center_x(0, fb_width, SIZE_BIG, settings_text);
+    int y = center_y(HEADER_HEIGHT, MISC_HEADER_H, SIZE_BIG);
+    fb_text *text = fb_add_text(x, y, LBLUE, SIZE_BIG, settings_text);
+    list_add(text, &t->ui_elements);
+
+    t->c = checkbox_create(20, MISC_HEADER_H+40, &checkbox_text);
+
+    text = fb_add_text(70, MISC_HEADER_H+40, WHITE, SIZE_BIG, "Auto-boot rom after");
+    list_add(text, &t->ui_elements);
+
+    return t;
+}
+
+void multirom_ui_tab_misc_destroy(void *data)
+{
+    tab_misc *t = (tab_misc*)data;
+    
+    list_clear(&t->ui_elements, &fb_remove_item);
+    checkbox_destroy(t->c);
+    
+    free(t);
 }

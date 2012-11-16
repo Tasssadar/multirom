@@ -38,6 +38,7 @@ struct multirom_status {
 typedef struct boot_img_hdr boot_img_hdr;
 
 int multirom();
+int multirom_find_base_dir(void);
 void multirom_emergency_reboot(void);
 int multirom_default_status(struct multirom_status *s);
 int multirom_get_rom_bootid(struct multirom_rom *rom, const char *roms_root_path);

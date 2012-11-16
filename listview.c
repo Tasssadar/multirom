@@ -155,7 +155,7 @@ int listview_touch_handler(touch_event *ev, void *data)
 
             if(!view->touch.hover)
             {
-                if(ev->x > view->x + view->w - PADDING*1.5f && ev->x < view->x + view->w)
+                if(ev->x > view->x + view->w - PADDING*2 && ev->x < view->x + view->w)
                     listview_scroll_to(view, ((ev->y-view->y)*100)/(view->h));
                 else
                     listview_scroll_by(view, view->touch.last_y - ev->y);
@@ -270,7 +270,7 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
     {
         d->text_it = fb_add_text(x+100, 0, WHITE, SIZE_BIG, d->text);
         d->bottom_line = fb_add_rect(x, 0, w, 1, 0xFF1B1B1B);
-        d->box = checkbox_create(0, 0);
+        d->box = checkbox_create(0, 0, NULL);
     }
 
     d->text_it->head.y = center_y(y, ROM_ITEM_H, SIZE_BIG);

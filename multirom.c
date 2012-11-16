@@ -18,16 +18,46 @@
 #include "util.h"
 
 #define REALDATA "/realdata"
-#define BUSYBOX_BIN "/realdata/media/multirom/busybox"
-#define MULTIROM_FOLDER "/realdata/media/multirom/"
+#define BUSYBOX_BIN "busybox"
 #define INTERNAL_ROM_NAME "Internal"
 #define BOOT_BLK "/dev/block/mmcblk0p2"
 #define IN_ROOT "is_in_root"
+#define MAX_ROM_NAME_LEN 26
 
 #define T_FOLDER 4
 
+static char multirom_dir[64] = { 0 };
+
+int multirom_find_base_dir(void)
+{
+    int i;
+    struct stat info;
+
+    static const char *paths[] = {
+        REALDATA"/media/0/multirom", // 4.2
+        REALDATA"/media/multirom",
+        NULL,
+    };
+
+    for(i = 0; paths[i]; ++i)
+    {
+        if(stat(paths[i], &info) < 0)
+            continue;
+
+        strcpy(multirom_dir, paths[i]);
+        return 0;
+    }
+    return -1;
+}
+
 int multirom()
 {
+    if(multirom_find_base_dir() == -1)
+    {
+        ERROR("Could not find multirom dir");
+        return -1;
+    }
+
     struct multirom_status s;
 
     multirom_load_status(&s);
@@ -117,15 +147,16 @@ int multirom_default_status(struct multirom_status *s)
     s->current_rom = NULL;
     s->roms = NULL;
 
-    const char *folder = MULTIROM_FOLDER"roms";
-    DIR *d = opendir(folder);
+    char roms_path[256];
+    sprintf(roms_path, "%s/roms", multirom_dir);
+    DIR *d = opendir(roms_path);
     if(!d)
     {
         fb_debug("failed to open roms folder, creating one with ROM from internal memory...\n");
         if(multirom_import_internal() == -1)
             return -1;
 
-        d = opendir(MULTIROM_FOLDER"roms");
+        d = opendir(roms_path);
         if(!d)
         {
             fb_debug("Failed to open roms folder, for second time!\n");
@@ -143,6 +174,12 @@ int multirom_default_status(struct multirom_status *s)
         if(dr->d_type != T_FOLDER)
             continue;
 
+        if(strlen(dr->d_name) > MAX_ROM_NAME_LEN)
+        {
+            ERROR("Skipping ROM %s, name is too long (max %d chars allowed)", dr->d_name, MAX_ROM_NAME_LEN);
+            continue;
+        }
+
         fb_debug("Adding ROM %s\n", dr->d_name);
 
         struct multirom_rom *rom = malloc(sizeof(struct multirom_rom));
@@ -154,10 +191,10 @@ int multirom_default_status(struct multirom_status *s)
 
         rom->type = multirom_get_rom_type(rom);
 
-        sprintf(path, "%s/roms/%s/%s", MULTIROM_FOLDER, rom->name, IN_ROOT);
+        sprintf(path, "%s/%s/%s", roms_path, rom->name, IN_ROOT);
         rom->is_in_root = access(path, R_OK) == 0 ? 1 : 0;
 
-        rom->has_bootimg = multirom_get_rom_bootid(rom, folder) == 0 ? 1 : 0;
+        rom->has_bootimg = multirom_get_rom_bootid(rom, roms_path) == 0 ? 1 : 0;
         if(!rom->has_bootimg && (rom->type == ROM_UBUNTU_INTERNAL || rom->type == ROM_DEFAULT))
         {
             fb_debug("Rom %s is type %d, but has no boot image - skipping!\n", rom->name, rom->type);
@@ -200,7 +237,7 @@ int multirom_get_rom_type(struct multirom_rom *rom)
         okay = 1;
         for(y = 0; folders[i][y] && y < FOLDERS && okay; ++y)
         {
-            sprintf(path, "%s/roms/%s/%s/", MULTIROM_FOLDER, rom->name, folders[i][y]);
+            sprintf(path, "%s/roms/%s/%s/", multirom_dir, rom->name, folders[i][y]);
             if(access(path, R_OK) < 0)
                 okay = 0;
         }
@@ -250,7 +287,10 @@ int multirom_load_status(struct multirom_status *s)
 
     multirom_default_status(s);
 
-    FILE *f = fopen(MULTIROM_FOLDER"multirom.ini", "r");
+    char arg[256];
+    sprintf(arg, "%s/multirom.ini", multirom_dir);
+
+    FILE *f = fopen(arg, "r");
     if(!f)
     {
         fb_debug("Failed to open config file, using defaults!\n");
@@ -261,7 +301,6 @@ int multirom_load_status(struct multirom_status *s)
 
     char line[512];
     char name[64];
-    char arg[256];
     char *pch;
 
     while((fgets(line, sizeof(line), f)))
@@ -298,7 +337,10 @@ int multirom_save_status(struct multirom_status *s)
 {
     fb_debug("Saving multirom status\n");
 
-    FILE *f = fopen(MULTIROM_FOLDER"multirom.ini", "w");
+    char path[256];
+    sprintf(path, "%s/multirom.ini", multirom_dir);
+
+    FILE *f = fopen(path, "w");
     if(!f)
     {
         fb_debug("Failed to open/create status file!\n");
@@ -314,13 +356,26 @@ int multirom_save_status(struct multirom_status *s)
 
 int multirom_import_internal(void)
 {
-    mkdir(MULTIROM_FOLDER, 0777);
-    mkdir(MULTIROM_FOLDER"roms", 0777);
-    mkdir(MULTIROM_FOLDER"roms/"INTERNAL_ROM_NAME, 0777);
+    char path[256];
 
-    int res = multirom_dump_boot(MULTIROM_FOLDER"roms/"INTERNAL_ROM_NAME"/boot.img");
+    // multirom
+    mkdir(multirom_dir, 0777); 
 
-    FILE *f = fopen(MULTIROM_FOLDER"roms/"INTERNAL_ROM_NAME"/"IN_ROOT, "w");
+    // roms
+    sprintf(path, "%s/roms", multirom_dir);
+    mkdir(path, 0777);
+
+    // internal rom
+    sprintf(path, "%s/roms/%s", multirom_dir, INTERNAL_ROM_NAME);
+    mkdir(path, 0777);
+
+    // boot image
+    sprintf(path, "%s/roms/%s/boot.img", multirom_dir, INTERNAL_ROM_NAME);
+    int res = multirom_dump_boot(path);
+
+    // is_in_root file
+    sprintf(path, "%s/roms/%s/%s", multirom_dir, INTERNAL_ROM_NAME, IN_ROOT);
+    FILE *f = fopen(path, "w");
     if(f)
         fclose(f);
     return res;
@@ -568,7 +623,7 @@ int multirom_check_bootimg(struct multirom_status *s, struct multirom_rom *rom)
     if(multirom_load_bootimg_header(BOOT_BLK, &h_mem) != 0)
         return -1;
 
-    sprintf(path, "%sroms/%s/boot.img", MULTIROM_FOLDER, rom->name);
+    sprintf(path, "%s/roms/%s/boot.img", multirom_dir, rom->name);
     if(multirom_load_bootimg_header(path, &h_rom) != 0)
         return -1;
 
@@ -589,7 +644,7 @@ int multirom_check_bootimg(struct multirom_status *s, struct multirom_rom *rom)
             fb_debug("Boot image id's does not match, but ramdisk_size is the same.\n");
             fb_debug("Assuming kernel update, dumping boot image to folder of rom %s\n", rom->name);
 
-            sprintf(path, "%sroms/%s/boot.img", MULTIROM_FOLDER, rom->name);
+            sprintf(path, "%s/roms/%s/boot.img", multirom_dir, rom->name);
             multirom_dump_boot(path);
             return 0;
         }
@@ -602,7 +657,7 @@ int multirom_check_bootimg(struct multirom_status *s, struct multirom_rom *rom)
             char *cmd[] = { BUSYBOX_BIN, "dd", "bs=4096", NULL, "of="BOOT_BLK, NULL };
 
             cmd[3] = malloc(256);
-            sprintf(cmd[3], "if=%sroms/%s/boot.img", MULTIROM_FOLDER, rom->name);
+            sprintf(cmd[3], "if=%s/roms/%s/boot.img", multirom_dir, rom->name);
             int res = run_cmd(cmd);
             free(cmd[3]);
 
@@ -618,7 +673,7 @@ int multirom_move_out_of_root(struct multirom_rom *rom)
     fb_debug("Moving ROM %s out of root...\n", rom->name);
 
     char path_to[256];
-    sprintf(path_to, "%sroms/%s/root/", MULTIROM_FOLDER, rom->name);
+    sprintf(path_to, "%s/roms/%s/root/", multirom_dir, rom->name);
 
     mkdir(path_to, 0777);
 
@@ -640,7 +695,7 @@ int multirom_move_out_of_root(struct multirom_rom *rom)
         if(strcmp(dr->d_name, "media") == 0)
             continue;
 
-        sprintf(cmd[2], "/realdata/%s", dr->d_name);
+        sprintf(cmd[2], REALDATA"/%s", dr->d_name);
         int res = run_cmd(cmd);
         if(res != 0)
         {
@@ -653,7 +708,7 @@ int multirom_move_out_of_root(struct multirom_rom *rom)
     closedir(d);
     free(cmd[2]);
 
-    sprintf(path_to, "%sroms/%s/%s", MULTIROM_FOLDER, rom->name, IN_ROOT);
+    sprintf(path_to, "%s/roms/%s/%s", multirom_dir, rom->name, IN_ROOT);
     unlink(path_to);
 
     return 0;
@@ -664,7 +719,7 @@ int multirom_move_to_root(struct multirom_rom *rom)
     fb_debug("Moving ROM %s to root...\n", rom->name);
 
     char path_from[256];
-    sprintf(path_from, "%sroms/%s/root/", MULTIROM_FOLDER, rom->name);
+    sprintf(path_from, "%s/roms/%s/root/", multirom_dir, rom->name);
 
     DIR *d = opendir(path_from);
     if(!d)
@@ -696,7 +751,7 @@ int multirom_move_to_root(struct multirom_rom *rom)
     }
     closedir(d);
     free(cmd[2]);
-    sprintf(path_from, "%sroms/%s/%s", MULTIROM_FOLDER, rom->name, IN_ROOT);
+    sprintf(path_from, "%s/roms/%s/%s", multirom_dir, rom->name, IN_ROOT);
     FILE *f = fopen(path_from, "w");
     if(f)
         fclose(f);
@@ -736,7 +791,7 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
     char in[128];
     char out[128];
     char folder[256];
-    sprintf(folder, "%sroms/%s/boot", MULTIROM_FOLDER, rom->name);
+    sprintf(folder, "%s/roms/%s/boot", multirom_dir, rom->name);
 
     DIR *d = opendir(folder);
     if(!d)
@@ -832,7 +887,7 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
     char to[256];
     for(i = 0; i < ARRAY_SIZE(folders); ++i)
     {
-        sprintf(from, "%sroms/%s/%s", MULTIROM_FOLDER, rom->name, folders[i]);
+        sprintf(from, "%s/roms/%s/%s", multirom_dir, rom->name, folders[i]);
         sprintf(to, "/%s", folders[i]);
 
         if(mount(from, to, "ext4", flags[i], "") < 0)

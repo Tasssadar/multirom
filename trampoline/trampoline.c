@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <stdio.h>
 
 #include "devices.h"
 #include "log.h"
@@ -12,31 +13,72 @@
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 #define REALDATA "/realdata"
 #define DATA_DEV "/dev/block/mmcblk0p9"
-#define MULTIROM_BIN "/realdata/media/multirom/multirom"
-#define BUSYBOX_BIN "/realdata/media/multirom/busybox"
+#define MULTIROM_BIN "multirom"
+#define BUSYBOX_BIN "busybox"
 #define KEEP_REALDATA "/dev/.keep_realdata"
 
 // Not defined in android includes?
 #define MS_RELATIME (1<<21)
 
+static char path_multirom[64] = { 0 };
+
+static int find_multirom(void)
+{
+    int i;
+    struct stat info;
+
+    static const char *paths[] = {
+        REALDATA"/media/0/multirom", // 4.2
+        REALDATA"/media/multirom",
+        NULL,
+    };
+
+    for(i = 0; paths[i]; ++i)
+    {
+        if(stat(paths[i], &info) < 0)
+            continue;
+
+        strcpy(path_multirom, paths[i]);
+        return 0;
+    }
+    return -1;
+}
+
 static void run_multirom(void)
 {
-    struct stat info;
-    if (stat(BUSYBOX_BIN, &info) < 0)
+    if(find_multirom() == -1)
     {
-        ERROR("Could not find busybox: %s", BUSYBOX_BIN);
+        ERROR("Could not find multirom folder!");
         return;
     }
+
+    char path[256];
+    struct stat info;
+
+    // busybox
+    sprintf(path, "%s/%s", path_multirom, BUSYBOX_BIN);
+    if (stat(path, &info) < 0)
+    {
+        ERROR("Could not find busybox: %s", path);
+        return;
+    }
+    chmod(path, EXEC_MASK);
+
+    // multirom
+    sprintf(path, "%s/%s", path_multirom, MULTIROM_BIN);
+    if (stat(path, &info) < 0)
+    {
+        ERROR("Could not find multirom: %s", path);
+        return;
+    }
+    chmod(path, EXEC_MASK);
 
     ERROR("Running multirom");
 
     pid_t pID = fork();
     if(pID == 0)
     {
-        chmod(MULTIROM_BIN, EXEC_MASK);
-        chmod(BUSYBOX_BIN, EXEC_MASK);
-
-        char *cmd[] = { MULTIROM_BIN, NULL };
+        char *cmd[] = { path, NULL };
         int res = execve(cmd[0], cmd, NULL);
 
         ERROR("exec failed %d %d %s\n", res, errno, strerror(errno));

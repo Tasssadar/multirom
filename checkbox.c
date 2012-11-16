@@ -1,17 +1,22 @@
 #include <stdlib.h>
 
 #include "checkbox.h"
+#include "input.h"
 
 #define BORDER_SIZE 2
 #define BORDER_PADDING 2
 
 #define SELECTED_SIZE (CHECKBOX_SIZE-(BORDER_SIZE+BORDER_PADDING)*2)
 #define SELECTED_PADDING (BORDER_SIZE + BORDER_PADDING)
+#define TOUCH 15
 
-checkbox *checkbox_create(int x, int y)
+checkbox *checkbox_create(int x, int y, void (*clicked)(int))
 {
     checkbox *c = malloc(sizeof(checkbox));
     memset(c, 0, sizeof(checkbox));
+
+    c->touch_id = -1;
+    c->clicked = clicked;
 
     c->borders[BORDER_L] = fb_add_rect(0, 0, BORDER_SIZE, CHECKBOX_SIZE, WHITE);
     c->borders[BORDER_R] = fb_add_rect(0, 0, BORDER_SIZE, CHECKBOX_SIZE, WHITE);
@@ -19,6 +24,9 @@ checkbox *checkbox_create(int x, int y)
     c->borders[BORDER_B] = fb_add_rect(0, 0, CHECKBOX_SIZE, BORDER_SIZE, WHITE);
 
     checkbox_set_pos(c, x, y);
+
+    if(c->clicked)
+        add_touch_handler(&checkbox_touch_handler, c);
 
     return c;
 }
@@ -30,6 +38,9 @@ void checkbox_destroy(checkbox *c)
         fb_rm_rect(c->borders[i]);
 
     fb_rm_rect(c->selected);
+
+    if(c->clicked)
+        rm_touch_handler(&checkbox_touch_handler, c);
 
     free(c);
 }
@@ -80,4 +91,35 @@ void checkbox_select(checkbox *c, int select)
         fb_rm_rect(c->selected);
         c->selected = NULL;
     }
+}
+
+int checkbox_touch_handler(touch_event *ev, void *data)
+{
+    checkbox *box = (checkbox*)data;
+
+    if(box->touch_id == -1)
+    {
+        if(!in_rect(ev->x, ev->y, box->x-TOUCH, box->y-TOUCH, CHECKBOX_SIZE+TOUCH*2, CHECKBOX_SIZE+TOUCH*2))
+            return -1;
+
+        box->touch_id = ev->id;
+        box->hover = fb_add_rect(box->x-TOUCH, box->y-TOUCH, CHECKBOX_SIZE+TOUCH*2, CHECKBOX_SIZE+TOUCH*2, LBLUE2);
+        fb_draw();
+    }
+
+    if(box->touch_id != ev->id)
+        return -1;
+
+    if(ev->changed & TCHNG_REMOVED)
+    {
+        (*box->clicked)(box->selected == NULL);
+        checkbox_select(box, (box->selected == NULL));
+
+        fb_rm_rect(box->hover);
+        box->hover = NULL;
+        box->touch_id = -1;
+
+        fb_draw();
+    }
+    return 0;
 }
