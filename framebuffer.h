@@ -21,7 +21,7 @@ extern struct FB *fb;
 // Colors, 0xAABBGGRR
 #define BLACK     0xFF000000
 #define WHITE     0xFFFFFFFF
-#define LBLUE     0xFFE5B533
+#define LBLUE     0xFFCC9900
 #define LBLUE2    0xFFF4DFA8
 #define GRAYISH   0xFFBEBEBE
 #define GRAY      0xFF7F7F7F
@@ -115,6 +115,7 @@ void fb_fill(uint32_t color);
 void fb_draw(void);
 void fb_clear(void);
 void fb_freeze(int freeze);
+int fb_clone(char **buff);
 
 inline int center_x(int x, int width, int size, const char *text);
 inline int center_y(int y, int height, int size);

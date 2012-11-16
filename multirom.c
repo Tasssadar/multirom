@@ -50,7 +50,7 @@ int multirom_find_base_dir(void)
     return -1;
 }
 
-int multirom()
+int multirom(void)
 {
     if(multirom_find_base_dir() == -1)
     {
@@ -63,17 +63,33 @@ int multirom()
     multirom_load_status(&s);
     multirom_dump_status(&s);
 
-    struct multirom_rom *to_boot = s.current_rom;
+    struct multirom_rom *to_boot = NULL;
     int exit = (EXIT_REBOOT | EXIT_UMOUNT);
 
     if(s.is_second_boot == 0)
     {
-        to_boot = multirom_ui(&s);
+        switch(multirom_ui(&s, &to_boot))
+        {
+            case UI_EXIT_BOOT_ROM: break;
+            case UI_EXIT_REBOOT:
+                exit = (EXIT_REBOOT | EXIT_UMOUNT);
+                break;
+            case UI_EXIT_REBOOT_RECOVERY:
+                exit = (EXIT_REBOOT_RECOVERY | EXIT_UMOUNT);
+                break;
+            case UI_EXIT_REBOOT_BOOTLOADER:
+                exit = (EXIT_REBOOT_BOOTLOADER | EXIT_UMOUNT);
+                break;
+            case UI_EXIT_SHUTDOWN:
+                exit = (EXIT_SHUTDOWN | EXIT_UMOUNT);
+                break;
+        }
     }
     else
     {
         ERROR("Skipping ROM selection beacause of is_second_boot==1");
         s.is_second_boot = 0;
+        to_boot = s.current_rom;
     }
 
     if(to_boot)
@@ -141,6 +157,13 @@ void multirom_emergency_reboot(void)
     stop_input_thread();
 }
 
+static int compare_rom_names(const void *a, const void *b)
+{
+    struct multirom_rom *rom_a = (struct multirom_rom *)(*((void**)a));
+    struct multirom_rom *rom_b = (struct multirom_rom *)(*((void**)b));
+    return strcoll(rom_a->name, rom_b->name);
+}
+
 int multirom_default_status(struct multirom_status *s)
 {
     s->is_second_boot = 0;
@@ -166,6 +189,7 @@ int multirom_default_status(struct multirom_status *s)
 
     struct dirent *dr;
     char path[256];
+    struct multirom_rom **add_roms = NULL;
     while((dr = readdir(d)))
     {
         if(dr->d_name[0] == '.')
@@ -203,10 +227,22 @@ int multirom_default_status(struct multirom_status *s)
             continue;
         }
 
-        multirom_add_rom(s, rom);
+        list_add(rom, &add_roms);
     }
 
     closedir(d);
+
+    if(add_roms)
+    {
+        // sort roms
+        qsort(add_roms, list_item_count(add_roms), sizeof(struct multirom_rom*), compare_rom_names);
+
+        //add them to main list
+        int i;
+        for(i = 0; add_roms[i]; ++i)
+            list_add(add_roms[i], &s->roms);
+        list_clear(&add_roms, NULL);
+    }
 
     s->current_rom = multirom_get_rom(s, INTERNAL_ROM_NAME);
     if(!s->current_rom)
@@ -215,6 +251,23 @@ int multirom_default_status(struct multirom_status *s)
         return -1;
     }
     return 0;
+}
+
+void multirom_find_usb_roms(struct multirom_status *s)
+{
+    // remove USB roms
+    int i;
+    for(i = 0; s->roms && s->roms[i];)
+    {
+        if(M(s->roms[i]->type) & MASK_USB_ROMS)
+        {
+            list_rm(s->roms[i], &s->roms, &multirom_free_rom);
+            i = 0;
+        }
+        else ++i;
+    }
+
+    // TODO
 }
 
 int multirom_get_rom_type(struct multirom_rom *rom)
@@ -397,19 +450,6 @@ int multirom_dump_boot(const char *dest)
     return res;
 }
 
-void multirom_add_rom(struct multirom_status *s, struct multirom_rom *rom)
-{
-    int current_size = 0;
-    while(s->roms && s->roms[current_size])
-        ++current_size;
-
-    current_size += 2;
-
-    s->roms = realloc(s->roms, current_size*sizeof(struct multirom_rom**));
-    s->roms[--current_size] = NULL;
-    s->roms[--current_size] = rom;
-}
-
 struct multirom_rom *multirom_get_rom(struct multirom_status *s, const char *name)
 {
     int i = 0;
@@ -430,7 +470,7 @@ struct multirom_rom *multirom_get_rom_in_root(struct multirom_status *s)
     return NULL;
 }
 
-int multirom_generate_rom_id()
+int multirom_generate_rom_id(void)
 {
     static int id = 0;
     return id++;
@@ -766,16 +806,16 @@ int multirom_move_to_root(struct multirom_rom *rom)
 
 void multirom_free_status(struct multirom_status *s)
 {
-    int i;
-    for(i = 0; s->roms && s->roms[i]; ++i)
-    {
-        free(s->roms[i]->name);
-        free(s->roms[i]);
-    }
-    free(s->roms);
+    list_clear(&s->roms, &multirom_free_rom);
 }
 
-int multirom_init_fb()
+void multirom_free_rom(void *rom)
+{
+    free(((struct multirom_rom*)rom)->name);
+    free(rom);
+}
+
+int multirom_init_fb(void)
 {
     vt_set_mode(1);
 
@@ -980,7 +1020,40 @@ int multirom_get_api_level(const char *path)
     return res;
 }
 
-void multirom_fix_ubuntu_permissions()
+void multirom_take_screenshot(void)
+{
+    char *buffer = NULL;
+    int len = fb_clone(&buffer);
+
+    int counter;
+    char path[256];
+    struct stat info;
+    FILE *f = NULL;
+
+    for(counter = 0; 1; ++counter)
+    {
+        sprintf(path, "%s/screenshot_%02d.raw", multirom_dir, counter);
+        if(stat(path, &info) >= 0)
+            continue;
+
+        f = fopen(path, "w");
+        if(f)
+        {
+            fwrite(buffer, 1, len, f);
+            fclose(f);
+        }
+        break;
+    }
+
+    free(buffer);
+
+    fb_fill(WHITE);
+    fb_update();
+    usleep(100000);
+    fb_draw();
+}
+
+void multirom_fix_ubuntu_permissions(void)
 {
     fb_debug("Fixing ubuntu ramdisk permissions...\n");
 

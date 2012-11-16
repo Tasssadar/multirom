@@ -98,7 +98,7 @@ int button_touch_handler(touch_event *ev, void *data)
     if(ev->changed & TCHNG_REMOVED)
     {
         if((b->flags & BTN_HOVER) && b->clicked)
-            (*b->clicked)();
+            (*b->clicked)(b->action);
         button_set_hover(b, 0);
         b->touch_id = -1;
     }

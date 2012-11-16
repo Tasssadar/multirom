@@ -20,7 +20,8 @@ typedef struct
     int flags;
     int touch_id;
 
-    void (*clicked)();
+    int action;
+    void (*clicked)(int); // action
 } button;
 
 void button_init_ui(button *b, const char *text, int size);

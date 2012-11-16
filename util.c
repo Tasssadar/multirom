@@ -601,9 +601,15 @@ int list_rm(void *item, void ***list, void (*destroy_callback)(void*))
 
 void list_clear(void ***list, void (*destroy_callback)(void*))
 {
+    if(*list == NULL)
+        return;
+
     int i;
-    for(i = 0; *list && (*list)[i]; ++i)
-        (*destroy_callback)((*list)[i]);
+    if(destroy_callback)
+    {
+        for(i = 0; *list && (*list)[i]; ++i)
+            (*destroy_callback)((*list)[i]);
+    }
 
     free(*list);
     *list = NULL;

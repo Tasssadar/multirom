@@ -14,7 +14,16 @@ enum
     TAB_COUNT
 };
 
-struct multirom_rom *multirom_ui(struct multirom_status *s);
+enum
+{
+    UI_EXIT_BOOT_ROM          = 1,
+    UI_EXIT_REBOOT            = 2,
+    UI_EXIT_REBOOT_RECOVERY   = 3,
+    UI_EXIT_REBOOT_BOOTLOADER = 4,
+    UI_EXIT_SHUTDOWN          = 5
+};
+
+int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot);
 void multirom_ui_init_header(void);
 void multirom_ui_header_select(int tab);
 void multirom_ui_destroy_tab(int tab);
@@ -25,10 +34,12 @@ void multirom_ui_fill_rom_list(listview *view, int mask);
 void *multirom_ui_tab_rom_init(int tab_type);
 void multirom_ui_tab_rom_destroy(void *data);
 void multirom_ui_tab_rom_selected(listview_item *prev, listview_item *now);
-void multirom_ui_tab_rom_boot_btn(void);
-void multirom_ui_tab_rom_refresh_usb(void);
+void multirom_ui_tab_rom_boot_btn(int action);
+void multirom_ui_tab_rom_refresh_usb(int action);
 
 void *multirom_ui_tab_misc_init(void);
 void multirom_ui_tab_misc_destroy(void *data);
+
+void multirom_ui_reboot_btn(int action);
 
 #endif

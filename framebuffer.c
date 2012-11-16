@@ -131,6 +131,18 @@ void fb_update(void)
     fb_set_active_framebuffer(active_fb);
 }
 
+int fb_clone(char **buff)
+{
+    int len = fb_size(fb);
+    *buff = malloc(len);
+
+    pthread_mutex_lock(&fb_mutex);
+    memcpy(*buff, fb->bits, len);
+    pthread_mutex_unlock(&fb_mutex);
+
+    return len;
+}
+
 void fb_fill(uint32_t color)
 {
     android_memset32(fb->bits, color, fb->size);

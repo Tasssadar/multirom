@@ -13,11 +13,17 @@ enum
 };
 
 #define M(x) (1 << x)
+#define MASK_USB_ROMS (M(ROM_ANDROID_USB) | M(ROM_UBUNTU_USB))
 
 enum 
 {
-    EXIT_REBOOT = 0x01,
-    EXIT_UMOUNT = 0x02,
+    EXIT_REBOOT              = 0x01,
+    EXIT_UMOUNT              = 0x02,
+    EXIT_REBOOT_RECOVERY     = 0x04,
+    EXIT_REBOOT_BOOTLOADER   = 0x08,
+    EXIT_SHUTDOWN            = 0x10,
+
+    EXIT_REBOOT_MASK         = (EXIT_REBOOT | EXIT_REBOOT_RECOVERY | EXIT_REBOOT_BOOTLOADER | EXIT_SHUTDOWN),
 };
 
 struct multirom_rom {
@@ -37,12 +43,13 @@ struct multirom_status {
 
 typedef struct boot_img_hdr boot_img_hdr;
 
-int multirom();
+int multirom(void);
 int multirom_find_base_dir(void);
 void multirom_emergency_reboot(void);
 int multirom_default_status(struct multirom_status *s);
+void multirom_find_usb_roms(struct multirom_status *s);
 int multirom_get_rom_bootid(struct multirom_rom *rom, const char *roms_root_path);
-int multirom_generate_rom_id();
+int multirom_generate_rom_id(void);
 struct multirom_rom *multirom_get_rom(struct multirom_status *s, const char *name);
 struct multirom_rom *multirom_get_rom_by_id(struct multirom_status *s, int id);
 struct multirom_rom *multirom_get_rom_in_root(struct multirom_status *s);
@@ -50,21 +57,22 @@ int multirom_load_status(struct multirom_status *s);
 int multirom_import_internal(void);
 void multirom_dump_status(struct multirom_status *s);
 int multirom_save_status(struct multirom_status *s);
-void multirom_add_rom(struct multirom_status *s, struct multirom_rom *rom);
 struct multirom_rom *multirom_select_rom(struct multirom_status *s);
 int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to_boot);
 int multirom_load_bootimg_header(const char *path, struct boot_img_hdr *header);
 int multirom_check_bootimg(struct multirom_status *s, struct multirom_rom *rom);
 int multirom_dump_boot(const char *dest);
-void multirom_fix_ubuntu_permissions();
+void multirom_fix_ubuntu_permissions(void);
 int multirom_move_out_of_root(struct multirom_rom *rom);
 int multirom_move_to_root(struct multirom_rom *rom);
 void multirom_free_status(struct multirom_status *s);
-int multirom_init_fb();
+void multirom_free_rom(void *rom);
+int multirom_init_fb(void);
 int multirom_prep_android_mounts(struct multirom_rom *rom);
 int multirom_create_media_link(void);
 int multirom_get_api_level(const char *path);
 int multirom_get_rom_type(struct multirom_rom *rom);
+void multirom_take_screenshot(void);
 
 /*
 ** +-----------------+ 

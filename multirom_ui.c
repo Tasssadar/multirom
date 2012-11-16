@@ -22,8 +22,9 @@ static int selected_tab = -1;
 static void *tab_data = NULL;
 static struct multirom_status *mrom_status = NULL;
 static struct multirom_rom *selected_rom = NULL;
+static volatile int exit_ui_code = -1;
 
-static pthread_mutex_t rom_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t exit_code_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void list_block(void)
 {
@@ -44,12 +45,15 @@ static void list_block(void)
     closedir(d);
 }
 
-struct multirom_rom *multirom_ui(struct multirom_status *s)
+int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 {
     if(multirom_init_fb() < 0)
         return NULL;
 
     mrom_status = s;
+
+    exit_ui_code = -1;
+    selected_rom = NULL;
 
     selected_tab = -1;
     multirom_ui_init_header();
@@ -58,37 +62,39 @@ struct multirom_rom *multirom_ui(struct multirom_status *s)
     add_touch_handler(&multirom_ui_touch_handler, NULL);
     start_input_thread();
 
-    int run = 1;
-    while(run)
+    while(1)
     {
-        usleep(100000);
-
-        pthread_mutex_lock(&rom_mutex);
-        if(selected_rom)
-            run = 0;
-        pthread_mutex_unlock(&rom_mutex);
-
-        switch(get_last_key())
+        pthread_mutex_lock(&exit_code_mutex);
+        if(exit_ui_code != -1)
         {
-            case KEY_POWER:
-                run = 0;
-                break;
-            case KEY_VOLUMEUP:
-                list_block();
-                break;
+            pthread_mutex_unlock(&exit_code_mutex);
+            break;
         }
+        pthread_mutex_unlock(&exit_code_mutex);
+
+        usleep(100000);
     }
 
     stop_input_thread();
     rm_touch_handler(&multirom_ui_touch_handler, NULL);
 
     fb_create_msgbox(500, 250);
-    if(!selected_rom)
-        fb_msgbox_add_text(-1, -1, SIZE_BIG, "Rebooting...");
-    else
+
+    switch(exit_ui_code)
     {
-        fb_msgbox_add_text(-1, 40, SIZE_BIG, "Booting ROM...");
-        fb_msgbox_add_text(-1, -1, SIZE_NORMAL, selected_rom->name);
+        case UI_EXIT_BOOT_ROM:
+            *to_boot = selected_rom;
+            fb_msgbox_add_text(-1, 40, SIZE_BIG, "Booting ROM...");
+            fb_msgbox_add_text(-1, -1, SIZE_NORMAL, selected_rom->name);
+            break;
+        case UI_EXIT_REBOOT:
+        case UI_EXIT_REBOOT_RECOVERY:
+        case UI_EXIT_REBOOT_BOOTLOADER:
+            fb_msgbox_add_text(-1, -1, SIZE_BIG, "Rebooting...");
+            break;
+        case UI_EXIT_SHUTDOWN:
+            fb_msgbox_add_text(-1, -1, SIZE_BIG, "Shutting down...");
+            break;
     }
 
     fb_draw();
@@ -97,7 +103,8 @@ struct multirom_rom *multirom_ui(struct multirom_status *s)
     multirom_ui_destroy_tab(selected_tab);
     fb_clear();
     fb_close();
-    return selected_rom;
+
+    return exit_ui_code;
 }
 
 void multirom_ui_init_header(void)
@@ -204,8 +211,17 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
 
 int multirom_ui_touch_handler(touch_event *ev, void *data)
 {
+    static int touch_count = 0;
+    if(ev->changed & TCHNG_ADDED)
+    {
+        if(++touch_count == 4)
+            multirom_take_screenshot();
+    }
+
     if(!(ev->changed & TCHNG_REMOVED))
         return -1;
+
+    --touch_count;
 
     int x = fb_width - (TAB_BTN_WIDTH*TAB_COUNT);
     if(ev->y > HEADER_HEIGHT || ev->x < x)
@@ -283,14 +299,6 @@ void *multirom_ui_tab_rom_init(int tab_type)
     assert(tab_type < 2);
 
     multirom_ui_fill_rom_list(t->list, rom_mask[tab_type]);
-    multirom_ui_fill_rom_list(t->list, rom_mask[tab_type]);
-    multirom_ui_fill_rom_list(t->list, rom_mask[tab_type]);
-    multirom_ui_fill_rom_list(t->list, rom_mask[tab_type]);
-    multirom_ui_fill_rom_list(t->list, rom_mask[tab_type]);
-    multirom_ui_fill_rom_list(t->list, rom_mask[tab_type]);
-    multirom_ui_fill_rom_list(t->list, rom_mask[tab_type]);
-    multirom_ui_fill_rom_list(t->list, rom_mask[tab_type]);
-    multirom_ui_fill_rom_list(t->list, rom_mask[tab_type]);
     listview_update_ui(t->list);
 
     int has_roms = (int)(t->list->items == NULL);
@@ -364,7 +372,7 @@ void multirom_ui_tab_rom_selected(listview_item *prev, listview_item *now)
     fb_draw();
 }
 
-void multirom_ui_tab_rom_boot_btn(void)
+void multirom_ui_tab_rom_boot_btn(int action)
 {
     if(!tab_data)
         return;
@@ -377,44 +385,66 @@ void multirom_ui_tab_rom_boot_btn(void)
     if(!rom)
         return;
 
-    pthread_mutex_lock(&rom_mutex);
+    pthread_mutex_lock(&exit_code_mutex);
     selected_rom = rom;
-    pthread_mutex_unlock(&rom_mutex);
+    exit_ui_code = UI_EXIT_BOOT_ROM;
+    pthread_mutex_unlock(&exit_code_mutex);
 }
 
-void multirom_ui_tab_rom_refresh_usb(void)
+void multirom_ui_tab_rom_refresh_usb(int action)
 {
-    
+    //TODO
 }
 
-#define MISC_HEADER_H 90
+#define MISCBTN_W 500
+#define MISCBTN_H 100
+
 typedef struct 
 {
     button **buttons;
     void **ui_elements;
-    checkbox *c;
 } tab_misc;
-
-static void checkbox_text(int checked)
-{
-    
-}
 
 void *multirom_ui_tab_misc_init(void)
 {
     tab_misc *t = malloc(sizeof(tab_misc));
     memset(t, 0, sizeof(tab_misc));
 
-    const char *settings_text = "Settings";
-    int x = center_x(0, fb_width, SIZE_BIG, settings_text);
-    int y = center_y(HEADER_HEIGHT, MISC_HEADER_H, SIZE_BIG);
-    fb_text *text = fb_add_text(x, y, LBLUE, SIZE_BIG, settings_text);
-    list_add(text, &t->ui_elements);
+    int x = fb_width/2 - MISCBTN_W/2;
+    int y = 350;
 
-    t->c = checkbox_create(20, MISC_HEADER_H+40, &checkbox_text);
+    static const char *texts[] = 
+    {
+        "Reboot",              // 0
+        "Reboot to recovery",  // 1
+        "Reboot to booloader", // 2
+        "Shutdown",            // 3
+        NULL
+    };
 
-    text = fb_add_text(70, MISC_HEADER_H+40, WHITE, SIZE_BIG, "Auto-boot rom after");
-    list_add(text, &t->ui_elements);
+    static const int exit_codes[] = {
+        UI_EXIT_REBOOT, UI_EXIT_REBOOT_RECOVERY,
+        UI_EXIT_REBOOT_BOOTLOADER, UI_EXIT_SHUTDOWN
+    };
+
+    int i;
+    for(i = 0; texts[i]; ++i)
+    {
+        button *b = malloc(sizeof(button));
+        memset(b, 0, sizeof(button));
+        b->x = x;
+        b->y = y;
+        b->w = MISCBTN_W;
+        b->h = MISCBTN_H;
+        b->action = exit_codes[i];
+        b->clicked = &multirom_ui_reboot_btn;
+        button_init_ui(b, texts[i], SIZE_BIG);
+        list_add(b, &t->buttons);
+
+        y += MISCBTN_H+20;
+        if(i == 2)
+            y += 50;
+    }
 
     return t;
 }
@@ -422,9 +452,16 @@ void *multirom_ui_tab_misc_init(void)
 void multirom_ui_tab_misc_destroy(void *data)
 {
     tab_misc *t = (tab_misc*)data;
-    
+
     list_clear(&t->ui_elements, &fb_remove_item);
-    checkbox_destroy(t->c);
-    
+    list_clear(&t->buttons, &button_destroy);
+
     free(t);
+}
+
+void multirom_ui_reboot_btn(int action)
+{
+    pthread_mutex_lock(&exit_code_mutex);
+    exit_ui_code = action;
+    pthread_mutex_unlock(&exit_code_mutex);
 }

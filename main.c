@@ -3,12 +3,29 @@
 #include <cutils/android_reboot.h>
 #include <fcntl.h>
 
+#include <sys/mount.h>
+
 #include "multirom.h"
 #include "framebuffer.h"
 #include "log.h"
 
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 #define KEEP_REALDATA "/dev/.keep_realdata"
+#define REALDATA "/realdata"
+
+static void do_reboot(int exit)
+{
+    sync();
+    umount(REALDATA);
+    usleep(300000);
+
+    if(exit & EXIT_REBOOT_RECOVERY)         android_reboot(ANDROID_RB_RESTART2, 0, "recovery");
+    else if(exit & EXIT_REBOOT_BOOTLOADER)  android_reboot(ANDROID_RB_RESTART2, 0, "bootloader");
+    else if(exit & EXIT_SHUTDOWN)           android_reboot(ANDROID_RB_POWEROFF, 0, 0);
+    else                                    android_reboot(ANDROID_RB_RESTART, 0, 0);
+
+    while(1);
+}
 
 int main()
 {
@@ -18,12 +35,10 @@ int main()
 
     if(exit >= 0)
     {
-        if(exit & EXIT_REBOOT)
+        if(exit & EXIT_REBOOT_MASK)
         {
-            sync();
-            usleep(300000);
-            android_reboot(ANDROID_RB_RESTART, 0, 0);
-            while(1);
+            do_reboot(exit);
+            return 0;
         }
 
         // indicates trampoline to keep /realdata mounted
