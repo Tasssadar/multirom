@@ -158,15 +158,19 @@ void multirom_ui_destroy_tab(int tab)
     switch(tab)
     {
         case TAB_INTERNAL:
-        case TAB_USB:
             multirom_ui_tab_rom_destroy(tab_data);
-            tab_data = NULL;
+            break;
+        case TAB_USB:
+            multirom_ui_tab_usb_destroy(tab_data);
             break;
         case TAB_MISC:
             multirom_ui_tab_misc_destroy(tab_data);
-            tab_data = NULL;
+            break;
+        default:
+            assert(0);
             break;
     }
+    tab_data = NULL;
 }
 
 void multirom_ui_switch(int tab)
@@ -185,8 +189,10 @@ void multirom_ui_switch(int tab)
     switch(tab)
     {
         case TAB_INTERNAL:
-        case TAB_USB:
             tab_data = multirom_ui_tab_rom_init(tab);
+            break;
+        case TAB_USB:
+            tab_data = multirom_ui_tab_usb_init();
             break;
         case TAB_MISC:
             tab_data = multirom_ui_tab_misc_init();
@@ -454,6 +460,40 @@ void multirom_ui_tab_rom_boot_btn(int action)
     selected_rom = rom;
     exit_ui_code = UI_EXIT_BOOT_ROM;
     pthread_mutex_unlock(&exit_code_mutex);
+}
+
+
+typedef struct 
+{
+    void **ui_elements;
+} tab_usb;
+
+void *multirom_ui_tab_usb_init()
+{
+    tab_usb *t = malloc(sizeof(tab_usb));
+    memset(t, 0, sizeof(tab_usb));
+
+    int i;
+    int y = center_y(HEADER_HEIGHT, fb_height-HEADER_HEIGHT, SIZE_BIG*2);
+    const char *str[] = { "Booting from USB", "is not yet supported.", NULL };
+    for(i = 0; str[i]; ++i)
+    {
+        int x = center_x(0, fb_width, SIZE_BIG, str[i]);
+        fb_text *text = fb_add_text(x, y, LBLUE, SIZE_BIG, str[i]);
+        list_add(text, &t->ui_elements);
+
+        y += 40;
+    }
+    return t;
+}
+
+void multirom_ui_tab_usb_destroy(void *data)
+{
+    tab_usb *t = (tab_usb*)data;
+
+    list_clear(&t->ui_elements, &fb_remove_item);
+
+    free(t);
 }
 
 void multirom_ui_tab_rom_refresh_usb(int action)
