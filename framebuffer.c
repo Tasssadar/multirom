@@ -505,7 +505,10 @@ void fb_draw(void)
 
 void fb_freeze(int freeze)
 {
-    fb_frozen = freeze;
+    if(freeze)
+        ++fb_frozen;
+    else
+        --fb_frozen;
 }
 
 int center_x(int x, int width, int size, const char *text)

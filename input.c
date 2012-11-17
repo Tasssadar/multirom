@@ -47,6 +47,7 @@ struct handler_list_it
 typedef struct handler_list_it handler_list_it;
 
 static handler_list_it *mt_handlers = NULL;
+static int mt_handlers_mode = HANDLERS_FIRST;
 
 #define DIV_ROUND_UP(n,d)  (((n) + (d) - 1) / (d))
 #define BIT(nr)            (1UL << (nr))
@@ -199,7 +200,7 @@ static void handle_touch_event(struct input_event *ev)
             while(it)
             {
                 h = it->handler;
-                if((*h->callback)(&mt_events[i], h->data) == 0)
+                if((*h->callback)(&mt_events[i], h->data) == 0 && mt_handlers_mode == HANDLERS_FIRST)
                     break;
                 it = it->next;
             }
@@ -297,6 +298,11 @@ void rm_touch_handler(touch_callback callback, void *data)
     }
 
     pthread_mutex_unlock(&touch_mutex);
+}
+
+void set_touch_handlers_mode(int mode)
+{
+    mt_handlers_mode = mode;
 }
 
 static void *input_thread_work(void *cookie)

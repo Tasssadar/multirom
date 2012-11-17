@@ -59,6 +59,7 @@ int multirom(void)
     }
 
     struct multirom_status s;
+    memset(&s, 0, sizeof(struct multirom_status));
 
     multirom_load_status(&s);
     multirom_dump_status(&s);
@@ -253,6 +254,92 @@ int multirom_default_status(struct multirom_status *s)
     return 0;
 }
 
+int multirom_load_status(struct multirom_status *s)
+{
+    fb_debug("Loading MultiROM status...\n");
+
+    multirom_default_status(s);
+
+    char arg[256];
+    sprintf(arg, "%s/multirom.ini", multirom_dir);
+
+    FILE *f = fopen(arg, "r");
+    if(!f)
+    {
+        fb_debug("Failed to open config file, using defaults!\n");
+        return -1;
+    }
+
+    char current_rom[256] = { 0 };
+    char auto_boot_rom[256] = { 0 };
+
+    char line[512];
+    char name[64];
+    char *pch;
+
+    while((fgets(line, sizeof(line), f)))
+    {
+        pch = strtok (line, "=\n");
+        if(!pch) continue;
+        strcpy(name, pch);
+        pch = strtok (NULL, "=\n");
+        if(!pch) continue;
+        strcpy(arg, pch);
+
+        if(strstr(name, "is_second_boot"))
+            s->is_second_boot = atoi(arg);
+        else if(strstr(name, "current_rom"))
+            strcpy(current_rom, arg);
+        else if(strstr(name, "auto_boot_seconds"))
+            s->auto_boot_seconds = atoi(arg);
+        else if(strstr(name, "auto_boot_rom"))
+            strcpy(auto_boot_rom, arg);
+    }
+
+    fclose(f);
+
+    s->current_rom = multirom_get_rom(s, current_rom);
+    if(!s->current_rom)
+    {
+        fb_debug("Failed to select current rom (%s), using Internal!\n", current_rom);
+        s->current_rom = multirom_get_rom(s, INTERNAL_ROM_NAME);
+        if(!s->current_rom)
+        {
+            fb_debug("No internal rom found!\n");
+            return -1;
+        }
+    }
+
+    s->auto_boot_rom = multirom_get_rom(s, auto_boot_rom);
+    if(!s->auto_boot_rom)
+        ERROR("Could not find rom %s to auto-boot", auto_boot_rom);
+
+    return 0;
+}
+
+int multirom_save_status(struct multirom_status *s)
+{
+    fb_debug("Saving multirom status\n");
+
+    char path[256];
+    sprintf(path, "%s/multirom.ini", multirom_dir);
+
+    FILE *f = fopen(path, "w");
+    if(!f)
+    {
+        fb_debug("Failed to open/create status file!\n");
+        return -1;
+    }
+
+    fprintf(f, "is_second_boot=%d\n", s->is_second_boot);
+    fprintf(f, "current_rom=%s\n", s->current_rom ? s->current_rom->name : INTERNAL_ROM_NAME);
+    fprintf(f, "auto_boot_seconds=%d\n", s->auto_boot_seconds);
+    fprintf(f, "auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "");
+
+    fclose(f);
+    return 0;
+}
+
 void multirom_find_usb_roms(struct multirom_status *s)
 {
     // remove USB roms
@@ -331,79 +418,6 @@ int multirom_load_bootimg_header(const char *path, struct boot_img_hdr *header)
     fread(header->magic, 1, sizeof(struct boot_img_hdr), boot_img);
     fclose(boot_img);
 
-    return 0;
-}
-
-int multirom_load_status(struct multirom_status *s)
-{
-    fb_debug("Loading MultiROM status...\n");
-
-    multirom_default_status(s);
-
-    char arg[256];
-    sprintf(arg, "%s/multirom.ini", multirom_dir);
-
-    FILE *f = fopen(arg, "r");
-    if(!f)
-    {
-        fb_debug("Failed to open config file, using defaults!\n");
-        return -1;
-    }
-
-    char current_rom[256] = { 0 };
-
-    char line[512];
-    char name[64];
-    char *pch;
-
-    while((fgets(line, sizeof(line), f)))
-    {
-        pch = strtok (line, "=\n");
-        strcpy(name, pch);
-        pch = strtok (NULL, "=\n");
-        strcpy(arg, pch);
-
-        if(strstr(name, "is_second_boot"))
-            s->is_second_boot = atoi(arg);
-        else if(strstr(name, "current_rom"))
-            strcpy(current_rom, arg);
-    }
-
-    fclose(f);
-
-    s->current_rom = multirom_get_rom(s, current_rom);
-    if(!s->current_rom)
-    {
-        fb_debug("Failed to select current rom (%s), using Internal!\n", current_rom);
-        s->current_rom = multirom_get_rom(s, INTERNAL_ROM_NAME);
-        if(!s->current_rom)
-        {
-            fb_debug("No internal rom found!\n");
-            return -1;
-        }
-    }
-
-    return 0;
-}
-
-int multirom_save_status(struct multirom_status *s)
-{
-    fb_debug("Saving multirom status\n");
-
-    char path[256];
-    sprintf(path, "%s/multirom.ini", multirom_dir);
-
-    FILE *f = fopen(path, "w");
-    if(!f)
-    {
-        fb_debug("Failed to open/create status file!\n");
-        return -1;
-    }
-
-    fprintf(f, "is_second_boot=%d\n", s->is_second_boot);
-    fprintf(f, "current_rom=%s\n", s->current_rom ? s->current_rom->name : INTERNAL_ROM_NAME);
-
-    fclose(f);
     return 0;
 }
 
@@ -490,6 +504,8 @@ void multirom_dump_status(struct multirom_status *s)
     fb_debug("Dumping multirom status:\n");
     fb_debug("  is_second_boot=%d\n", s->is_second_boot);
     fb_debug("  current_rom=%s\n", s->current_rom ? s->current_rom->name : "NULL");
+    fb_debug("  auto_boot_seconds=%d\n", s->auto_boot_seconds);
+    fb_debug("  auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "NULL");
     fb_debug("\n");
 
     int i, y;

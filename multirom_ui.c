@@ -23,6 +23,7 @@ static void *tab_data = NULL;
 static struct multirom_status *mrom_status = NULL;
 static struct multirom_rom *selected_rom = NULL;
 static volatile int exit_ui_code = -1;
+static fb_msgbox *auto_boot_box = NULL;
 
 static pthread_mutex_t exit_code_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -50,10 +51,13 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     if(multirom_init_fb() < 0)
         return NULL;
 
+    fb_freeze(1);
+
     mrom_status = s;
 
     exit_ui_code = -1;
     selected_rom = NULL;
+    auto_boot_box = NULL;
 
     selected_tab = -1;
     multirom_ui_init_header();
@@ -61,6 +65,13 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     add_touch_handler(&multirom_ui_touch_handler, NULL);
     start_input_thread();
+
+    fb_freeze(0);
+
+    if(s->auto_boot_rom && s->auto_boot_seconds > 0)
+        multirom_ui_auto_boot();
+    else
+        fb_draw();
 
     while(1)
     {
@@ -216,6 +227,13 @@ int multirom_ui_touch_handler(touch_event *ev, void *data)
     {
         if(++touch_count == 4)
             multirom_take_screenshot();
+
+        if(auto_boot_box)
+        {
+            pthread_mutex_lock(&exit_code_mutex);
+            auto_boot_box = NULL;
+            pthread_mutex_unlock(&exit_code_mutex);
+        }
     }
 
     if(!(ev->changed & TCHNG_REMOVED))
@@ -240,6 +258,53 @@ int multirom_ui_touch_handler(touch_event *ev, void *data)
     }
 
     return -1;
+}
+
+void multirom_ui_auto_boot(void)
+{
+    int seconds = mrom_status->auto_boot_seconds*1000;
+    auto_boot_box = fb_create_msgbox(500, 300);
+
+    fb_msgbox_add_text(-1, 40, SIZE_BIG, "Auto-boot");
+    fb_msgbox_add_text(-1, auto_boot_box->h-100, SIZE_NORMAL, "ROM: %s", mrom_status->auto_boot_rom->name);
+    fb_msgbox_add_text(-1, auto_boot_box->h-60, SIZE_NORMAL, "Touch anywhere to cancel");
+
+    fb_text *sec_text = fb_msgbox_add_text(-1, -1, SIZE_BIG, "%d", seconds/1000);
+
+    fb_draw();
+
+    set_touch_handlers_mode(HANDLERS_ALL);
+
+    while(1)
+    {
+        pthread_mutex_lock(&exit_code_mutex);
+        if(!auto_boot_box)
+        {
+            fb_destroy_msgbox();
+            fb_draw();
+            pthread_mutex_unlock(&exit_code_mutex);
+            break;
+        }
+        pthread_mutex_unlock(&exit_code_mutex);
+
+        seconds -= 50;
+        if(seconds <= 0)
+        {
+            pthread_mutex_lock(&exit_code_mutex);
+            selected_rom = mrom_status->auto_boot_rom;
+            exit_ui_code = UI_EXIT_BOOT_ROM;
+            pthread_mutex_unlock(&exit_code_mutex);
+            fb_destroy_msgbox();
+            break;
+        }
+        else if((seconds+50)/1000 != seconds/1000)
+        {
+            sprintf(sec_text->text, "%d", seconds/1000);
+            fb_draw();
+        }
+        usleep(50000);
+    }
+    set_touch_handlers_mode(HANDLERS_FIRST);
 }
 
 #define ROMS_FOOTER_H 130
