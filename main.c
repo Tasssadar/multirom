@@ -8,6 +8,7 @@
 #include "multirom.h"
 #include "framebuffer.h"
 #include "log.h"
+#include "version.h"
 
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 #define KEEP_REALDATA "/dev/.keep_realdata"
@@ -27,8 +28,18 @@ static void do_reboot(int exit)
     while(1);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+    int i;
+    for(i = 1; i < argc; ++i)
+    {
+        if(strcmp(argv[i], "-v") == 0)
+        {
+            printf("%d\n", VERSION_MULTIROM);
+            return 0;
+        }
+    }
+
     klog_init();
 
     int exit = multirom();

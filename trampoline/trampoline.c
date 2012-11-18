@@ -9,6 +9,7 @@
 #include "devices.h"
 #include "log.h"
 #include "util.h"
+#include "../version.h"
 
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 #define REALDATA "/realdata"
@@ -91,8 +92,18 @@ static void run_multirom(void)
     ERROR("MultiROM exited with status %d", status);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+    int i;
+    for(i = 1; i < argc; ++i)
+    {
+        if(strcmp(argv[i], "-v") == 0)
+        {
+            printf("%d\n", VERSION_TRAMPOLINE);
+            return 0;
+        }
+    }
+
     umask(000);
 
     // Init only the little we need, leave the rest for real init
