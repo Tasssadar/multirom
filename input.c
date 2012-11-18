@@ -318,7 +318,7 @@ static void *input_thread_work(void *cookie)
     int res;
     while(input_run)
     {
-        ev_get(&ev, 0);
+        while(ev_get(&ev, 1) == 0)
         {
             switch(ev.type)
             {
@@ -331,7 +331,7 @@ static void *input_thread_work(void *cookie)
                     break;
             }
         }
-        //usleep(10000);
+        usleep(10000);
     }
     ev_exit();
     pthread_exit(NULL);
@@ -373,4 +373,5 @@ void stop_input_thread(void)
     if(!input_run)
         return;
     input_run = 0;
+    pthread_join(input_thread, NULL);
 }

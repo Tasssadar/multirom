@@ -18,7 +18,6 @@ static void do_reboot(int exit)
 {
     sync();
     umount(REALDATA);
-    usleep(300000);
 
     if(exit & EXIT_REBOOT_RECOVERY)         android_reboot(ANDROID_RB_RESTART2, 0, "recovery");
     else if(exit & EXIT_REBOOT_BOOTLOADER)  android_reboot(ANDROID_RB_RESTART2, 0, "bootloader");

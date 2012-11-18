@@ -86,7 +86,6 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
         usleep(100000);
     }
 
-    stop_input_thread();
     rm_touch_handler(&multirom_ui_touch_handler, NULL);
 
     fb_create_msgbox(500, 250);
@@ -110,6 +109,8 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     fb_draw();
     fb_freeze(1);
+
+    stop_input_thread();
 
     multirom_ui_destroy_tab(selected_tab);
     fb_clear();
