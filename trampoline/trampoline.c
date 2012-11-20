@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "devices.h"
 #include "log.h"
@@ -13,7 +14,7 @@
 
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 #define REALDATA "/realdata"
-#define DATA_DEV "/dev/block/mmcblk0p9"
+#define BOOT_DEV "/dev/block/mmcblk0p2"
 #define MULTIROM_BIN "multirom"
 #define BUSYBOX_BIN "busybox"
 #define KEEP_REALDATA "/dev/.keep_realdata"
@@ -92,6 +93,88 @@ static void run_multirom(void)
     ERROR("MultiROM exited with status %d", status);
 }
 
+struct part_info
+{
+    uint64_t size;
+    char *name;
+};
+
+int find_data_dev(char *data_dev)
+{
+    FILE *f = fopen("/proc/partitions", "r");
+    if(!f)
+        return -1;
+
+    int res = -1;
+
+    struct part_info parts[24];
+    memset(parts, 0, sizeof(parts));
+    int i = 0;
+    int y, part_ok;
+
+    char *p;
+    char line[1024];
+    // skip the first line
+    fgets(line, sizeof(line), f);
+    while(fgets(line, sizeof(line), f))
+    {
+        p = strtok(line, " \t\n");
+        part_ok = 0;
+        for(y = 0; p != NULL; ++y)
+        {
+            ERROR("Part %d \"%s\"", y, p);
+            switch(y)
+            {
+                case 2:
+                    parts[i].size = atol(p);
+                    break;
+                case 3:
+                {
+                    free(parts[i].name);
+                    parts[i].name = malloc(strlen(p)+1);
+                    strcpy(parts[i].name, p);
+                    part_ok = 1;
+                    break;
+                }
+            }
+            p = strtok(NULL, " \t\n");
+        }
+
+        if(part_ok)
+        {
+            if(++i >= 24)
+                return -1;
+        }
+    }
+    fclose(f);
+
+    uint64_t max = 0;
+    int idx = -1;
+    for(y = 0; y < i; ++y)
+    {
+        if(strstr(parts[y].name, "mmcblk0p") != parts[y].name)
+            continue;
+        ERROR("got part %s, size %d", parts[y].name, (int)parts[y].size);
+        if(parts[y].size > max)
+        {
+            idx = y;
+            max = parts[y].size;
+        }
+    }
+
+    if(idx == -1)
+        goto exit;
+
+    sprintf(data_dev, "/dev/block/%s", parts[idx].name);
+    res = 0;
+    ERROR("booting %s, size %d", parts[idx].name, (int)parts[idx].size);
+
+exit:
+    for(y = 0; y < i; ++y)
+        free(parts[y].name);
+    return res;
+}
+
 int main(int argc, char *argv[])
 {
     int i;
@@ -124,10 +207,8 @@ int main(int argc, char *argv[])
     devices_init();
     ERROR("Done initializing");
 
-    chmod("/busybox", EXEC_MASK);
-
     int ok = 1;
-    if(wait_for_file(DATA_DEV, 5) < 0)
+    if(wait_for_file(BOOT_DEV, 5) < 0)
     {
         ERROR("Waing too long for data block dev");
         ok = 0;
@@ -142,8 +223,10 @@ int main(int argc, char *argv[])
     // mount and run multirom from sdcard
     if(ok)
     {
+        char data_dev[128];
         mkdir(REALDATA, 0755);
-        if (mount(DATA_DEV, REALDATA, "ext4", MS_RELATIME | MS_NOATIME,
+        if (find_data_dev(data_dev) == 0 &&
+            mount(data_dev, REALDATA, "ext4", MS_RELATIME | MS_NOATIME,
             "user_xattr,acl,barrier=1,data=ordered") >= 0)
         {
             run_multirom();

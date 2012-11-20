@@ -27,6 +27,7 @@
 #define T_FOLDER 4
 
 static char multirom_dir[64] = { 0 };
+static char busybox_path[128] = { 0 };
 
 int multirom_find_base_dir(void)
 {
@@ -45,6 +46,7 @@ int multirom_find_base_dir(void)
             continue;
 
         strcpy(multirom_dir, paths[i]);
+        sprintf(busybox_path, "%s/%s", paths[i], BUSYBOX_BIN);
         return 0;
     }
     return -1;
@@ -453,7 +455,7 @@ int multirom_dump_boot(const char *dest)
     fb_debug("Dumping boot image...");
 
     //              0            1     2             3
-    char *cmd[] = { BUSYBOX_BIN, "dd", "if="BOOT_BLK, NULL, NULL };
+    char *cmd[] = { busybox_path, "dd", "if="BOOT_BLK, NULL, NULL };
     cmd[3] = malloc(256);
     sprintf(cmd[3], "of=%s", dest);
 
@@ -715,7 +717,7 @@ int multirom_check_bootimg(struct multirom_status *s, struct multirom_rom *rom)
             fb_debug("Flashing my boot image..");
 
             //              0            1     2         3     4
-            char *cmd[] = { BUSYBOX_BIN, "dd", "bs=4096", NULL, "of="BOOT_BLK, NULL };
+            char *cmd[] = { busybox_path, "dd", "bs=4096", NULL, "of="BOOT_BLK, NULL };
 
             cmd[3] = malloc(256);
             sprintf(cmd[3], "if=%s/roms/%s/boot.img", multirom_dir, rom->name);
@@ -746,7 +748,7 @@ int multirom_move_out_of_root(struct multirom_rom *rom)
     }
 
     //              0           1     2            3
-    char *cmd[] = { BUSYBOX_BIN, "mv", malloc(256), path_to, NULL };
+    char *cmd[] = { busybox_path, "mv", malloc(256), path_to, NULL };
     struct dirent *dr;
     while((dr = readdir(d)))
     {
@@ -790,7 +792,7 @@ int multirom_move_to_root(struct multirom_rom *rom)
     }
 
     //              0           1     2            3
-    char *cmd[] = { BUSYBOX_BIN, "mv", malloc(256), "/realdata/", NULL };
+    char *cmd[] = { busybox_path, "mv", malloc(256), "/realdata/", NULL };
     struct dirent *dr;
     while((dr = readdir(d)))
     {

@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <pthread.h>
 #include <dirent.h>
+#include <errno.h>
+#include <string.h>
 
 #include "multirom_ui.h"
 #include "framebuffer.h"
@@ -27,22 +29,32 @@ static fb_msgbox *auto_boot_box = NULL;
 
 static pthread_mutex_t exit_code_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-static void list_block(void)
+static void list_block(char *path, int rec)
 {
-    ERROR("Listing /dev/block");
-    DIR *d = opendir("/dev/block");
+    ERROR("Listing %s", path);
+    DIR *d = opendir(path);
     if(!d)
     {
-        ERROR("Failed to open /dev/block");
+        ERROR("Failed to open %s", path);
         return;
     }
     
     struct dirent *dr;
+	struct stat info;
     while((dr = readdir(d)))
     {
-        ERROR("/dev/block/%s (%d)", dr->d_name, dr->d_type);
+		if(dr->d_name[0] == '.')
+			continue;
+
+        ERROR("%s/%s (%d)", path, dr->d_name, dr->d_type);
+		if(dr->d_type == 4 && rec)
+		{
+			char name[256];
+			sprintf(name, "%s/%s", path, dr->d_name);
+			list_block(name, 1);
+		}
     }
-    
+
     closedir(d);
 }
 
