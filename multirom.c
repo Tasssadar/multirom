@@ -174,20 +174,23 @@ int multirom_default_status(struct multirom_status *s)
     s->roms = NULL;
 
     char roms_path[256];
-    sprintf(roms_path, "%s/roms", multirom_dir);
+    sprintf(roms_path, "%s/roms/"INTERNAL_ROM_NAME, multirom_dir);
     DIR *d = opendir(roms_path);
     if(!d)
     {
-        fb_debug("failed to open roms folder, creating one with ROM from internal memory...\n");
+        ERROR("Failed to open Internal ROM's folder, creating one with ROM from internal memory...\n");
         if(multirom_import_internal() == -1)
             return -1;
+    }
+    else
+        closedir(d);
 
-        d = opendir(roms_path);
-        if(!d)
-        {
-            fb_debug("Failed to open roms folder, for second time!\n");
-            return -1;
-        }
+    sprintf(roms_path, "%s/roms", multirom_dir);
+    d = opendir(roms_path);
+    if(!d)
+    {
+        ERROR("Failed to open roms dir!\n");
+        return -1;
     }
 
     struct dirent *dr;
@@ -643,7 +646,15 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     switch(type_to)
     {
         case ROM_UBUNTU_INTERNAL:
+        {
+            struct stat info;
+            if(!(exit & EXIT_REBOOT) && stat("/init.rc", &info) >= 0)
+            {
+                ERROR("Trying to boot ubuntu with android boot.img, aborting!");
+                return -1;
+            }
             break;
+        }
         case ROM_ANDROID_INTERNAL:
         {
             if(!(exit & EXIT_REBOOT))
@@ -654,6 +665,13 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
 
             if(multirom_create_media_link() == -1)
                 return -1;
+
+            struct stat info;
+            if(!(exit & EXIT_REBOOT) && stat("/init.rc", &info) < 0)
+            {
+                ERROR("Trying to boot android with ubuntu boot.img, aborting!");
+                return -1;
+            }
             break;
         }
     }
