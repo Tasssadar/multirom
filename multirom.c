@@ -23,6 +23,7 @@
 #define BOOT_BLK "/dev/block/mmcblk0p2"
 #define IN_ROOT "is_in_root"
 #define MAX_ROM_NAME_LEN 26
+#define LAYOUT_VERSION "/data/.layout_version"
 
 #define T_FOLDER 4
 
@@ -1022,6 +1023,19 @@ int multirom_create_media_link(void)
     {
         ERROR("Failed to bind media folder %d (%s)", errno, strerror(errno));
         return -1;
+    }
+
+    if(api_level >= 17)
+    {
+        FILE *f = fopen(LAYOUT_VERSION, "w");
+        if(!f)
+        {
+            ERROR("Failed to create .layout_version!\n");
+            return -1;
+        }
+        fputs("2", f);
+        fclose(f);
+        chmod(LAYOUT_VERSION, 0600);
     }
     return 0;
 }
