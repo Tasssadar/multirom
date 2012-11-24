@@ -14,6 +14,7 @@
 #include "util.h"
 #include "button.h"
 #include "checkbox.h"
+#include "version.h"
 
 #define HEADER_HEIGHT 75
 #define TAB_BTN_WIDTH 165
@@ -234,8 +235,11 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
         data = rom_item_create(rom->name);
         it = listview_add_item(view, rom->id, data);
 
-        if(rom == mrom_status->current_rom)
+        if ((mrom_status->auto_boot_rom && rom == mrom_status->auto_boot_rom) ||
+            (!mrom_status->auto_boot_rom && rom == mrom_status->current_rom))
+        {
             listview_select_item(view, it);
+        }
     }
 }
 
@@ -564,6 +568,9 @@ void *multirom_ui_tab_misc_init(void)
             y += 50;
     }
 
+    fb_text *ver = fb_add_text(0, fb_height-16, WHITE, SIZE_SMALL, "MultiROM v%d with trampoline v%d.",
+                               VERSION_MULTIROM, multirom_get_trampoline_ver());
+    list_add(ver, &t->ui_elements);
     return t;
 }
 

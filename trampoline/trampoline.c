@@ -122,7 +122,6 @@ int find_data_dev(char *data_dev)
         part_ok = 0;
         for(y = 0; p != NULL; ++y)
         {
-            ERROR("Part %d \"%s\"", y, p);
             switch(y)
             {
                 case 2:

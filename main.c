@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <cutils/android_reboot.h>
 #include <fcntl.h>
-
+#include <stdio.h>
 #include <sys/mount.h>
 
 #include "multirom.h"

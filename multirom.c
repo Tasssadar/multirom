@@ -399,12 +399,6 @@ int multirom_get_rom_bootid(struct multirom_rom *rom, const char *roms_root_path
         return -1;
 
     memcpy(rom->boot_image_id, header.id, sizeof(rom->boot_image_id));
-
-    fb_debug("Got ROM's boot id:\n");
-    int i = 0; 
-    for(; i < 8; ++i)
-        fb_debug("%X ", rom->boot_image_id[i]);
-    fb_debug("\n");
     return 0;
 }
 
@@ -511,6 +505,7 @@ void multirom_dump_status(struct multirom_status *s)
     fb_debug("\n");
 
     int i, y;
+    char buff[256];
     for(i = 0; s->roms && s->roms[i]; ++i)
     {
         fb_debug("  ROM: %s\n", s->roms[i]->name);
@@ -519,9 +514,10 @@ void multirom_dump_status(struct multirom_status *s)
         fb_debug("    has_bootimg: %d\n", s->roms[i]->has_bootimg);
         fb_debug("    bootid: ");
 
+        buff[0] = 0;
         for(y = 0; y < 8; ++y)
-            fb_debug("%X-", s->roms[i]->boot_image_id[y]);
-        fb_debug("\n");
+            sprintf(buff + strlen(buff), "0x%X ", s->roms[i]->boot_image_id[y]);
+        fb_debug("%s\n", buff);
     }
 }
 
@@ -644,11 +640,9 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
             return -1;
     }
 
-    // fix ubuntu ramdisk permissions
     switch(type_to)
     {
         case ROM_UBUNTU_INTERNAL:
-            multirom_fix_ubuntu_permissions();
             break;
         case ROM_ANDROID_INTERNAL:
         {
@@ -1071,209 +1065,44 @@ void multirom_take_screenshot(void)
     fb_draw();
 }
 
-void multirom_fix_ubuntu_permissions(void)
+int multirom_get_trampoline_ver(void)
 {
-    fb_debug("Fixing ubuntu ramdisk permissions...\n");
+    static int ver = -1;
+    if(ver == -1)
+    {
+        int fd[2];
+        if(pipe(fd) < 0)
+            return -1;
 
-    chmod("/etc", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/etc/ld.so.cache", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/modprobe.d", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/etc/modprobe.d/blacklist-framebuffer.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/modprobe.d/blacklist-watchdog.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/modprobe.d/iwlwifi.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/modprobe.d/blacklist-ath_pci.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/modprobe.d/alsa-base.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/modprobe.d/blacklist-rare-network.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/modprobe.d/blacklist.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/modprobe.d/blacklist-modem.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/modprobe.d/blacklist-firewire.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/console-setup", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/etc/console-setup/Uni2-Fixed16.psf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/console-setup/cached.kmap.gz", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/ld.so.conf.d", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/etc/ld.so.conf.d/libc.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/ld.so.conf.d/arm-linux-gnueabihf.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/casper.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/udev", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/etc/udev/udev.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/default", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/etc/default/console-setup", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/default/keyboard", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/etc/ld.so.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/main_init", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/libply.so.2", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/ld-linux-armhf.so.3", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/brltty", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/brltty/brltty.sh", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/arm-linux-gnueabihf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/arm-linux-gnueabihf/libcom_err.so.2", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/arm-linux-gnueabihf/librt.so.1", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/arm-linux-gnueabihf/libc.so.6", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/arm-linux-gnueabihf/libuuid.so.1", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/arm-linux-gnueabihf/libblkid.so.1", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/arm-linux-gnueabihf/libe2p.so.2", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/arm-linux-gnueabihf/libext2fs.so.2", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/arm-linux-gnueabihf/libudev.so.0", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/arm-linux-gnueabihf/libpthread.so.0", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/arm-linux-gnueabihf/libselinux.so.1", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/arm-linux-gnueabihf/libntfs-3g.so.835", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/arm-linux-gnueabihf/libdl.so.2", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/arm-linux-gnueabihf/libfuse.so.2", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/arm-linux-gnueabihf/libgcc_s.so.1", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/udev", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/udev/ata_id", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/udev/firmware", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/udev/cdrom_id", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/udev/rules.d", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/udev/rules.d/60-cdrom_id.rules", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/udev/rules.d/80-drivers.rules", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/udev/rules.d/50-udev-default.rules", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/udev/rules.d/50-firmware.rules", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/udev/rules.d/95-udev-late.rules", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/udev/rules.d/60-persistent-storage.rules", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/udev/blkid", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/udev/scsi_id", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/casper", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/libply-boot-client.so.2", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/klibc-6nLb5AjYTRZ6C8D-jIJ18a17wug.so", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/modules", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/modules/3.1.10-6-nexus7", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/lib/modules/3.1.10-6-nexus7/modules.dep", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/modules/3.1.10-6-nexus7/modules.softdep", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/modules/3.1.10-6-nexus7/modules.order", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/modules/3.1.10-6-nexus7/modules.dep.bin", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/modules/3.1.10-6-nexus7/modules.devname", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/modules/3.1.10-6-nexus7/modules.symbols", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/modules/3.1.10-6-nexus7/modules.alias.bin", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/modules/3.1.10-6-nexus7/modules.symbols.bin", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/lib/modules/3.1.10-6-nexus7/modules.alias", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/sbin", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/sbin/mount.ntfs", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/sbin/brltty-setup", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/sbin/wait-for-root", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/sbin/mount.ntfs-3g", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/sbin/dumpe2fs", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/sbin/mount.cifs", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH | S_ISUID));
-    chmod("/sbin/mount.fuse", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/sbin/losetup", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/sbin/rmmod", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/sbin/udevadm", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/sbin/modprobe", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/sbin/udevd", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/sbin/blkid", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/sbin/hwclock", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/nfs-top", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/nfs-top/ORDER", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/scripts/nfs-top/udev", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/local-premount", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/local-premount/resume", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/local-premount/fixrtc", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/local-premount/ORDER", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/scripts/local-premount/ntfs_3g", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/local-premount/tarball-installer", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-functions", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/scripts/panic", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/panic/console_setup", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/panic/ORDER", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/scripts/panic/keymap", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/init-top", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/init-top/console_setup", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/init-top/ORDER", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/scripts/init-top/all_generic_ide", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/init-top/framebuffer", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/init-top/blacklist", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/init-top/brltty", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/init-top/udev", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/init-top/keymap", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/init-bottom", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/init-bottom/ORDER", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/scripts/init-bottom/udev", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/12fstab", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/36disable_trackerd", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/40install_driver_updates", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/30accessibility", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/20xconfig", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/26serialtty", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/22desktop_settings", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/43disable_updateinitramfs", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/25adduser", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/45jackd2", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/35fix_language_selector", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/24preseed", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/31disable_update_notifier", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/22sslcert", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/23networking", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/ORDER", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/scripts/casper-bottom/48kubuntu_disable_restart_notifications", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/25configure_init", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/07remove_oem_config", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/15autologin", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/19keyboard", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/05mountpoints", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/16gdmnopasswd", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/13swap", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/49kubuntu_mobile_session", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/34disable_kde_services", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/18hostname", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/32disable_hibernation", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/50ubiquity-bluetooth-agent", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/23etc_modules", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/44pk_allow_ubuntu", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/41apt_cdrom", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/01integrity_check", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/14locales", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-bottom/33enable_apport_crashes", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/nfs", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/scripts/casper-premount", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-premount/ORDER", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/scripts/casper-premount/10driver_updates", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper-helpers", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/scripts/init-premount", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/init-premount/ORDER", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/scripts/init-premount/brltty", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/casper", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/scripts/local-bottom", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/local-bottom/ORDER", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/scripts/local-bottom/ntfs_3g", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/scripts/local", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/scripts/functions", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/conf/conf.d", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/conf/uuid.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/conf/arch.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/conf/initramfs.conf", (S_IRWXU | S_IRUSR | S_IWUSR | S_IRWXG | S_IRGRP | S_IRWXO | S_IROTH));
-    chmod("/run", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/dd", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/reboot", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/kbd_mode", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/resume", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/tar", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/insmod", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/pivot_root", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/loadkeys", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/setfont", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/nfsmount", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/date", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/mount", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/poweroff", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/casper-set-selections", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/ipconfig", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/fstype", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/eject", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/losetup", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/run-init", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/sleep", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/busybox", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/cpio", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/halt", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/casper-preseed", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/ntfs-3g", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/casper-reconfigure", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/casper-md5check", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/sh", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
-    chmod("/bin/dmesg", (S_IRWXU | S_IRUSR | S_IWUSR | S_IXUSR | S_IRWXG | S_IRGRP | S_IXGRP | S_IRWXO | S_IROTH | S_IXOTH));
+        pid_t pid = fork();
+        if (pid < 0)
+        {
+            close(fd[0]);
+            close(fd[1]);
+            return -1;
+        }
+
+        if(pid == 0) // child
+        {
+            close(fd[0]);
+            dup2(fd[1], 1);  // send stdout to the pipe
+            dup2(fd[1], 2);  // send stderr to the pipe
+            close(fd[1]);
+
+            execl("/init", "/init", "-v", NULL);
+            printf("-1\n");
+        }
+        else
+        {
+            close(fd[1]);
+
+            char buffer[512];
+            while (read(fd[0], buffer, sizeof(buffer)) != 0)
+            {
+                ERROR("got %s\n", buffer);
+                ver = atoi(buffer);
+            }
+        }
+    }
+    return ver;
 }

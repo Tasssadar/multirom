@@ -64,7 +64,6 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
 int multirom_load_bootimg_header(const char *path, struct boot_img_hdr *header);
 int multirom_check_bootimg(struct multirom_status *s, struct multirom_rom *rom);
 int multirom_dump_boot(const char *dest);
-void multirom_fix_ubuntu_permissions(void);
 int multirom_move_out_of_root(struct multirom_rom *rom);
 int multirom_move_to_root(struct multirom_rom *rom);
 void multirom_free_status(struct multirom_status *s);
@@ -75,6 +74,7 @@ int multirom_create_media_link(void);
 int multirom_get_api_level(const char *path);
 int multirom_get_rom_type(struct multirom_rom *rom);
 void multirom_take_screenshot(void);
+int multirom_get_trampoline_ver(void);
 
 /*
 ** +-----------------+ 
