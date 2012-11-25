@@ -724,6 +724,15 @@ int multirom_check_bootimg(struct multirom_status *s, struct multirom_rom *rom)
             multirom_dump_boot(path);
             return 0;
         }
+        else if(rom == s->current_rom && strcmp(rom->name, INTERNAL_ROM_NAME) == 0)
+        {
+            fb_debug("Boot image id's does not match, but it is internal rom and it is active.\n");
+            fb_debug("Assuming kernel update, dumping boot image to folder of internal ROM\n");
+
+            sprintf(path, "%s/roms/%s/boot.img", multirom_dir, rom->name);
+            multirom_dump_boot(path);
+            return 0;
+        }
         else
         {
             fb_debug("Boot image id's does not match and ramdisk_size differs.\n");
