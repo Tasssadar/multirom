@@ -14,6 +14,8 @@ enum
 
 #define M(x) (1 << x)
 #define MASK_USB_ROMS (M(ROM_ANDROID_USB) | M(ROM_UBUNTU_USB))
+#define MASK_UBUNTU (M(ROM_UBUNTU_INTERNAL) | M(ROM_UBUNTU_USB))
+#define MASK_ANDROID (M(ROM_ANDROID_USB) | M(ROM_ANDROID_INTERNAL))
 
 enum 
 {
@@ -22,6 +24,7 @@ enum
     EXIT_REBOOT_RECOVERY     = 0x04,
     EXIT_REBOOT_BOOTLOADER   = 0x08,
     EXIT_SHUTDOWN            = 0x10,
+    EXIT_KEXEC               = 0x20,
 
     EXIT_REBOOT_MASK         = (EXIT_REBOOT | EXIT_REBOOT_RECOVERY | EXIT_REBOOT_BOOTLOADER | EXIT_SHUTDOWN),
 };
@@ -32,7 +35,6 @@ struct multirom_rom {
     int type;
     int is_in_root;
     int has_bootimg;
-    unsigned boot_image_id[8];
 };
 
 struct multirom_status {
@@ -50,7 +52,6 @@ int multirom_find_base_dir(void);
 void multirom_emergency_reboot(void);
 int multirom_default_status(struct multirom_status *s);
 void multirom_find_usb_roms(struct multirom_status *s);
-int multirom_get_rom_bootid(struct multirom_rom *rom, const char *roms_root_path);
 int multirom_generate_rom_id(void);
 struct multirom_rom *multirom_get_rom(struct multirom_status *s, const char *name);
 struct multirom_rom *multirom_get_rom_by_id(struct multirom_status *s, int id);
@@ -59,10 +60,7 @@ int multirom_load_status(struct multirom_status *s);
 int multirom_import_internal(void);
 void multirom_dump_status(struct multirom_status *s);
 int multirom_save_status(struct multirom_status *s);
-struct multirom_rom *multirom_select_rom(struct multirom_status *s);
 int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to_boot);
-int multirom_load_bootimg_header(const char *path, struct boot_img_hdr *header);
-int multirom_check_bootimg(struct multirom_status *s, struct multirom_rom *rom);
 int multirom_dump_boot(const char *dest);
 int multirom_move_out_of_root(struct multirom_rom *rom);
 int multirom_move_to_root(struct multirom_rom *rom);
@@ -75,6 +73,13 @@ int multirom_get_api_level(const char *path);
 int multirom_get_rom_type(struct multirom_rom *rom);
 void multirom_take_screenshot(void);
 int multirom_get_trampoline_ver(void);
+int multirom_has_kexec(void);
+int multirom_load_kexec(struct multirom_rom *rom);
+int multirom_get_cmdline(char *str, size_t size);
+int multirom_find_file(char *res, const char *name_part, const char *path);
+int multirom_fill_kexec_ubuntu(struct multirom_rom *rom, char **cmd);
+int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd);
+int multirom_extract_bytes(const char *dst, FILE *src, size_t size);
 
 /*
 ** +-----------------+ 

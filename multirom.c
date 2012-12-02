@@ -19,6 +19,7 @@
 
 #define REALDATA "/realdata"
 #define BUSYBOX_BIN "busybox"
+#define KEXEC_BIN "kexec"
 #define INTERNAL_ROM_NAME "Internal"
 #define BOOT_BLK "/dev/block/mmcblk0p2"
 #define IN_ROOT "is_in_root"
@@ -29,6 +30,7 @@
 
 static char multirom_dir[64] = { 0 };
 static char busybox_path[128] = { 0 };
+static char kexec_path[128] = { 0 };
 
 int multirom_find_base_dir(void)
 {
@@ -48,6 +50,7 @@ int multirom_find_base_dir(void)
 
         strcpy(multirom_dir, paths[i]);
         sprintf(busybox_path, "%s/%s", paths[i], BUSYBOX_BIN);
+        sprintf(kexec_path, "%s/%s", paths[i], KEXEC_BIN);
         return 0;
     }
     return -1;
@@ -72,6 +75,10 @@ int multirom(void)
 
     if(s.is_second_boot == 0)
     {
+        // just to cache the result so that it does not take
+        // any time when the UI is up
+        multirom_has_kexec();
+
         switch(multirom_ui(&s, &to_boot))
         {
             case UI_EXIT_BOOT_ROM: break;
@@ -92,7 +99,6 @@ int multirom(void)
     else
     {
         ERROR("Skipping ROM selection beacause of is_second_boot==1");
-        s.is_second_boot = 0;
         to_boot = s.current_rom;
     }
 
@@ -108,7 +114,10 @@ int multirom(void)
         }
 
         s.current_rom = to_boot;
-        s.is_second_boot = (exit & EXIT_REBOOT) ? 1 : 0;
+        if(s.is_second_boot == 0 && (M(to_boot->type) & MASK_ANDROID) && (exit & EXIT_KEXEC))
+            s.is_second_boot = 1;
+        else
+            s.is_second_boot = 0;
     }
 
     multirom_save_status(&s);
@@ -225,14 +234,8 @@ int multirom_default_status(struct multirom_status *s)
         sprintf(path, "%s/%s/%s", roms_path, rom->name, IN_ROOT);
         rom->is_in_root = access(path, R_OK) == 0 ? 1 : 0;
 
-        rom->has_bootimg = multirom_get_rom_bootid(rom, roms_path) == 0 ? 1 : 0;
-        if(!rom->has_bootimg && (rom->type == ROM_UBUNTU_INTERNAL || rom->type == ROM_DEFAULT))
-        {
-            fb_debug("Rom %s is type %d, but has no boot image - skipping!\n", rom->name, rom->type);
-            free(rom->name);
-            free(rom);
-            continue;
-        }
+        sprintf(path, "%s/%s/boot.img", roms_path, rom->name);
+        rom->has_bootimg = access(path, R_OK) == 0 ? 1 : 0;
 
         list_add(rom, &add_roms);
     }
@@ -393,34 +396,6 @@ int multirom_get_rom_type(struct multirom_rom *rom)
     return ROM_UNKNOWN;
 }
 
-int multirom_get_rom_bootid(struct multirom_rom *rom, const char *roms_root_path)
-{
-    char path[256];
-    sprintf(path, "%s/%s/boot.img", roms_root_path, rom->name);
-
-    boot_img_hdr header;
-    if(multirom_load_bootimg_header(path, &header) == -1)
-        return -1;
-
-    memcpy(rom->boot_image_id, header.id, sizeof(rom->boot_image_id));
-    return 0;
-}
-
-int multirom_load_bootimg_header(const char *path, struct boot_img_hdr *header)
-{
-    FILE *boot_img = fopen(path, "r");
-    if(!boot_img)
-    {
-        fb_debug("Failed to open boot image at %s\n",  path);
-        return -1;
-    }
-
-    fread(header->magic, 1, sizeof(struct boot_img_hdr), boot_img);
-    fclose(boot_img);
-
-    return 0;
-}
-
 int multirom_import_internal(void)
 {
     char path[256];
@@ -516,111 +491,19 @@ void multirom_dump_status(struct multirom_status *s)
         fb_debug("    type: %d\n", s->roms[i]->type);
         fb_debug("    is_in_root: %d\n", s->roms[i]->is_in_root);
         fb_debug("    has_bootimg: %d\n", s->roms[i]->has_bootimg);
-        fb_debug("    bootid: ");
-
-        buff[0] = 0;
-        for(y = 0; y < 8; ++y)
-            sprintf(buff + strlen(buff), "0x%X ", s->roms[i]->boot_image_id[y]);
-        fb_debug("%s\n", buff);
     }
-}
-
-struct multirom_rom *multirom_select_rom(struct multirom_status *s)
-{
-    fb_printf("\nChoose ROM to boot with volume up/down keys and then select with power button:\n");
-
-    int i, y, current = -1;
-    for(i = 0; s->roms && s->roms[i]; ++i)
-    {
-        if(s->roms[i]->type == ROM_UNKNOWN)
-        {
-            ERROR("Skipping ROM %s in selection because it has unknown type\n", s->roms[i]->name);
-            continue;
-        }
-
-        fb_printf("  %d) %s", i, s->roms[i]->name);
-        if(s->roms[i] == s->current_rom)
-        {
-            fb_printf(" (Current)\n");
-            current = i;
-        }
-        else
-            fb_printf("\n");
-    }
-
-    int reboot = i++;
-    fb_printf("\n  %d) Reboot\n", reboot);
-
-    start_input_thread();
-
-    int user_choice = -1;
-    int timer = 5000;
-
-    if(current == -1)
-    {
-        current = 0;
-        timer = -1;
-    }
-
-    while(user_choice == -1)
-    {
-        while((y = get_last_key()) != -1)
-        {
-            switch(y)
-            {
-                case KEY_VOLUMEDOWN:
-                    if(++current >= i)
-                        current = 0;
-                    break;
-                case KEY_VOLUMEUP:
-                    if(--current < 0)
-                        current = i-1;
-                    break;
-                case KEY_POWER:
-                    user_choice = current;
-                    break;
-                default:
-                    continue;
-            }
-            timer = -1;
-            fb_printf("\rSelected ROM: %d                    ", current);
-        }
-
-        if(timer > 0)
-        {
-            timer -= 10;
-            if(timer <= 0)
-            {
-                user_choice = current;
-                fb_printf("\rAuto booting rom %d                   \n", current);
-                break;
-            }
-            else if((timer+10)/1000 != timer/1000)
-                fb_printf("\rSelected ROM: %d (auto-boot in %ds)", current, timer/1000);
-        }
-        usleep(10000);
-    }
-    stop_input_thread();
-
-    if(user_choice == reboot)
-    {
-        fb_printf("\rRebooting...                         \n");
-        return NULL;
-    }
-    fb_printf("\nROM \"%s\" selected\n", s->roms[user_choice]->name);
-    return s->roms[user_choice];
 }
 
 int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to_boot)
 {
     int exit = EXIT_UMOUNT;
 
-    int res = multirom_check_bootimg(s, to_boot);
-    if(res == -1)
-        return -1;
-
-    if(res == 1)
-        exit |= EXIT_REBOOT;
+    if(to_boot->has_bootimg && to_boot->type != ROM_DEFAULT && s->is_second_boot == 0)
+    {
+        if(multirom_load_kexec(to_boot) != 0)
+            return -1;
+        exit |= EXIT_KEXEC;
+    }
 
     if(to_boot == s->current_rom)
         fb_debug("To-boot rom is the same as previous rom.\n");
@@ -649,16 +532,16 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
         case ROM_UBUNTU_INTERNAL:
         {
             struct stat info;
-            if(!(exit & EXIT_REBOOT) && stat("/init.rc", &info) >= 0)
+            if(!(exit & (EXIT_REBOOT | EXIT_KEXEC)) && stat("/init.rc", &info) >= 0)
             {
-                ERROR("Trying to boot ubuntu with android boot.img, aborting!");
+                ERROR("Trying to boot ubuntu with android boot.img, aborting!\n");
                 return -1;
             }
             break;
         }
         case ROM_ANDROID_INTERNAL:
         {
-            if(!(exit & EXIT_REBOOT))
+            if(!(exit & (EXIT_REBOOT | EXIT_KEXEC)))
                 exit &= ~(EXIT_UMOUNT);
 
             if(multirom_prep_android_mounts(to_boot) == -1)
@@ -668,9 +551,9 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
                 return -1;
 
             struct stat info;
-            if(!(exit & EXIT_REBOOT) && stat("/init.rc", &info) < 0)
+            if(!(exit & (EXIT_REBOOT | EXIT_KEXEC)) && stat("/init.rc", &info) < 0)
             {
-                ERROR("Trying to boot android with ubuntu boot.img, aborting!");
+                ERROR("Trying to boot android with ubuntu boot.img, aborting!\n");
                 return -1;
             }
             break;
@@ -678,79 +561,6 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     }
 
     return exit;
-}
-
-int multirom_check_bootimg(struct multirom_status *s, struct multirom_rom *rom)
-{
-    if(rom->has_bootimg == 0)
-    {
-        if(rom->type == ROM_ANDROID_INTERNAL && (rom = multirom_get_rom(s, INTERNAL_ROM_NAME)))
-            fb_debug("This ROM does not have boot image, using image from internal rom...\n");
-        else
-        {
-            fb_debug("Skipping boot image check, ROM %s does not have boot img.\n", rom->name);
-            return 0;
-        }
-    }
-
-    char path[256];
-    boot_img_hdr h_mem;
-    boot_img_hdr h_rom;
-    if(multirom_load_bootimg_header(BOOT_BLK, &h_mem) != 0)
-        return -1;
-
-    sprintf(path, "%s/roms/%s/boot.img", multirom_dir, rom->name);
-    if(multirom_load_bootimg_header(path, &h_rom) != 0)
-        return -1;
-
-    int i;
-    int id_matches = 1;
-    for(i = 0; id_matches && i < 8; ++i)
-        id_matches = (int)(h_mem.id[i] == h_rom.id[i]);
-
-    if(id_matches == 1)
-    {
-        fb_debug("Boot image id's are the same, leaving boot as-is.\n");
-        return 0;
-    }
-    else
-    {
-        if(h_mem.ramdisk_size == h_rom.ramdisk_size)
-        {
-            fb_debug("Boot image id's does not match, but ramdisk_size is the same.\n");
-            fb_debug("Assuming kernel update, dumping boot image to folder of rom %s\n", rom->name);
-
-            sprintf(path, "%s/roms/%s/boot.img", multirom_dir, rom->name);
-            multirom_dump_boot(path);
-            return 0;
-        }
-        else if(rom == s->current_rom && strcmp(rom->name, INTERNAL_ROM_NAME) == 0)
-        {
-            fb_debug("Boot image id's does not match, but it is internal rom and it is active.\n");
-            fb_debug("Assuming kernel update, dumping boot image to folder of internal ROM\n");
-
-            sprintf(path, "%s/roms/%s/boot.img", multirom_dir, rom->name);
-            multirom_dump_boot(path);
-            return 0;
-        }
-        else
-        {
-            fb_debug("Boot image id's does not match and ramdisk_size differs.\n");
-            fb_debug("Flashing my boot image..");
-
-            //              0            1     2         3     4
-            char *cmd[] = { busybox_path, "dd", "bs=4096", NULL, "of="BOOT_BLK, NULL };
-
-            cmd[3] = malloc(256);
-            sprintf(cmd[3], "if=%s/roms/%s/boot.img", multirom_dir, rom->name);
-            int res = run_cmd(cmd);
-            free(cmd[3]);
-
-            fb_debug("done, res: %d\n", res);
-            return 1;
-        }
-    }
-    return 0;
 }
 
 int multirom_move_out_of_root(struct multirom_rom *rom)
@@ -1132,6 +942,7 @@ int multirom_get_trampoline_ver(void)
 
             execl("/init", "/init", "-v", NULL);
             printf("-1\n");
+            exit(0);
         }
         else
         {
@@ -1139,11 +950,207 @@ int multirom_get_trampoline_ver(void)
 
             char buffer[512];
             while (read(fd[0], buffer, sizeof(buffer)) != 0)
-            {
-                ERROR("got %s\n", buffer);
                 ver = atoi(buffer);
-            }
         }
     }
     return ver;
+}
+
+int multirom_has_kexec(void)
+{
+    static int has_kexec = -2;
+    if(has_kexec != -2)
+        return has_kexec;
+
+    struct stat info;
+    if(stat("/proc/config.gz", &info) < 0)
+    {
+        has_kexec = -1;
+        return has_kexec;
+    }
+
+    char *cmd_cp[] = { busybox_path, "cp", "/proc/config.gz", "/config.gz", NULL };
+    run_cmd(cmd_cp);
+
+    char *cmd_gzip[] = { busybox_path, "gzip", "-d", "/config.gz", NULL };
+    run_cmd(cmd_gzip);
+
+    char *cmd_grep[] = { busybox_path, "grep", "CONFIG_KEXEC_HARDBOOT=y", "/config", NULL };
+    if(run_cmd(cmd_grep) == 0)
+        has_kexec = 0;
+    else
+        has_kexec = -1;
+
+    return has_kexec;
+}
+
+int multirom_get_cmdline(char *str, size_t size)
+{
+    FILE *f = fopen("/proc/cmdline", "r");
+    if(!f)
+        return -1;
+    fgets(str, size, f);
+    fclose(f);
+    return 0;
+}
+
+int multirom_find_file(char *res, const char *name_part, const char *path)
+{
+    DIR *d = opendir(path);
+    if(!d)
+        return -1;
+
+    int ret= -1;
+    struct dirent *dr;
+    while(ret == -1 && (dr = readdir(d)))
+    {
+        if(dr->d_name[0] == '.')
+            continue;
+
+        if(!strstr(dr->d_name, name_part))
+            continue;
+
+        sprintf(res, "%s/%s", path, dr->d_name);
+        ret = 0;
+    }
+
+    closedir(d);
+    return ret;
+}
+
+int multirom_load_kexec(struct multirom_rom *rom)
+{
+    int res = -1;
+    // kexec --load-hardboot ./zImage --command-line="$(cat /proc/cmdline)" --mem-min=0xA0000000 --initrd=./rd.img
+    //                    0            1                 2            3                       4            5            6
+    char *cmd[] = { kexec_path, "--load-hardboot", malloc(1024), "--mem-min=0xA0000000", malloc(1024), malloc(1024), NULL };
+
+    switch(rom->type)
+    {
+        case ROM_UBUNTU_INTERNAL:
+        case ROM_UBUNTU_USB:
+            if(multirom_fill_kexec_ubuntu(rom, cmd) != 0)
+                goto exit;
+            break;
+        case ROM_ANDROID_INTERNAL:
+        case ROM_ANDROID_USB:
+            if(multirom_fill_kexec_android(rom, cmd) != 0)
+                goto exit;
+            break;
+        default:
+            ERROR("Unsupported rom type to kexec (%d)!\n", rom->type);
+            goto exit;
+    }
+
+    ERROR("Loading kexec: %s %s %s %s %s %s\n", cmd[0], cmd[1], cmd[2], cmd[3], cmd[4], cmd[5]);
+    if(run_cmd(cmd) == 0)
+        res = 0;
+    else
+        ERROR("kexec call failed\n");
+
+    char *cmd_cp[] = { busybox_path, "cp", kexec_path, "/kexec", NULL };
+    run_cmd(cmd_cp);
+    chmod("/kexec", 0755);
+
+exit:
+    free(cmd[2]);
+    free(cmd[4]);
+    free(cmd[5]);
+    return res;
+}
+
+int multirom_fill_kexec_ubuntu(struct multirom_rom *rom, char **cmd)
+{
+    char rom_path[256];
+    if(rom->is_in_root == 0)
+        sprintf(rom_path, "%s/roms/%s/root/boot", multirom_dir, rom->name);
+    else
+        sprintf(rom_path, "%s/boot", REALDATA);
+
+    if(multirom_find_file(cmd[2], "vmlinuz", rom_path) == -1)
+    {
+        ERROR("Failed to get vmlinuz path\n");
+        return -1;
+    }
+
+    char str[1000];
+    if(multirom_find_file(str, "initrd.img", rom_path) == -1)
+    {
+        ERROR("Failed to get initrd path\n");
+        return -1;
+    }
+
+    sprintf(cmd[4], "--initrd=%s", str);
+
+    if(multirom_get_cmdline(str, sizeof(str)) == -1)
+    {
+        ERROR("Failed to get cmdline\n");
+        return -1;
+    }
+
+    // TODO correct root
+    sprintf(cmd[5], "--command-line=%s root=/dev/mmcblk0p9 ro console=tty1 fbcon=rotate:1 quiet", str);
+    return 0;
+}
+
+int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd)
+{
+    int res = -1;
+    char img_path[256];
+    sprintf(img_path, "%s/roms/%s/boot.img", multirom_dir, rom->name);
+
+    FILE *f = fopen(img_path, "r");
+    if(!f)
+    {
+        ERROR("kexec_fill could not open boot image (%s)!", img_path);
+        return -1;
+    }
+
+    struct boot_img_hdr header;
+    fread(header.magic, 1, sizeof(struct boot_img_hdr), f);
+
+    unsigned p = header.page_size;
+
+    fseek(f, p, SEEK_SET); // seek to kernel
+    if(multirom_extract_bytes("/zImage", f, header.kernel_size) != 0)
+        goto exit;
+
+    fseek(f, p + ((header.kernel_size + p - 1) / p)*p, SEEK_SET); // seek to ramdisk
+    if(multirom_extract_bytes("/initrd.img", f, header.ramdisk_size) != 0)
+        goto exit;
+
+    char cmdline[1024];
+    if(multirom_get_cmdline(cmdline, sizeof(cmdline)) == -1)
+    {
+        ERROR("Failed to get cmdline\n");
+        return -1;
+    }
+
+    strcpy(cmd[2], "/zImage");
+    strcpy(cmd[4], "--initrd=/initrd.img");
+    sprintf(cmd[5], "--command-line=%s %s", cmdline, header.cmdline);
+
+    res = 0;
+exit:
+    fclose(f);
+    return res;
+}
+
+int multirom_extract_bytes(const char *dst, FILE *src, size_t size)
+{
+    FILE *f = fopen(dst, "w");
+    if(!f)
+    {
+        ERROR("Failed to open dest file %s\n", dst);
+        return -1;
+    }
+
+    char *buff = malloc(size);
+
+    fread(buff, 1, size, src);
+    fwrite(buff, 1, size, f);
+
+    fclose(f);
+    free(buff);
+    return 0;
 }

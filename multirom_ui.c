@@ -39,21 +39,21 @@ static void list_block(char *path, int rec)
         ERROR("Failed to open %s", path);
         return;
     }
-    
+
     struct dirent *dr;
-	struct stat info;
+    struct stat info;
     while((dr = readdir(d)))
     {
-		if(dr->d_name[0] == '.')
-			continue;
+        if(dr->d_name[0] == '.')
+            continue;
 
         ERROR("%s/%s (%d)", path, dr->d_name, dr->d_type);
-		if(dr->d_type == 4 && rec)
-		{
-			char name[256];
-			sprintf(name, "%s/%s", path, dr->d_name);
-			list_block(name, 1);
-		}
+        if(dr->d_type == 4 && rec)
+        {
+            char name[256];
+            sprintf(name, "%s/%s", path, dr->d_name);
+            list_block(name, 1);
+        }
     }
 
     closedir(d);
@@ -254,7 +254,11 @@ int multirom_ui_touch_handler(touch_event *ev, void *data)
         if(auto_boot_box)
         {
             pthread_mutex_lock(&exit_code_mutex);
+            fb_destroy_msgbox();
+            fb_freeze(0);
+            fb_draw();
             auto_boot_box = NULL;
+            set_touch_handlers_mode(HANDLERS_FIRST);
             pthread_mutex_unlock(&exit_code_mutex);
         }
     }
@@ -295,7 +299,7 @@ void multirom_ui_auto_boot(void)
     fb_text *sec_text = fb_msgbox_add_text(-1, -1, SIZE_BIG, "%d", seconds/1000);
 
     fb_draw();
-
+    fb_freeze(1);
     set_touch_handlers_mode(HANDLERS_ALL);
 
     while(1)
@@ -303,8 +307,6 @@ void multirom_ui_auto_boot(void)
         pthread_mutex_lock(&exit_code_mutex);
         if(!auto_boot_box)
         {
-            fb_destroy_msgbox();
-            fb_draw();
             pthread_mutex_unlock(&exit_code_mutex);
             break;
         }
@@ -315,15 +317,19 @@ void multirom_ui_auto_boot(void)
         {
             pthread_mutex_lock(&exit_code_mutex);
             selected_rom = mrom_status->auto_boot_rom;
+            auto_boot_box = NULL;
             exit_ui_code = UI_EXIT_BOOT_ROM;
             pthread_mutex_unlock(&exit_code_mutex);
             fb_destroy_msgbox();
+            fb_freeze(0);
             break;
         }
         else if((seconds+50)/1000 != seconds/1000)
         {
             sprintf(sec_text->text, "%d", seconds/1000);
+            fb_freeze(0);
             fb_draw();
+            fb_freeze(1);
         }
         usleep(50000);
     }
@@ -472,6 +478,22 @@ void multirom_ui_tab_rom_boot_btn(int action)
     struct multirom_rom *rom = multirom_get_rom_by_id(mrom_status, t->list->selected->id);
     if(!rom)
         return;
+
+    if(rom->has_bootimg && multirom_has_kexec() != 0)
+    {
+        auto_boot_box = fb_create_msgbox(550, 360);
+        fb_msgbox_add_text(-1, 30, SIZE_BIG, "Error");
+        fb_msgbox_add_text(-1, 90, SIZE_NORMAL, "Kexec-hardboot support");
+        fb_msgbox_add_text(-1, 125, SIZE_NORMAL, "required to boot this ROM.");
+        fb_msgbox_add_text(-1, 180, SIZE_NORMAL, "Use kernel with");
+        fb_msgbox_add_text(-1, 215, SIZE_NORMAL, "kexec-hardboot support.");
+        fb_msgbox_add_text(-1, auto_boot_box->h-60, SIZE_NORMAL, "Touch anywhere to close");
+
+        fb_draw();
+        fb_freeze(1);
+        set_touch_handlers_mode(HANDLERS_ALL);
+        return;
+    }
 
     pthread_mutex_lock(&exit_code_mutex);
     selected_rom = rom;

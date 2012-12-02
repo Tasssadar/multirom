@@ -4,11 +4,14 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <sys/mount.h>
+#include <string.h>
+#include <errno.h>
 
 #include "multirom.h"
 #include "framebuffer.h"
 #include "log.h"
 #include "version.h"
+#include "util.h"
 
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 #define KEEP_REALDATA "/dev/.keep_realdata"
@@ -24,6 +27,17 @@ static void do_reboot(int exit)
     else if(exit & EXIT_SHUTDOWN)           android_reboot(ANDROID_RB_POWEROFF, 0, 0);
     else                                    android_reboot(ANDROID_RB_RESTART, 0, 0);
 
+    while(1);
+}
+
+static void do_kexec(void)
+{
+    sync();
+    umount(REALDATA);
+
+    execl("/kexec", "/kexec", "-e", NULL);
+
+    ERROR("kexec -e failed! (%d: %s)", errno, strerror(errno));
     while(1);
 }
 
@@ -48,6 +62,12 @@ int main(int argc, char *argv[])
         if(exit & EXIT_REBOOT_MASK)
         {
             do_reboot(exit);
+            return 0;
+        }
+
+        if(exit & EXIT_KEXEC)
+        {
+            do_kexec();
             return 0;
         }
 
