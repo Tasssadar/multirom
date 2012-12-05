@@ -51,6 +51,7 @@ listview_item *listview_add_item(listview *view, int id, void *data)
 void listview_clear(listview *view)
 {
     list_clear(&view->items, view->item_destroy);
+    view->selected = NULL;
 }
 
 void listview_update_ui(listview *view)

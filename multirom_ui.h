@@ -31,12 +31,14 @@ int multirom_ui_touch_handler(touch_event *ev, void*);
 void multirom_ui_switch(int tab);
 void multirom_ui_fill_rom_list(listview *view, int mask);
 void multirom_ui_auto_boot(void);
+void multirom_ui_refresh_usb_handler(void);
 
 void *multirom_ui_tab_rom_init(int tab_type);
 void multirom_ui_tab_rom_destroy(void *data);
 void multirom_ui_tab_rom_selected(listview_item *prev, listview_item *now);
 void multirom_ui_tab_rom_boot_btn(int action);
 void multirom_ui_tab_rom_refresh_usb(int action);
+void multirom_ui_tab_rom_update_usb(void *data);
 
 void *multirom_ui_tab_usb_init();
 void multirom_ui_tab_usb_destroy(void *data);

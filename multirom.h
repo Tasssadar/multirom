@@ -1,21 +1,25 @@
 #ifndef MULTIROM_H
 #define MULTIROM_H
 
+#include <pthread.h>
+
 enum
 {
     ROM_DEFAULT           = 0,
     ROM_ANDROID_INTERNAL  = 1,
     ROM_UBUNTU_INTERNAL   = 2,
-    ROM_ANDROID_USB       = 3,
-    ROM_UBUNTU_USB        = 4,
+    ROM_ANDROID_USB_IMG   = 3,
+    ROM_UBUNTU_USB_IMG    = 4,
+    ROM_ANDROID_USB_DIR   = 5,
+    ROM_UBUNTU_USB_DIR    = 6,
 
-    ROM_UNKNOWN           = 5
+    ROM_UNKNOWN           = 7
 };
 
 #define M(x) (1 << x)
-#define MASK_USB_ROMS (M(ROM_ANDROID_USB) | M(ROM_UBUNTU_USB))
-#define MASK_UBUNTU (M(ROM_UBUNTU_INTERNAL) | M(ROM_UBUNTU_USB))
-#define MASK_ANDROID (M(ROM_ANDROID_USB) | M(ROM_ANDROID_INTERNAL))
+#define MASK_USB_ROMS (M(ROM_ANDROID_USB_IMG) | M(ROM_UBUNTU_USB_IMG) | M(ROM_ANDROID_USB_DIR) | M(ROM_UBUNTU_USB_DIR))
+#define MASK_UBUNTU (M(ROM_UBUNTU_INTERNAL) | M(ROM_UBUNTU_USB_IMG)| M(ROM_UBUNTU_USB_DIR))
+#define MASK_ANDROID (M(ROM_ANDROID_USB_DIR) | M(ROM_ANDROID_USB_IMG) | M(ROM_ANDROID_INTERNAL))
 
 enum 
 {
@@ -29,20 +33,42 @@ enum
     EXIT_REBOOT_MASK         = (EXIT_REBOOT | EXIT_REBOOT_RECOVERY | EXIT_REBOOT_BOOTLOADER | EXIT_SHUTDOWN),
 };
 
-struct multirom_rom {
+enum 
+{
+    FS_UNK                   = 0,
+    FS_FAT                   = 1,
+    FS_NTFS                  = 2,
+    FS_EXT                   = 3,
+};
+
+struct usb_partition
+{
+    char *name;
+    char *mount_path;
+    char *uuid;
+    char *fs;
+    int keep_mounted;
+};
+
+struct multirom_rom
+{
     int id;
     char *name;
+    char *base_path;
     int type;
     int is_in_root;
     int has_bootimg;
+    struct usb_partition *partition;
 };
 
-struct multirom_status {
+struct multirom_status
+{
     int is_second_boot;
     int auto_boot_seconds;
     struct multirom_rom *auto_boot_rom;
     struct multirom_rom *current_rom;
     struct multirom_rom **roms;
+    struct usb_partition **partitions;
 };
 
 typedef struct boot_img_hdr boot_img_hdr;
@@ -80,6 +106,12 @@ int multirom_find_file(char *res, const char *name_part, const char *path);
 int multirom_fill_kexec_ubuntu(struct multirom_rom *rom, char **cmd);
 int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd);
 int multirom_extract_bytes(const char *dst, FILE *src, size_t size);
+int multirom_update_partitions(struct multirom_status *s);
+void multirom_destroy_partition(void *part);
+void multirom_set_usb_refresh_thread(struct multirom_status *s, int run);
+void multirom_set_usb_refresh_handler(void (*handler)(void));
+int multirom_mount_usb(struct usb_partition *part);
+int multirom_mount_loop(const char *src, const char *dst, int flags);
 
 /*
 ** +-----------------+ 

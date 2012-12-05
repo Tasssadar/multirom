@@ -27,6 +27,7 @@ static struct multirom_status *mrom_status = NULL;
 static struct multirom_rom *selected_rom = NULL;
 static volatile int exit_ui_code = -1;
 static fb_msgbox *auto_boot_box = NULL;
+static volatile int update_usb_roms = 0;
 
 static pthread_mutex_t exit_code_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -93,6 +94,13 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
         {
             pthread_mutex_unlock(&exit_code_mutex);
             break;
+        }
+        if(update_usb_roms)
+        {
+            multirom_find_usb_roms(mrom_status);
+            if(selected_tab == TAB_USB)
+                multirom_ui_tab_rom_update_usb(tab_data);
+            update_usb_roms = 0;
         }
         pthread_mutex_unlock(&exit_code_mutex);
 
@@ -171,11 +179,9 @@ void multirom_ui_destroy_tab(int tab)
 {
     switch(tab)
     {
+        case TAB_USB:
         case TAB_INTERNAL:
             multirom_ui_tab_rom_destroy(tab_data);
-            break;
-        case TAB_USB:
-            multirom_ui_tab_usb_destroy(tab_data);
             break;
         case TAB_MISC:
             multirom_ui_tab_misc_destroy(tab_data);
@@ -202,11 +208,9 @@ void multirom_ui_switch(int tab)
     // init new tab
     switch(tab)
     {
+        case TAB_USB:
         case TAB_INTERNAL:
             tab_data = multirom_ui_tab_rom_init(tab);
-            break;
-        case TAB_USB:
-            tab_data = multirom_ui_tab_usb_init();
             break;
         case TAB_MISC:
             tab_data = multirom_ui_tab_misc_init();
@@ -241,6 +245,9 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
             listview_select_item(view, it);
         }
     }
+
+    if(view->items != NULL && view->selected == NULL)
+        listview_select_item(view, view->items[0]);
 }
 
 int multirom_ui_touch_handler(touch_event *ev, void *data)
@@ -336,6 +343,13 @@ void multirom_ui_auto_boot(void)
     set_touch_handlers_mode(HANDLERS_FIRST);
 }
 
+void multirom_ui_refresh_usb_handler(void)
+{
+    pthread_mutex_lock(&exit_code_mutex);
+    update_usb_roms = 1;
+    pthread_mutex_unlock(&exit_code_mutex);
+}
+
 #define ROMS_FOOTER_H 130
 #define ROMS_HEADER_H 90
 
@@ -351,6 +365,8 @@ typedef struct
     button **buttons;
     void **ui_elements;
     fb_text *rom_name;
+    fb_text *title_text;
+    button *boot_btn;
 } tab_roms;
 
 void *multirom_ui_tab_rom_init(int tab_type)
@@ -373,9 +389,6 @@ void *multirom_ui_tab_rom_init(int tab_type)
     t->list->w = fb_width;
     t->list->h = fb_height - t->list->y - ROMS_FOOTER_H-20;
 
-    if(tab_type == TAB_USB) // space for refresh btn
-        t->list->h -= REFRESHBTN_H+20;
-
     t->list->item_draw = &rom_item_draw;
     t->list->item_hide = &rom_item_hide;
     t->list->item_height = &rom_item_height;
@@ -388,7 +401,7 @@ void *multirom_ui_tab_rom_init(int tab_type)
         // TAB_INTERNAL
         (M(ROM_DEFAULT) | M(ROM_ANDROID_INTERNAL) | M(ROM_UBUNTU_INTERNAL)),
         // TAB_USB
-        (M(ROM_ANDROID_USB) | M(ROM_UBUNTU_USB)),
+        MASK_USB_ROMS,
     };
     assert(tab_type < 2);
 
@@ -401,8 +414,8 @@ void *multirom_ui_tab_rom_init(int tab_type)
     const char *str[] = { "Select ROM to boot:", "No ROMs in this location!" };
     int x = center_x(0, fb_width, SIZE_BIG, str[has_roms]);
     int y = center_y(HEADER_HEIGHT, ROMS_HEADER_H, SIZE_BIG);
-    fb_text *text = fb_add_text(x, y, LBLUE, SIZE_BIG, str[has_roms]);
-    list_add(text, &t->ui_elements);
+    t->title_text = fb_add_text(x, y, LBLUE, SIZE_BIG, str[has_roms]);
+    list_add(t->title_text, &t->ui_elements);
 
     // footer
     fb_rect *sep = fb_add_rect(0, fb_height-ROMS_FOOTER_H, fb_width, 2, LBLUE);
@@ -418,25 +431,20 @@ void *multirom_ui_tab_rom_init(int tab_type)
     button_init_ui(b, "Boot", SIZE_BIG);
     button_enable(b, !has_roms);
     list_add(b, &t->buttons);
+    t->boot_btn = b;
 
     if(tab_type == TAB_USB)
     {
-        b = malloc(sizeof(button));
-        memset(b, 0, sizeof(button));
-        b->x = fb_width/2 - REFRESHBTN_W/2;
-        b->y = base_y - REFRESHBTN_H - 20;
-        b->w = REFRESHBTN_W;
-        b->h = REFRESHBTN_H;
-        b->clicked = &multirom_ui_tab_rom_refresh_usb;
-        button_init_ui(b, "Refresh", SIZE_BIG);
-        list_add(b, &t->buttons);
+        multirom_set_usb_refresh_handler(&multirom_ui_refresh_usb_handler);
+        multirom_set_usb_refresh_thread(mrom_status, 1);
     }
-
     return t;
 }
 
 void multirom_ui_tab_rom_destroy(void *data)
 {
+    multirom_set_usb_refresh_thread(mrom_status, 0);
+
     tab_roms *t = (tab_roms*)data;
 
     list_clear(&t->buttons, &button_destroy);
@@ -501,6 +509,28 @@ void multirom_ui_tab_rom_boot_btn(int action)
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
+void multirom_ui_tab_rom_update_usb(void *data)
+{
+    tab_roms *t = (tab_roms*)tab_data;
+    listview_clear(t->list);
+
+    t->rom_name->text = realloc(t->rom_name->text, 1);
+    t->rom_name->text[0] = 0;
+
+    multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
+    listview_update_ui(t->list);
+
+    int has_roms = (int)(t->list->items == NULL);
+    const char *str[] = { "Select ROM to boot:", "No ROMs in this location!" };
+
+    t->title_text->head.x = center_x(0, fb_width, SIZE_BIG, str[has_roms]);
+    t->title_text->text = realloc(t->title_text->text, strlen(str[has_roms])+1);
+    strcpy(t->title_text->text, str[has_roms]);
+
+    button_enable(t->boot_btn, !has_roms);
+
+    fb_draw();
+}
 
 typedef struct 
 {
@@ -537,7 +567,7 @@ void multirom_ui_tab_usb_destroy(void *data)
 
 void multirom_ui_tab_rom_refresh_usb(int action)
 {
-    //TODO
+    multirom_update_partitions(mrom_status);
 }
 
 #define MISCBTN_W 500
@@ -559,10 +589,10 @@ void *multirom_ui_tab_misc_init(void)
 
     static const char *texts[] = 
     {
-        "Reboot",              // 0
-        "Reboot to recovery",  // 1
-        "Reboot to booloader", // 2
-        "Shutdown",            // 3
+        "Reboot",               // 0
+        "Reboot to recovery",   // 1
+        "Reboot to bootloader", // 2
+        "Shutdown",             // 3
         NULL
     };
 

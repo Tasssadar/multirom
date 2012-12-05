@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <sys/mount.h>
 #include <sys/klog.h>
+#include <linux/loop.h>
 
 #include "multirom.h"
 #include "multirom_ui.h"
@@ -31,6 +32,10 @@
 static char multirom_dir[64] = { 0 };
 static char busybox_path[128] = { 0 };
 static char kexec_path[128] = { 0 };
+static volatile int run_usb_refresh = 0;
+static pthread_t usb_refresh_thread;
+static pthread_mutex_t parts_mutex = PTHREAD_MUTEX_INITIALIZER;
+static void (*usb_refresh_handler)(void) = NULL;
 
 int multirom_find_base_dir(void)
 {
@@ -226,15 +231,17 @@ int multirom_default_status(struct multirom_status *s)
         memset(rom, 0, sizeof(struct multirom_rom));
 
         rom->id = multirom_generate_rom_id();
-        rom->name = malloc(strlen(dr->d_name)+1);
-        strcpy(rom->name, dr->d_name);
+        rom->name = strdup(dr->d_name);
+
+        sprintf(path, "%s/%s", roms_path, rom->name);
+        rom->base_path = strdup(path);
 
         rom->type = multirom_get_rom_type(rom);
 
-        sprintf(path, "%s/%s/%s", roms_path, rom->name, IN_ROOT);
+        sprintf(path, "%s/%s", rom->base_path, IN_ROOT);
         rom->is_in_root = access(path, R_OK) == 0 ? 1 : 0;
 
-        sprintf(path, "%s/%s/boot.img", roms_path, rom->name);
+        sprintf(path, "%s/boot.img", rom->base_path, rom->name);
         rom->has_bootimg = access(path, R_OK) == 0 ? 1 : 0;
 
         list_add(rom, &add_roms);
@@ -363,21 +370,84 @@ void multirom_find_usb_roms(struct multirom_status *s)
         else ++i;
     }
 
-    // TODO
+    char path[256];
+    struct usb_partition *p;
+    struct stat info;
+    DIR *d;
+    struct dirent *dr;
+    struct multirom_rom **add_roms = NULL;
+
+    pthread_mutex_lock(&parts_mutex);
+    for(i = 0; s->partitions && s->partitions[i]; ++i)
+    {
+        p = s->partitions[i];
+ 
+        sprintf(path, "%s/multirom", p->mount_path);
+        if(stat(path, &info) < 0)
+            continue;
+
+        d = opendir(path);
+        if(!d)
+            continue;
+
+        while((dr = readdir(d)) != NULL)
+        {
+            if(dr->d_name[0] == '.')
+                continue;
+
+            struct multirom_rom *rom = malloc(sizeof(struct multirom_rom));
+            memset(rom, 0, sizeof(struct multirom_rom));
+
+            rom->id = multirom_generate_rom_id();
+            rom->name = strdup(dr->d_name);
+
+            sprintf(path, "%s/multirom/%s", p->mount_path, rom->name);
+            rom->base_path = strdup(path);
+
+            rom->partition = p;
+            rom->type = multirom_get_rom_type(rom);
+
+            sprintf(path, "%s/%s", rom->base_path, IN_ROOT);
+            rom->is_in_root = access(path, R_OK) == 0 ? 1 : 0;
+
+            sprintf(path, "%s/boot.img", rom->base_path);
+            rom->has_bootimg = access(path, R_OK) == 0 ? 1 : 0;
+
+            list_add(rom, &add_roms);
+        }
+        closedir(d);
+    }
+    pthread_mutex_unlock(&parts_mutex);
+
+    if(add_roms)
+    {
+        // sort roms
+        qsort(add_roms, list_item_count(add_roms), sizeof(struct multirom_rom*), compare_rom_names);
+
+        //add them to main list
+        for(i = 0; add_roms[i]; ++i)
+            list_add(add_roms[i], &s->roms);
+        list_clear(&add_roms, NULL);
+    }
+
+    multirom_dump_status(s);
 }
 
 int multirom_get_rom_type(struct multirom_rom *rom)
 {
-    if(strcmp(rom->name, INTERNAL_ROM_NAME) == 0)
+    if(!rom->partition && strcmp(rom->name, INTERNAL_ROM_NAME) == 0)
         return ROM_DEFAULT;
 
-#define FOLDERS 2
+#define FOLDERS 3
     static const char *folders[][FOLDERS] = 
     {
-         { "system", "data" },
-         { "root", NULL },
+         { "system", "data", "cache" },
+         { "root", NULL, NULL },
+         { "system.img", "data.img", "cache.img" },
+         { "root.img", NULL, NULL }
     };
-    static const int types[] = { ROM_ANDROID_INTERNAL, ROM_UBUNTU_INTERNAL };
+    static const int types_int[] = { ROM_ANDROID_INTERNAL, ROM_UBUNTU_INTERNAL, ROM_UNKNOWN, ROM_UNKNOWN };
+    static const int types_usb[] = { ROM_ANDROID_USB_DIR, ROM_UBUNTU_USB_DIR, ROM_ANDROID_USB_IMG, ROM_UBUNTU_USB_IMG };
 
     char path[256];
     uint32_t i, y, okay;
@@ -386,12 +456,18 @@ int multirom_get_rom_type(struct multirom_rom *rom)
         okay = 1;
         for(y = 0; folders[i][y] && y < FOLDERS && okay; ++y)
         {
-            sprintf(path, "%s/roms/%s/%s/", multirom_dir, rom->name, folders[i][y]);
+            sprintf(path, "%s/%s", rom->base_path, folders[i][y]);
             if(access(path, R_OK) < 0)
                 okay = 0;
         }
+
         if(okay)
-            return types[i];
+        {
+            if(!rom->partition)
+                return types_int[i];
+            else
+                return types_usb[i];
+        }
     }
     return ROM_UNKNOWN;
 }
@@ -488,6 +564,7 @@ void multirom_dump_status(struct multirom_status *s)
     for(i = 0; s->roms && s->roms[i]; ++i)
     {
         fb_debug("  ROM: %s\n", s->roms[i]->name);
+        fb_debug("    base_path: %s\n", s->roms[i]->base_path);
         fb_debug("    type: %d\n", s->roms[i]->type);
         fb_debug("    is_in_root: %d\n", s->roms[i]->is_in_root);
         fb_debug("    has_bootimg: %d\n", s->roms[i]->has_bootimg);
@@ -529,6 +606,8 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
 
     switch(type_to)
     {
+        case ROM_DEFAULT:
+            break;
         case ROM_UBUNTU_INTERNAL:
         {
             struct stat info;
@@ -539,6 +618,8 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
             }
             break;
         }
+        case ROM_ANDROID_USB_IMG:
+        case ROM_ANDROID_USB_DIR:
         case ROM_ANDROID_INTERNAL:
         {
             if(!(exit & (EXIT_REBOOT | EXIT_KEXEC)))
@@ -550,6 +631,9 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
             if(multirom_create_media_link() == -1)
                 return -1;
 
+            if(to_boot->partition)
+                to_boot->partition->keep_mounted = 1;
+
             struct stat info;
             if(!(exit & (EXIT_REBOOT | EXIT_KEXEC)) && stat("/init.rc", &info) < 0)
             {
@@ -558,6 +642,9 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
             }
             break;
         }
+        default:
+            ERROR("Unknown ROM type\n");
+            return -1;
     }
 
     return exit;
@@ -656,12 +743,14 @@ int multirom_move_to_root(struct multirom_rom *rom)
 
 void multirom_free_status(struct multirom_status *s)
 {
+    list_clear(&s->partitions, &multirom_destroy_partition);
     list_clear(&s->roms, &multirom_free_rom);
 }
 
 void multirom_free_rom(void *rom)
 {
     free(((struct multirom_rom*)rom)->name);
+    free(((struct multirom_rom*)rom)->base_path);
     free(rom);
 }
 
@@ -686,7 +775,7 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
     char in[128];
     char out[128];
     char folder[256];
-    sprintf(folder, "%s/roms/%s/boot", multirom_dir, rom->name);
+    sprintf(folder, "%s/boot", rom->base_path);
 
     DIR *d = opendir(folder);
     if(!d)
@@ -778,20 +867,38 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
     mkdir_with_perms("/data", 0771, "system", "system");
     mkdir_with_perms("/cache", 0770, "system", "cache");
 
-    static const char *folders[] = { "system", "data", "cache" };
-    unsigned long flags[] = { MS_BIND | MS_RDONLY, MS_BIND, MS_BIND };
+    static const char *folders[2][3] = 
+    {
+        { "system", "data", "cache" },
+        { "system.img", "data.img", "cache.img" },
+    };
+
+    unsigned long flags[2][3] = {
+        { MS_BIND | MS_RDONLY, MS_BIND, MS_BIND },
+        { MS_RDONLY | MS_NOATIME, MS_NOATIME, MS_NOATIME },
+    };
+
     uint32_t i;
     char from[256];
     char to[256];
-    for(i = 0; i < ARRAY_SIZE(folders); ++i)
+    int img = (int)(rom->type == ROM_ANDROID_USB_IMG);
+    for(i = 0; i < ARRAY_SIZE(folders[0]); ++i)
     {
-        sprintf(from, "%s/roms/%s/%s", multirom_dir, rom->name, folders[i]);
-        sprintf(to, "/%s", folders[i]);
+        sprintf(from, "%s/%s", rom->base_path, folders[img][i]);
+        sprintf(to, "/%s", folders[0][i]);
 
-        if(mount(from, to, "ext4", flags[i], "") < 0)
+        if(img == 0)
         {
-            ERROR("Failed to mount %s to %s (%d: %s)", from, to, errno, strerror(errno));
-            return -1;
+            if(mount(from, to, "ext4", flags[img][i], "") < 0)
+            {
+                ERROR("Failed to mount %s to %s (%d: %s)", from, to, errno, strerror(errno));
+                return -1;
+            }
+        }
+        else
+        {
+            if(multirom_mount_loop(from, to, flags[img][i]) < 0)
+                return -1;
         }
     }
     return 0;
@@ -918,39 +1025,17 @@ void multirom_take_screenshot(void)
 
 int multirom_get_trampoline_ver(void)
 {
-    static int ver = -1;
-    if(ver == -1)
+    static int ver = -2;
+    if(ver == -2)
     {
-        int fd[2];
-        if(pipe(fd) < 0)
-            return -1;
+        ver = -1;
 
-        pid_t pid = fork();
-        if (pid < 0)
+        char *cmd[] = { "/init", "-v", NULL };
+        char *res = run_get_stdout(cmd);
+        if(res)
         {
-            close(fd[0]);
-            close(fd[1]);
-            return -1;
-        }
-
-        if(pid == 0) // child
-        {
-            close(fd[0]);
-            dup2(fd[1], 1);  // send stdout to the pipe
-            dup2(fd[1], 2);  // send stderr to the pipe
-            close(fd[1]);
-
-            execl("/init", "/init", "-v", NULL);
-            printf("-1\n");
-            exit(0);
-        }
-        else
-        {
-            close(fd[1]);
-
-            char buffer[512];
-            while (read(fd[0], buffer, sizeof(buffer)) != 0)
-                ver = atoi(buffer);
+            ver = atoi(res);
+            free(res);
         }
     }
     return ver;
@@ -1028,12 +1113,14 @@ int multirom_load_kexec(struct multirom_rom *rom)
     switch(rom->type)
     {
         case ROM_UBUNTU_INTERNAL:
-        case ROM_UBUNTU_USB:
+        case ROM_UBUNTU_USB_DIR:
+        case ROM_UBUNTU_USB_IMG:
             if(multirom_fill_kexec_ubuntu(rom, cmd) != 0)
                 goto exit;
             break;
         case ROM_ANDROID_INTERNAL:
-        case ROM_ANDROID_USB:
+        case ROM_ANDROID_USB_DIR:
+        case ROM_ANDROID_USB_IMG:
             if(multirom_fill_kexec_android(rom, cmd) != 0)
                 goto exit;
             break;
@@ -1063,7 +1150,7 @@ int multirom_fill_kexec_ubuntu(struct multirom_rom *rom, char **cmd)
 {
     char rom_path[256];
     if(rom->is_in_root == 0)
-        sprintf(rom_path, "%s/roms/%s/root/boot", multirom_dir, rom->name);
+        sprintf(rom_path, "%s/root/boot", rom->base_path);
     else
         sprintf(rom_path, "%s/boot", REALDATA);
 
@@ -1097,7 +1184,7 @@ int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd)
 {
     int res = -1;
     char img_path[256];
-    sprintf(img_path, "%s/roms/%s/boot.img", multirom_dir, rom->name);
+    sprintf(img_path, "%s/boot.img", rom->base_path);
 
     FILE *f = fopen(img_path, "r");
     if(!f)
@@ -1153,4 +1240,192 @@ int multirom_extract_bytes(const char *dst, FILE *src, size_t size)
     fclose(f);
     free(buff);
     return 0;
+}
+
+void multirom_destroy_partition(void *part)
+{
+    struct usb_partition *p = (struct usb_partition *)part;
+    if(p->mount_path && p->keep_mounted == 0)
+        umount(p->mount_path);
+
+    free(p->name);
+    free(p->uuid);
+    free(p->mount_path);
+    free(p->fs);
+    free(p);
+}
+
+int multirom_update_partitions(struct multirom_status *s)
+{
+    pthread_mutex_lock(&parts_mutex);
+
+    list_clear(&s->partitions, &multirom_destroy_partition);
+
+    char *cmd[] = { busybox_path, "blkid", NULL };
+    char *res = run_get_stdout(cmd);
+    if(!res)
+    {
+        pthread_mutex_unlock(&parts_mutex);
+        return -1;
+    }
+
+    char *p = strtok(res, "\n");
+    while(p != NULL)
+    {
+        if(!strstr(p, "/sd"))
+        {
+            p = strtok(NULL, "\n");
+            continue;
+        }
+
+        struct usb_partition *part = malloc(sizeof(struct usb_partition));
+        memset(part, 0, sizeof(struct usb_partition));
+
+        char *t = strndup(p, strchr(p, ':') - p);
+        part->name = strdup(strrchr(t, '/')+1);
+
+        t = strstr(p, "UUID=\"");
+        if(t)
+        {
+            t += strlen("UUID=\"");
+            part->uuid = strndup(t, strchr(t, '"') - t);
+        }
+
+        t = strstr(p, "TYPE=\"");
+        if(t)
+        {
+            t += strlen("TYPE=\"");
+
+            part->fs = strndup(t, strchr(t, '"') - t);
+        }
+
+        if(multirom_mount_usb(part) == 0)
+        {
+            list_add(part, &s->partitions);
+            ERROR("Found part %s: %s, %s\n", part->name, part->uuid, part->fs);
+        }
+        else
+        {
+            ERROR("Failed to mount part %s %s, %s\n", part->name, part->uuid, part->fs);
+            multirom_destroy_partition(part);
+        }
+
+        p = strtok(NULL, "\n");
+    }
+    pthread_mutex_unlock(&parts_mutex);
+    free(res);
+    return 0;
+}
+
+int multirom_mount_usb(struct usb_partition *part)
+{
+    mkdir("/mnt", 0777);
+
+    char path[256];
+    sprintf(path, "/mnt/%s", part->name);
+    if(mkdir(path, 0777) != 0 && errno != EEXIST)
+    {
+        ERROR("Failed to create dir for mount %s\n", path);
+        return -1;
+    }
+
+    char src[256];
+    sprintf(src, "/dev/block/%s", part->name);
+
+    if(mount(src, path, part->fs, MS_NOATIME, "") < 0)
+    {
+        ERROR("Failed to mount %s (%d: %s)\n", src, errno, strerror(errno));
+        return -1;
+    }
+    part->mount_path = strdup(path);
+    return 0;
+}
+
+void *multirom_usb_refresh_thread_work(void *status)
+{
+    uint32_t timer = 0;
+    time_t last_change = 0;
+    struct stat info;
+
+    while(run_usb_refresh)
+    {
+        if(timer <= 50)
+        {
+            if(stat("/dev/block", &info) >= 0 && info.st_ctime > last_change)
+            {
+                multirom_update_partitions((struct multirom_status*)status);
+                if(usb_refresh_handler)
+                    (*usb_refresh_handler)();
+                last_change = info.st_ctime;
+            }
+            timer = 500;
+        }
+        else
+            timer -= 50;
+        usleep(50000);
+    }
+    return NULL;
+}
+
+void multirom_set_usb_refresh_thread(struct multirom_status *s, int run)
+{
+    if(run_usb_refresh == run)
+        return;
+
+    run_usb_refresh = run;
+    if(run)
+        pthread_create(&usb_refresh_thread, NULL, multirom_usb_refresh_thread_work, s);
+    else
+        pthread_join(usb_refresh_thread, NULL);
+}
+
+void multirom_set_usb_refresh_handler(void (*handler)(void))
+{
+    usb_refresh_handler = handler;
+}
+
+int multirom_mount_loop(const char *src, const char *dst, int flags)
+{
+    int file_fd, device_fd, res = -1;
+
+    file_fd = open(src, O_RDWR);
+    if (file_fd < 0) {
+        ERROR("Failed to open image %s\n", src);
+        return -1;
+    }
+
+    static int loop_devs = 0;
+    char path[64];
+    sprintf(path, "/dev/loop%d", loop_devs);
+    if(mknod(path, S_IFBLK | 0777, makedev(7, loop_devs)) < 0)
+    {
+        ERROR("Failed to create loop file (%d: %s)\n", errno, strerror(errno));
+        goto close_file;
+    }
+
+    ++loop_devs;
+
+    device_fd = open(path, O_RDWR);
+    if (device_fd < 0)
+    {
+        ERROR("Failed to open loop file (%d: %s)\n", errno, strerror(errno));
+        goto close_file;
+    }
+
+    if (ioctl(device_fd, LOOP_SET_FD, file_fd) < 0)
+    {
+        ERROR("ioctl LOOP_SET_FD failed on %s\n", path);
+        goto close_dev;
+    }
+
+    if(mount(path, dst, "ext4", flags, "") < 0)
+        ERROR("Failed to mount loop (%d: %s)\n", errno, strerror(errno));
+    else
+        res = 0;
+
+close_dev:
+    close(device_fd);
+close_file:
+    close(file_fd);
+    return res;
 }

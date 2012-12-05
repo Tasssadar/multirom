@@ -42,6 +42,7 @@ void import_kernel_cmdline(int in_qemu, void (*import_kernel_nv)(char *name, int
 int copy_file(const char *from, const char *to);
 int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const char *group);
 int run_cmd(char **cmd);
+char *run_get_stdout(char **cmd);
 
 void list_add(void *item, void ***list);
 int list_rm(void *item, void ***list, void (*destroy_callback)(void*));

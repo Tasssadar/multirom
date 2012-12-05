@@ -542,6 +542,59 @@ int run_cmd(char **cmd)
     return status;
 }
 
+char *run_get_stdout(char **cmd)
+{
+   int fd[2];
+   if(pipe(fd) < 0)
+        return NULL;
+
+    pid_t pid = fork();
+    if (pid < 0)
+    {
+        close(fd[0]);
+        close(fd[1]);
+        return NULL;
+    }
+
+    if(pid == 0) // child
+    {
+        close(fd[0]);
+        dup2(fd[1], 1);  // send stdout to the pipe
+        dup2(fd[1], 2);  // send stderr to the pipe
+        close(fd[1]);
+
+        execv(cmd[0], cmd);
+        exit(0);
+    }
+    else
+    {
+        close(fd[1]);
+
+        char *res = malloc(512);
+        char buffer[512];
+        int size = 512, written = 0, len;
+        while ((len = read(fd[0], buffer, sizeof(buffer))) > 0)
+        {
+            if(written + len + 1 > size)
+            {
+                size = written + len + 256;
+                res = realloc(res, size);
+            }
+            memcpy(res+written, buffer, len);
+            written += len;
+            res[written] = 0;
+        }
+
+        if(written == 0)
+        {
+            free(res);
+            return NULL;
+        }
+        return res;
+    }
+    return NULL;
+}
+
 int list_item_count(void **list)
 {
     int i = 0;
