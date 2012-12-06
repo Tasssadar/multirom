@@ -45,6 +45,7 @@ void multirom_ui_tab_usb_destroy(void *data);
 
 void *multirom_ui_tab_misc_init(void);
 void multirom_ui_tab_misc_destroy(void *data);
+void multirom_ui_tab_misc_copy_log(int action);
 
 void multirom_ui_reboot_btn(int action);
 

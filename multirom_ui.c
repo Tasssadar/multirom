@@ -26,7 +26,7 @@ static void *tab_data = NULL;
 static struct multirom_status *mrom_status = NULL;
 static struct multirom_rom *selected_rom = NULL;
 static volatile int exit_ui_code = -1;
-static fb_msgbox *auto_boot_box = NULL;
+static fb_msgbox *active_msgbox = NULL;
 static volatile int update_usb_roms = 0;
 
 static pthread_mutex_t exit_code_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -71,7 +71,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     exit_ui_code = -1;
     selected_rom = NULL;
-    auto_boot_box = NULL;
+    active_msgbox = NULL;
 
     selected_tab = -1;
     multirom_ui_init_header();
@@ -236,7 +236,7 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
         if(!(M(rom->type) & mask))
             continue;
 
-        data = rom_item_create(rom->name);
+        data = rom_item_create(rom->name, rom->partition ? rom->partition->name : NULL);
         it = listview_add_item(view, rom->id, data);
 
         if ((mrom_status->auto_boot_rom && rom == mrom_status->auto_boot_rom) ||
@@ -258,13 +258,13 @@ int multirom_ui_touch_handler(touch_event *ev, void *data)
         if(++touch_count == 4)
             multirom_take_screenshot();
 
-        if(auto_boot_box)
+        if(active_msgbox)
         {
             pthread_mutex_lock(&exit_code_mutex);
             fb_destroy_msgbox();
             fb_freeze(0);
             fb_draw();
-            auto_boot_box = NULL;
+            active_msgbox = NULL;
             set_touch_handlers_mode(HANDLERS_FIRST);
             pthread_mutex_unlock(&exit_code_mutex);
         }
@@ -297,11 +297,11 @@ int multirom_ui_touch_handler(touch_event *ev, void *data)
 void multirom_ui_auto_boot(void)
 {
     int seconds = mrom_status->auto_boot_seconds*1000;
-    auto_boot_box = fb_create_msgbox(500, 300);
+    active_msgbox = fb_create_msgbox(500, 300);
 
     fb_msgbox_add_text(-1, 40, SIZE_BIG, "Auto-boot");
-    fb_msgbox_add_text(-1, auto_boot_box->h-100, SIZE_NORMAL, "ROM: %s", mrom_status->auto_boot_rom->name);
-    fb_msgbox_add_text(-1, auto_boot_box->h-60, SIZE_NORMAL, "Touch anywhere to cancel");
+    fb_msgbox_add_text(-1, active_msgbox->h-100, SIZE_NORMAL, "ROM: %s", mrom_status->auto_boot_rom->name);
+    fb_msgbox_add_text(-1, active_msgbox->h-60, SIZE_NORMAL, "Touch anywhere to cancel");
 
     fb_text *sec_text = fb_msgbox_add_text(-1, -1, SIZE_BIG, "%d", seconds/1000);
 
@@ -312,7 +312,7 @@ void multirom_ui_auto_boot(void)
     while(1)
     {
         pthread_mutex_lock(&exit_code_mutex);
-        if(!auto_boot_box)
+        if(!active_msgbox)
         {
             pthread_mutex_unlock(&exit_code_mutex);
             break;
@@ -324,7 +324,7 @@ void multirom_ui_auto_boot(void)
         {
             pthread_mutex_lock(&exit_code_mutex);
             selected_rom = mrom_status->auto_boot_rom;
-            auto_boot_box = NULL;
+            active_msgbox = NULL;
             exit_ui_code = UI_EXIT_BOOT_ROM;
             pthread_mutex_unlock(&exit_code_mutex);
             fb_destroy_msgbox();
@@ -489,13 +489,13 @@ void multirom_ui_tab_rom_boot_btn(int action)
 
     if(rom->has_bootimg && multirom_has_kexec() != 0)
     {
-        auto_boot_box = fb_create_msgbox(550, 360);
+        active_msgbox = fb_create_msgbox(550, 360);
         fb_msgbox_add_text(-1, 30, SIZE_BIG, "Error");
         fb_msgbox_add_text(-1, 90, SIZE_NORMAL, "Kexec-hardboot support");
         fb_msgbox_add_text(-1, 125, SIZE_NORMAL, "required to boot this ROM.");
         fb_msgbox_add_text(-1, 180, SIZE_NORMAL, "Use kernel with");
         fb_msgbox_add_text(-1, 215, SIZE_NORMAL, "kexec-hardboot support.");
-        fb_msgbox_add_text(-1, auto_boot_box->h-60, SIZE_NORMAL, "Touch anywhere to close");
+        fb_msgbox_add_text(-1, active_msgbox->h-60, SIZE_NORMAL, "Touch anywhere to close");
 
         fb_draw();
         fb_freeze(1);
@@ -570,7 +570,7 @@ void multirom_ui_tab_rom_refresh_usb(int action)
     multirom_update_partitions(mrom_status);
 }
 
-#define MISCBTN_W 500
+#define MISCBTN_W 530
 #define MISCBTN_H 100
 
 typedef struct 
@@ -585,7 +585,19 @@ void *multirom_ui_tab_misc_init(void)
     memset(t, 0, sizeof(tab_misc));
 
     int x = fb_width/2 - MISCBTN_W/2;
-    int y = 350;
+    int y = 270;
+
+    button *b = malloc(sizeof(button));
+    memset(b, 0, sizeof(button));
+    b->x = x;
+    b->y = y;
+    b->w = MISCBTN_W;
+    b->h = MISCBTN_H;
+    b->clicked = &multirom_ui_tab_misc_copy_log;
+    button_init_ui(b, "Copy log to /sdcard", SIZE_BIG);
+    list_add(b, &t->buttons);
+
+    y += MISCBTN_H+70;
 
     static const char *texts[] = 
     {
@@ -641,4 +653,23 @@ void multirom_ui_reboot_btn(int action)
     pthread_mutex_lock(&exit_code_mutex);
     exit_ui_code = action;
     pthread_mutex_unlock(&exit_code_mutex);
+}
+
+void multirom_ui_tab_misc_copy_log(int action)
+{
+    multirom_dump_status(mrom_status);
+
+    int res = multirom_copy_log();
+
+    static const char *text[] = { "Failed to copy log to sdcard!", "Successfully copied error log!" };
+
+    active_msgbox = fb_create_msgbox(550, 260);
+    fb_msgbox_add_text(-1, 50, SIZE_NORMAL, text[res+1]);
+    if(res == 0)
+        fb_msgbox_add_text(-1, -1, SIZE_NORMAL, "/sdcard/multirom/error.txt");
+    fb_msgbox_add_text(-1, active_msgbox->h-60, SIZE_NORMAL, "Touch anywhere to close");
+
+    fb_draw();
+    fb_freeze(1);
+    set_touch_handlers_mode(HANDLERS_ALL);
 }

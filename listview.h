@@ -64,7 +64,7 @@ void listview_scroll_to(listview *view, int pct);
 listview_item *listview_item_at(listview *view, int y_pos);
 inline void listview_select_item(listview *view, listview_item *it);
 
-void *rom_item_create(const char *text);
+void *rom_item_create(const char *text, const char *partition);
 void rom_item_draw(int x, int y, int w, listview_item *it);
 void rom_item_hide(void *data);
 int rom_item_height(void *data);

@@ -247,20 +247,22 @@ listview_item *listview_item_at(listview *view, int y_pos)
 typedef struct
 {
     char *text;
+    char *partition;
     fb_text *text_it;
+    fb_text *part_it;
     fb_rect *bottom_line;
     fb_rect *hover_rect;
     checkbox *box;
 } rom_item_data;
 
-void *rom_item_create(const char *text)
+void *rom_item_create(const char *text, const char *partition)
 {
     rom_item_data *data = malloc(sizeof(rom_item_data));
     memset(data, 0, sizeof(rom_item_data));
 
-    data->text = malloc(strlen(text)+1);
-    strcpy(data->text, text);
-
+    data->text = strdup(text);
+    if(partition)
+        data->partition = strdup(partition);
     return data;
 }
 
@@ -272,10 +274,19 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
         d->text_it = fb_add_text(x+100, 0, WHITE, SIZE_BIG, d->text);
         d->bottom_line = fb_add_rect(x, 0, w, 1, 0xFF1B1B1B);
         d->box = checkbox_create(0, 0, NULL);
+
+        if(d->partition)
+        {
+            d->part_it = fb_add_text(0, 0, GRAY, SIZE_NORMAL, d->partition);
+            d->part_it->head.x = x + w - (strlen(d->partition)+1)*8*SIZE_NORMAL;
+        }
     }
 
     d->text_it->head.y = center_y(y, ROM_ITEM_H, SIZE_BIG);
     d->bottom_line->head.y = y+ROM_ITEM_H-2;
+
+    if(d->part_it)
+        d->part_it->head.y = center_y(y, ROM_ITEM_H, SIZE_NORMAL);
 
     if(it->flags & IT_HOVER)
     {
@@ -300,12 +311,14 @@ void rom_item_hide(void *data)
         return;
 
     fb_rm_text(d->text_it);
+    fb_rm_text(d->part_it);
     fb_rm_rect(d->bottom_line);
     fb_rm_rect(d->hover_rect);
 
     checkbox_destroy(d->box);
 
     d->text_it = NULL;
+    d->part_it = NULL;
     d->bottom_line = NULL;
     d->hover_rect = NULL;
     d->box = NULL;
@@ -321,6 +334,7 @@ void rom_item_destroy(listview_item *it)
     rom_item_hide(it->data);
     rom_item_data *d = (rom_item_data*)it->data;
     free(d->text);
+    free(d->partition);
     free(it->data);
     free(it);
 }

@@ -150,24 +150,7 @@ void multirom_emergency_reboot(void)
     fb_clear();
     fb_close();
 
-    // dump klog
-    int len = klogctl(10, NULL, 0);
-    if      (len < 16*1024)      len = 16*1024;
-    else if (len > 16*1024*1024) len = 16*1024*1024;
-
-    char *buff = malloc(len);
-    klogctl(3, buff, len);
-    if(len > 0)
-    {
-        FILE *f = fopen(REALDATA"/media/multirom/error.txt", "w");
-        if(f)
-        {
-            fwrite(buff, 1, len, f);
-            fclose(f);
-            chmod(REALDATA"/media/multirom/error.txt", 0777);
-        }
-    }
-    free(buff);
+    multirom_copy_log();
 
     // Wait for power key
     start_input_thread();
@@ -1427,5 +1410,41 @@ close_dev:
     close(device_fd);
 close_file:
     close(file_fd);
+    return res;
+}
+
+int multirom_copy_log(void)
+{
+    int res = 0;
+
+    int len = klogctl(10, NULL, 0);
+    if      (len < 16*1024)      len = 16*1024;
+    else if (len > 16*1024*1024) len = 16*1024*1024;
+
+    char *buff = malloc(len);
+    klogctl(3, buff, len);
+    if(len > 0)
+    {
+        char path[256];
+        sprintf(path, "%s/error.txt", multirom_dir);
+        FILE *f = fopen(path, "w");
+        if(f)
+        {
+            fwrite(buff, 1, len, f);
+            fclose(f);
+            chmod(REALDATA"/media/multirom/error.txt", 0777);
+        }
+        else
+        {
+            ERROR("Failed to open %s!\n", path);
+            res = -1;
+        }
+    }
+    else
+    {
+        ERROR("Could not get klog!\n");
+        res = -1;
+    }
+    free(buff);
     return res;
 }

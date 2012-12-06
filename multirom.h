@@ -112,6 +112,7 @@ void multirom_set_usb_refresh_thread(struct multirom_status *s, int run);
 void multirom_set_usb_refresh_handler(void (*handler)(void));
 int multirom_mount_usb(struct usb_partition *part);
 int multirom_mount_loop(const char *src, const char *dst, int flags);
+int multirom_copy_log(void);
 
 /*
 ** +-----------------+ 
