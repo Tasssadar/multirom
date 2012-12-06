@@ -69,6 +69,7 @@ struct multirom_status
     struct multirom_rom *current_rom;
     struct multirom_rom **roms;
     struct usb_partition **partitions;
+    char *curr_rom_part;
 };
 
 typedef struct boot_img_hdr boot_img_hdr;
@@ -79,7 +80,7 @@ void multirom_emergency_reboot(void);
 int multirom_default_status(struct multirom_status *s);
 void multirom_find_usb_roms(struct multirom_status *s);
 int multirom_generate_rom_id(void);
-struct multirom_rom *multirom_get_rom(struct multirom_status *s, const char *name);
+struct multirom_rom *multirom_get_rom(struct multirom_status *s, const char *name, const char *part_uuid);
 struct multirom_rom *multirom_get_rom_by_id(struct multirom_status *s, int id);
 struct multirom_rom *multirom_get_rom_in_root(struct multirom_status *s);
 int multirom_load_status(struct multirom_status *s);
@@ -113,6 +114,8 @@ void multirom_set_usb_refresh_handler(void (*handler)(void));
 int multirom_mount_usb(struct usb_partition *part);
 int multirom_mount_loop(const char *src, const char *dst, int flags);
 int multirom_copy_log(void);
+int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_partition *p);
+struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uuid);
 
 /*
 ** +-----------------+ 

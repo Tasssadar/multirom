@@ -119,6 +119,13 @@ int multirom(void)
         }
 
         s.current_rom = to_boot;
+
+        free(s.curr_rom_part);
+        s.curr_rom_part = NULL;
+
+        if(to_boot->partition)
+            s.curr_rom_part = strdup(to_boot->partition->uuid);
+
         if(s.is_second_boot == 0 && (M(to_boot->type) & MASK_ANDROID) && (exit & EXIT_KEXEC))
             s.is_second_boot = 1;
         else
@@ -244,7 +251,7 @@ int multirom_default_status(struct multirom_status *s)
         list_clear(&add_roms, NULL);
     }
 
-    s->current_rom = multirom_get_rom(s, INTERNAL_ROM_NAME);
+    s->current_rom = multirom_get_rom(s, INTERNAL_ROM_NAME, NULL);
     if(!s->current_rom)
     {
         fb_debug("No internal rom found!\n");
@@ -269,12 +276,20 @@ int multirom_load_status(struct multirom_status *s)
         return -1;
     }
 
+    char line[1024];
     char current_rom[256] = { 0 };
     char auto_boot_rom[256] = { 0 };
 
-    char line[512];
     char name[64];
     char *pch;
+
+    if(multirom_get_cmdline(line, sizeof(line)) != 0)
+    {
+        ERROR("Failed to get cmdline!\n");
+        return -1;
+    }
+
+    s->is_second_boot = (int)(strstr(line, "multirom_kexeced=1") != NULL);
 
     while((fgets(line, sizeof(line), f)))
     {
@@ -285,23 +300,45 @@ int multirom_load_status(struct multirom_status *s)
         if(!pch) continue;
         strcpy(arg, pch);
 
-        if(strstr(name, "is_second_boot"))
-            s->is_second_boot = atoi(arg);
-        else if(strstr(name, "current_rom"))
+        if(strstr(name, "current_rom"))
             strcpy(current_rom, arg);
         else if(strstr(name, "auto_boot_seconds"))
             s->auto_boot_seconds = atoi(arg);
         else if(strstr(name, "auto_boot_rom"))
             strcpy(auto_boot_rom, arg);
+        else if(strstr(name, "curr_rom_part"))
+            s->curr_rom_part = strdup(arg);
     }
 
     fclose(f);
 
-    s->current_rom = multirom_get_rom(s, current_rom);
+    // find USB drive if we're booting from it
+    if(s->curr_rom_part && s->is_second_boot)
+    {
+        struct usb_partition *p = NULL;
+        int tries = 0;
+        while(!p && tries < 10)
+        {
+            multirom_update_partitions(s);
+            p = multirom_get_partition(s, s->curr_rom_part);
+
+            if(p)
+            {
+                multirom_scan_partition_for_roms(s, p);
+                break;
+            }
+
+            ++tries;
+            ERROR("part %s not found, waiting 1s (%d)\n", s->curr_rom_part, tries);
+            sleep(1);
+        }
+    }
+
+    s->current_rom = multirom_get_rom(s, current_rom, s->curr_rom_part);
     if(!s->current_rom)
     {
-        fb_debug("Failed to select current rom (%s), using Internal!\n", current_rom);
-        s->current_rom = multirom_get_rom(s, INTERNAL_ROM_NAME);
+        fb_debug("Failed to select current rom (%s, part %s), using Internal!\n", current_rom, s->curr_rom_part);
+        s->current_rom = multirom_get_rom(s, INTERNAL_ROM_NAME, NULL);
         if(!s->current_rom)
         {
             fb_debug("No internal rom found!\n");
@@ -309,7 +346,7 @@ int multirom_load_status(struct multirom_status *s)
         }
     }
 
-    s->auto_boot_rom = multirom_get_rom(s, auto_boot_rom);
+    s->auto_boot_rom = multirom_get_rom(s, auto_boot_rom, NULL);
     if(!s->auto_boot_rom)
         ERROR("Could not find rom %s to auto-boot", auto_boot_rom);
 
@@ -330,10 +367,10 @@ int multirom_save_status(struct multirom_status *s)
         return -1;
     }
 
-    fprintf(f, "is_second_boot=%d\n", s->is_second_boot);
     fprintf(f, "current_rom=%s\n", s->current_rom ? s->current_rom->name : INTERNAL_ROM_NAME);
     fprintf(f, "auto_boot_seconds=%d\n", s->auto_boot_seconds);
     fprintf(f, "auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "");
+    fprintf(f, "curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "");
 
     fclose(f);
     return 0;
@@ -355,52 +392,54 @@ void multirom_find_usb_roms(struct multirom_status *s)
 
     char path[256];
     struct usb_partition *p;
+    pthread_mutex_lock(&parts_mutex);
+    for(i = 0; s->partitions && s->partitions[i]; ++i)
+        multirom_scan_partition_for_roms(s, s->partitions[i]);
+    pthread_mutex_unlock(&parts_mutex);
+}
+
+int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_partition *p)
+{
+    char path[256];
+    int i;
     struct stat info;
-    DIR *d;
     struct dirent *dr;
     struct multirom_rom **add_roms = NULL;
 
-    pthread_mutex_lock(&parts_mutex);
-    for(i = 0; s->partitions && s->partitions[i]; ++i)
+    sprintf(path, "%s/multirom", p->mount_path);
+    if(stat(path, &info) < 0)
+        return -1;
+
+    DIR *d = opendir(path);
+    if(!d)
+        return -1;
+
+    while((dr = readdir(d)) != NULL)
     {
-        p = s->partitions[i];
- 
-        sprintf(path, "%s/multirom", p->mount_path);
-        if(stat(path, &info) < 0)
+        if(dr->d_name[0] == '.')
             continue;
 
-        d = opendir(path);
-        if(!d)
-            continue;
+        struct multirom_rom *rom = malloc(sizeof(struct multirom_rom));
+        memset(rom, 0, sizeof(struct multirom_rom));
 
-        while((dr = readdir(d)) != NULL)
-        {
-            if(dr->d_name[0] == '.')
-                continue;
+        rom->id = multirom_generate_rom_id();
+        rom->name = strdup(dr->d_name);
 
-            struct multirom_rom *rom = malloc(sizeof(struct multirom_rom));
-            memset(rom, 0, sizeof(struct multirom_rom));
+        sprintf(path, "%s/multirom/%s", p->mount_path, rom->name);
+        rom->base_path = strdup(path);
 
-            rom->id = multirom_generate_rom_id();
-            rom->name = strdup(dr->d_name);
+        rom->partition = p;
+        rom->type = multirom_get_rom_type(rom);
 
-            sprintf(path, "%s/multirom/%s", p->mount_path, rom->name);
-            rom->base_path = strdup(path);
+        sprintf(path, "%s/%s", rom->base_path, IN_ROOT);
+        rom->is_in_root = access(path, R_OK) == 0 ? 1 : 0;
 
-            rom->partition = p;
-            rom->type = multirom_get_rom_type(rom);
+        sprintf(path, "%s/boot.img", rom->base_path);
+        rom->has_bootimg = access(path, R_OK) == 0 ? 1 : 0;
 
-            sprintf(path, "%s/%s", rom->base_path, IN_ROOT);
-            rom->is_in_root = access(path, R_OK) == 0 ? 1 : 0;
-
-            sprintf(path, "%s/boot.img", rom->base_path);
-            rom->has_bootimg = access(path, R_OK) == 0 ? 1 : 0;
-
-            list_add(rom, &add_roms);
-        }
-        closedir(d);
+        list_add(rom, &add_roms);
     }
-    pthread_mutex_unlock(&parts_mutex);
+    closedir(d);
 
     if(add_roms)
     {
@@ -412,8 +451,7 @@ void multirom_find_usb_roms(struct multirom_status *s)
             list_add(add_roms[i], &s->roms);
         list_clear(&add_roms, NULL);
     }
-
-    multirom_dump_status(s);
+    return 0;
 }
 
 int multirom_get_rom_type(struct multirom_rom *rom)
@@ -498,12 +536,19 @@ int multirom_dump_boot(const char *dest)
     return res;
 }
 
-struct multirom_rom *multirom_get_rom(struct multirom_status *s, const char *name)
+struct multirom_rom *multirom_get_rom(struct multirom_status *s, const char *name, const char *part_uuid)
 {
     int i = 0;
+    struct multirom_rom *r;
     for(; s->roms && s->roms[i]; ++i)
-        if(strcmp(s->roms[i]->name, name) == 0)
-            return s->roms[i];
+    {
+        r = s->roms[i];
+        if (strcmp(r->name, name) == 0 && 
+           (!part_uuid || (r->partition && strcmp(r->partition->uuid, part_uuid) == 0)))
+        {
+            return r;
+        }
+    }
 
     return NULL;
 }
@@ -540,6 +585,7 @@ void multirom_dump_status(struct multirom_status *s)
     fb_debug("  current_rom=%s\n", s->current_rom ? s->current_rom->name : "NULL");
     fb_debug("  auto_boot_seconds=%d\n", s->auto_boot_seconds);
     fb_debug("  auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "NULL");
+    fb_debug("  curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "NULL");
     fb_debug("\n");
 
     int i, y;
@@ -728,6 +774,7 @@ void multirom_free_status(struct multirom_status *s)
 {
     list_clear(&s->partitions, &multirom_destroy_partition);
     list_clear(&s->roms, &multirom_free_rom);
+    free(s->curr_rom_part);
 }
 
 void multirom_free_rom(void *rom)
@@ -1057,8 +1104,14 @@ int multirom_get_cmdline(char *str, size_t size)
     FILE *f = fopen("/proc/cmdline", "r");
     if(!f)
         return -1;
-    fgets(str, size, f);
+    fread(str, 1, size, f);
     fclose(f);
+
+    char *c;
+    for(c = str; *c; ++c)
+        if(*c == '\n')
+            *c = ' ';
+
     return 0;
 }
 
@@ -1159,7 +1212,7 @@ int multirom_fill_kexec_ubuntu(struct multirom_rom *rom, char **cmd)
     }
 
     // TODO correct root
-    sprintf(cmd[5], "--command-line=%s root=/dev/mmcblk0p9 ro console=tty1 fbcon=rotate:1 quiet", str);
+    sprintf(cmd[5], "--command-line=%s multirom_kexeced=1 root=/dev/mmcblk0p9 ro console=tty1 fbcon=rotate:1 quiet", str);
     return 0;
 }
 
@@ -1198,7 +1251,7 @@ int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd)
 
     strcpy(cmd[2], "/zImage");
     strcpy(cmd[4], "--initrd=/initrd.img");
-    sprintf(cmd[5], "--command-line=%s %s", cmdline, header.cmdline);
+    sprintf(cmd[5], "--command-line=%s multirom_kexeced=1 %s", cmdline, header.cmdline);
 
     res = 0;
 exit:
@@ -1272,6 +1325,13 @@ int multirom_update_partitions(struct multirom_status *s)
         {
             t += strlen("UUID=\"");
             part->uuid = strndup(t, strchr(t, '"') - t);
+        }
+        else
+        {
+            ERROR("Part %s does not have UUID, line: \"%s\"\n", part->name, p);
+            p = strtok(NULL, "\n");
+            multirom_destroy_partition(part);
+            continue;
         }
 
         t = strstr(p, "TYPE=\"");
@@ -1447,4 +1507,13 @@ int multirom_copy_log(void)
     }
     free(buff);
     return res;
+}
+
+struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uuid)
+{
+    int i;
+    for(i = 0; s->partitions && s->partitions[i]; ++i)
+        if(strcmp(s->partitions[i]->uuid, uuid) == 0)
+            return s->partitions[i];
+    return NULL;
 }
