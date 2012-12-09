@@ -48,6 +48,8 @@ void list_add(void *item, void ***list);
 int list_rm(void *item, void ***list, void (*destroy_callback)(void*));
 int list_size(void **list);
 int list_item_count(void **list);
+int list_copy(void **source, void ***dest);
+int list_move(void ***source, void ***dest);
 void list_clear(void ***list, void (*destroy_callback)(void*));
 
 inline int in_rect(int x, int y, int rx, int ry, int rw, int rh);

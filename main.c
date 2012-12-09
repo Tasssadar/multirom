@@ -6,6 +6,7 @@
 #include <sys/mount.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 
 #include "multirom.h"
 #include "framebuffer.h"
@@ -53,6 +54,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    srand(time(0));
     klog_init();
 
     int exit = multirom();

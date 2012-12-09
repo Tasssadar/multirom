@@ -6,8 +6,8 @@
 
 enum 
 {
-    BTN_HOVER      = 0x01,
-    BTN_DISABLED   = 0x02,
+    BTN_HOVER         = 0x01,
+    BTN_DISABLED      = 0x02
 };
 
 typedef struct

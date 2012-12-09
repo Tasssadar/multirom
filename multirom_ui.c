@@ -15,6 +15,7 @@
 #include "button.h"
 #include "checkbox.h"
 #include "version.h"
+#include "pong.h"
 
 #define HEADER_HEIGHT 75
 #define TAB_BTN_WIDTH 165
@@ -28,6 +29,9 @@ static struct multirom_rom *selected_rom = NULL;
 static volatile int exit_ui_code = -1;
 static fb_msgbox *active_msgbox = NULL;
 static volatile int update_usb_roms = 0;
+static volatile int start_pong = 0;
+static int pong_btn_w = 0;
+static int pong_btn_h = 0;
 
 static pthread_mutex_t exit_code_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -102,6 +106,18 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
                 multirom_ui_tab_rom_update_usb(tab_data);
             update_usb_roms = 0;
         }
+
+        if(start_pong)
+        {
+            start_pong = 0;
+            input_push_context();
+            fb_push_context();
+
+            pong();
+
+            fb_pop_context();
+            input_pop_context();
+        }
         pthread_mutex_unlock(&exit_code_mutex);
 
         usleep(100000);
@@ -147,6 +163,9 @@ void multirom_ui_init_header(void)
     static const char *str[] = { "Internal", "USB", "Misc" };
 
     int x = fb_width - (TAB_BTN_WIDTH*TAB_COUNT);
+
+    pong_btn_w = x;
+    pong_btn_h = HEADER_HEIGHT;
 
     int i, text_x, text_y;
     for(i = 0; i < TAB_COUNT; ++i)
@@ -272,6 +291,9 @@ int multirom_ui_touch_handler(touch_event *ev, void *data)
 
     if(!(ev->changed & TCHNG_REMOVED))
         return -1;
+
+    if(ev->x < pong_btn_w && ev->y < pong_btn_h)
+        start_pong = 1;
 
     --touch_count;
 

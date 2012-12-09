@@ -49,4 +49,7 @@ void add_touch_handler(touch_callback callback, void *data);
 void rm_touch_handler(touch_callback callback, void *data);
 void set_touch_handlers_mode(int mode);
 
+void input_push_context(void);
+void input_pop_context(void);
+
 #endif

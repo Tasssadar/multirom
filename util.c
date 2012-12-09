@@ -657,15 +657,45 @@ void list_clear(void ***list, void (*destroy_callback)(void*))
     if(*list == NULL)
         return;
 
-    int i;
     if(destroy_callback)
     {
+        int i;
         for(i = 0; *list && (*list)[i]; ++i)
             (*destroy_callback)((*list)[i]);
     }
 
     free(*list);
     *list = NULL;
+}
+
+int list_copy(void **source, void ***dest)
+{
+    if(!source)
+        return 0;
+
+    if(*dest)
+        return -1;
+
+    int size = list_size(source);
+    *dest = calloc(size, sizeof(*source));
+
+    int i;
+    for(i = 0; source[i]; ++i)
+        (*dest)[i] = source[i];
+    return 0;
+}
+
+int list_move(void ***source, void ***dest)
+{
+    if(!source)
+        return 0;
+
+    if(*dest)
+        return -1;
+
+    list_copy(*source, dest);
+    list_clear(source, NULL);
+    return 0;
 }
 
 int in_rect(int x, int y, int rx, int ry, int rw, int rh)

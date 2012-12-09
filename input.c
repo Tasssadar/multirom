@@ -46,7 +46,14 @@ struct handler_list_it
 
 typedef struct handler_list_it handler_list_it;
 
+typedef struct
+{
+    int handlers_mode;
+    handler_list_it *handlers;
+} handlers_ctx;
+
 static handler_list_it *mt_handlers = NULL;
+static handlers_ctx **inactive_ctx = NULL;
 static int mt_handlers_mode = HANDLERS_FIRST;
 
 #define DIV_ROUND_UP(n,d)  (((n) + (d) - 1) / (d))
@@ -374,4 +381,40 @@ void stop_input_thread(void)
         return;
     input_run = 0;
     pthread_join(input_thread, NULL);
+}
+
+void input_push_context(void)
+{
+    handlers_ctx *ctx = malloc(sizeof(handlers_ctx));
+    memset(ctx, 0, sizeof(handlers_ctx));
+
+    pthread_mutex_lock(&touch_mutex);
+
+    ctx->handlers_mode = mt_handlers_mode;
+    ctx->handlers = mt_handlers;
+
+    mt_handlers_mode = HANDLERS_FIRST;
+    mt_handlers = NULL;
+
+    pthread_mutex_unlock(&touch_mutex);
+
+    list_add(ctx, &inactive_ctx);
+}
+
+void input_pop_context(void)
+{
+    if(!inactive_ctx)
+        return;
+
+    int idx = list_item_count(inactive_ctx)-1;
+    handlers_ctx *ctx = inactive_ctx[idx];
+
+    pthread_mutex_lock(&touch_mutex);
+
+    mt_handlers_mode = ctx->handlers_mode;
+    mt_handlers = ctx->handlers;
+
+    pthread_mutex_unlock(&touch_mutex);
+
+    list_rm(ctx, &inactive_ctx, &free);
 }

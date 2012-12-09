@@ -25,6 +25,7 @@ static int active_fb = 0;
 static int fb_frozen = 0;
 
 static fb_items_t fb_items = { NULL, NULL, NULL };
+static fb_items_t **inactive_ctx = NULL;
 int fb_width = 0;
 int fb_height = 0;
 static pthread_mutex_t fb_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -519,4 +520,44 @@ int center_x(int x, int width, int size, const char *text)
 int center_y(int y, int height, int size)
 {
     return y + (height/2 - (ISO_CHAR_HEIGHT*size)/2);
+}
+
+void fb_push_context(void)
+{
+    fb_items_t *ctx = malloc(sizeof(fb_items_t));
+    memset(ctx, 0, sizeof(fb_items_t));
+
+    pthread_mutex_lock(&fb_mutex);
+
+    list_move(&fb_items.texts, &ctx->texts);
+    list_move(&fb_items.rects, &ctx->rects);
+    ctx->msgbox = fb_items.msgbox;
+    fb_items.msgbox = NULL;
+
+    pthread_mutex_unlock(&fb_mutex);
+
+    list_add(ctx, &inactive_ctx);
+}
+
+void fb_pop_context(void)
+{
+    if(!inactive_ctx)
+        return;
+
+    fb_clear();
+
+    int idx = list_item_count(inactive_ctx)-1;
+    fb_items_t *ctx = inactive_ctx[idx];
+
+    pthread_mutex_lock(&fb_mutex);
+
+    list_move(&ctx->texts, &fb_items.texts);
+    list_move(&ctx->rects, &fb_items.rects);
+    fb_items.msgbox = ctx->msgbox;
+
+    pthread_mutex_unlock(&fb_mutex);
+
+    list_rm(ctx, &inactive_ctx, &free);
+
+    fb_draw();
 }

@@ -117,6 +117,9 @@ void fb_clear(void);
 void fb_freeze(int freeze);
 int fb_clone(char **buff);
 
+void fb_push_context(void);
+void fb_pop_context(void);
+
 inline int center_x(int x, int width, int size, const char *text);
 inline int center_y(int y, int height, int size);
 
