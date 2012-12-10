@@ -2,7 +2,6 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <time.h>
-#include <pthread.h>
 #include <math.h>
 #include <stdio.h>
 
@@ -17,7 +16,7 @@
 
 #define PADDLE_W 150
 #define PADDLE_H 60
-
+#define PADDLE_REF ((PADDLE_H/3)*2)
 #define PADDLE_Y 20
 
 #define BALL_W 25
@@ -33,6 +32,7 @@ static fb_rect *ball = NULL;
 static int paddle_last_x[2] = { -1, -1 };
 static int paddle_touch_id[2] = { -1, -1 };
 static int ball_speed = DEFAULT_BALL_SPEED;
+static int enable_computer = 1;
 
 typedef struct
 {
@@ -51,7 +51,6 @@ enum
 };
 
 static ball_step **movement_steps = NULL;
-static pthread_mutex_t steps_mutex = PTHREAD_MUTEX_INITIALIZER;
 static float ball_speed_x = 0;
 static float ball_speed_y = 0;
 
@@ -60,6 +59,7 @@ static int ai_hit_pos = 0;
 
 void pong(void)
 {
+    enable_computer = 1;
     paddle_touch_id[L] = -1;
     paddle_touch_id[R] = -1;
 
@@ -111,16 +111,14 @@ void pong(void)
 
     rm_touch_handler(&pong_touch_handler, NULL);
 
-    pthread_mutex_lock(&steps_mutex);
     list_clear(&movement_steps, &free);
-    pthread_mutex_unlock(&steps_mutex);
 }
 
 int pong_do_movement(int step)
 {
     if(!movement_steps[step])
     {
-            pong_calc_movement();
+        pong_calc_movement();
         return 0;
     }
 
@@ -129,7 +127,8 @@ int pong_do_movement(int step)
     {
         ball->head.x = movement_steps[step]->x;
         ball->head.y = movement_steps[step]->y;
-        pong_handle_ai();
+        if(enable_computer)
+            pong_handle_ai();
     }
 
     switch(col)
@@ -144,17 +143,21 @@ int pong_do_movement(int step)
         case COL_RIGHT:
         {
             int s = col - 1;
-            if(ball->head.x+BALL_W > paddles[s]->head.x && ball->head.x < paddles[s]->head.x+PADDLE_W)
+            if(ball->head.x+BALL_W >= paddles[s]->head.x && ball->head.x <= paddles[s]->head.x+PADDLE_W)
             {
-                // Increase X speed according to distance from center of paddle. 
+                // Increase X speed according to distance from center of paddle.
                 ball_speed_x = (float)((ball->head.x + BALL_W/2) - (paddles[s]->head.x + PADDLE_W/2))/BALL_SPEED_MOD;
                 ball_speed_y = -ball_speed_y;
             }
             else
             {
-                pong_spawn_ball(s);
                 pong_add_score(!s);
-                sleep(1);
+                for(col = 0; col < 1000; col += 15)
+                {
+                    fb_draw();
+                    usleep(15000);
+                }
+                pong_spawn_ball(s);
             }
             break;
         }
@@ -174,6 +177,8 @@ int pong_touch_handler(touch_event *ev, void *data)
         {
             paddle_touch_id[i] = ev->id;
             paddle_last_x[i] = ev->x;
+            if(i == L)
+                enable_computer = 0;
             return 0;
         }
 
@@ -213,14 +218,23 @@ void pong_spawn_ball(int side)
 
 void pong_calc_movement(void)
 {
-    pthread_mutex_lock(&steps_mutex);
     list_clear(&movement_steps, &free);
 
     ball_step *step = NULL;
     float x = ball->head.x;
     float y = ball->head.y;
 
-    while(1)
+    if(y < PADDLE_Y+PADDLE_H)
+        y = PADDLE_Y+PADDLE_H;
+    else if(y > fb_height-PADDLE_Y-PADDLE_H-BALL_W)
+        y = fb_height-PADDLE_Y-PADDLE_H-BALL_W;
+
+    if(x < 0)
+        x = 0;
+    else if(x > fb_width-BALL_W)
+        x = fb_width-BALL_W;
+
+    while(!step || step->collision == COL_NONE)
     {
         x += ball_speed_x;
         y += ball_speed_y;
@@ -228,35 +242,24 @@ void pong_calc_movement(void)
         step = malloc(sizeof(ball_step));
         step->x = x;
         step->y = y;
+        step->collision = pong_get_collision(x, y);
         list_add(step, &movement_steps);
-
-        if(y < PADDLE_Y+PADDLE_H)
-        {
-            step->collision = COL_LEFT;
-            break;
-        }
-
-        if(y > fb_height-PADDLE_Y-PADDLE_H-BALL_W)
-        {
-            step->collision = COL_RIGHT;
-            break;
-        }
-
-        if(x < 0)
-        {
-            step->collision = COL_BOTTOM;
-            break;
-        }
-
-        if(x > fb_width-BALL_W)
-        {
-            step->collision = COL_TOP;
-            break;
-        }
-
-        step->collision = COL_NONE;
     }
-    pthread_mutex_unlock(&steps_mutex);
+}
+
+int pong_get_collision(int x, int y)
+{
+    if(y < PADDLE_Y+PADDLE_REF)
+        return COL_LEFT;
+    if(y > fb_height-PADDLE_Y-PADDLE_REF-BALL_W)
+        return COL_RIGHT;
+
+    if(x < 0)
+        return COL_BOTTOM;
+    if(x > fb_width-BALL_W)
+        return COL_TOP;
+
+    return COL_NONE;
 }
 
 void pong_add_score(int side)
@@ -265,14 +268,6 @@ void pong_add_score(int side)
     int curr = atoi(score[side]->text);
 
     sprintf(buff, "%d", ++curr);
-    score[side]->text = realloc(score[side]->text, strlen(buff)+1);
-    strcpy(score[side]->text, buff);
-}
-
-void pong_set_score(int side, int val)
-{
-    char buff[16];
-    sprintf(buff, "%d", val);
     score[side]->text = realloc(score[side]->text, strlen(buff)+1);
     strcpy(score[side]->text, buff);
 }
@@ -287,7 +282,7 @@ void pong_handle_ai(void)
         ai_last_speed = ball_speed_x;
     }
 
-    int computer_x;
+    int computer_x = 0;
     switch(ai_hit_pos)
     {
         case 0:
@@ -316,4 +311,3 @@ void pong_handle_ai(void)
             paddles[COMPUTER]->head.x -= move_dist;
     }
 }
-
