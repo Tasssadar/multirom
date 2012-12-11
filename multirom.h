@@ -13,13 +13,17 @@ enum
     ROM_ANDROID_USB_DIR   = 5,
     ROM_UBUNTU_USB_DIR    = 6,
 
-    ROM_UNKNOWN           = 7
+    ROM_UNSUPPORTED_INT   = 7,
+    ROM_UNSUPPORTED_USB   = 8,
+    ROM_UNKNOWN           = 9
 };
 
 #define M(x) (1 << x)
-#define MASK_USB_ROMS (M(ROM_ANDROID_USB_IMG) | M(ROM_UBUNTU_USB_IMG) | M(ROM_ANDROID_USB_DIR) | M(ROM_UBUNTU_USB_DIR))
+#define MASK_INTERNAL (M(ROM_DEFAULT) | M(ROM_ANDROID_INTERNAL) | M(ROM_UBUNTU_INTERNAL) | M(ROM_UNSUPPORTED_INT))
+#define MASK_USB_ROMS (M(ROM_ANDROID_USB_IMG) | M(ROM_UBUNTU_USB_IMG) | M(ROM_ANDROID_USB_DIR) | M(ROM_UBUNTU_USB_DIR) | M(ROM_UNSUPPORTED_USB))
 #define MASK_UBUNTU (M(ROM_UBUNTU_INTERNAL) | M(ROM_UBUNTU_USB_IMG)| M(ROM_UBUNTU_USB_DIR))
 #define MASK_ANDROID (M(ROM_ANDROID_USB_DIR) | M(ROM_ANDROID_USB_IMG) | M(ROM_ANDROID_INTERNAL))
+#define MASK_UNSUPPORTED (M(ROM_UNSUPPORTED_USB) | M(ROM_UNSUPPORTED_INT))
 
 enum 
 {
@@ -31,14 +35,6 @@ enum
     EXIT_KEXEC               = 0x20,
 
     EXIT_REBOOT_MASK         = (EXIT_REBOOT | EXIT_REBOOT_RECOVERY | EXIT_REBOOT_BOOTLOADER | EXIT_SHUTDOWN),
-};
-
-enum 
-{
-    FS_UNK                   = 0,
-    FS_FAT                   = 1,
-    FS_NTFS                  = 2,
-    FS_EXT                   = 3,
 };
 
 struct usb_partition
@@ -56,7 +52,6 @@ struct multirom_rom
     char *name;
     char *base_path;
     int type;
-    int is_in_root;
     int has_bootimg;
     struct usb_partition *partition;
 };
@@ -82,15 +77,12 @@ void multirom_find_usb_roms(struct multirom_status *s);
 int multirom_generate_rom_id(void);
 struct multirom_rom *multirom_get_rom(struct multirom_status *s, const char *name, const char *part_uuid);
 struct multirom_rom *multirom_get_rom_by_id(struct multirom_status *s, int id);
-struct multirom_rom *multirom_get_rom_in_root(struct multirom_status *s);
 int multirom_load_status(struct multirom_status *s);
 int multirom_import_internal(void);
 void multirom_dump_status(struct multirom_status *s);
 int multirom_save_status(struct multirom_status *s);
 int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to_boot);
 int multirom_dump_boot(const char *dest);
-int multirom_move_out_of_root(struct multirom_rom *rom);
-int multirom_move_to_root(struct multirom_rom *rom);
 void multirom_free_status(struct multirom_status *s);
 void multirom_free_rom(void *rom);
 int multirom_init_fb(void);
@@ -117,6 +109,7 @@ int multirom_copy_log(void);
 int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_partition *p);
 struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uuid);
 struct usb_partition *multirom_get_data_partition(struct multirom_status *s);
+int multirom_path_exists(char *base, char *filename);
 
 /*
 ** +-----------------+ 

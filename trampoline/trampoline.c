@@ -99,6 +99,8 @@ struct part_info
     char *name;
 };
 
+#define PARTS_SIZE 24
+
 int find_data_dev(char *data_dev)
 {
     FILE *f = fopen("/proc/partitions", "r");
@@ -107,7 +109,7 @@ int find_data_dev(char *data_dev)
 
     int res = -1;
 
-    struct part_info parts[24];
+    struct part_info parts[PARTS_SIZE];
     memset(parts, 0, sizeof(parts));
     int i = 0;
     int y, part_ok;
@@ -141,7 +143,7 @@ int find_data_dev(char *data_dev)
 
         if(part_ok)
         {
-            if(++i >= 24)
+            if(++i >= PARTS_SIZE)
                 return -1;
         }
     }

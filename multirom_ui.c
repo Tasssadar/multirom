@@ -423,16 +423,9 @@ void *multirom_ui_tab_rom_init(int tab_type)
 
     listview_init_ui(t->list);
 
-    static int rom_mask[2] = {
-        // TAB_INTERNAL
-        (M(ROM_DEFAULT) | M(ROM_ANDROID_INTERNAL) | M(ROM_UBUNTU_INTERNAL)),
-        // TAB_USB
-        MASK_USB_ROMS,
-    };
-    assert(tab_type < 2);
-
     if(tab_type == TAB_INTERNAL)
-        multirom_ui_fill_rom_list(t->list, rom_mask[tab_type]);
+        multirom_ui_fill_rom_list(t->list, MASK_INTERNAL);
+
     listview_update_ui(t->list);
 
     int has_roms = (int)(t->list->items == NULL);
@@ -513,6 +506,20 @@ void multirom_ui_tab_rom_boot_btn(int action)
     struct multirom_rom *rom = multirom_get_rom_by_id(mrom_status, t->list->selected->id);
     if(!rom)
         return;
+
+    if(M(rom->type) & MASK_UNSUPPORTED)
+    {
+        active_msgbox = fb_create_msgbox(550, 360);
+        fb_msgbox_add_text(-1, 30, SIZE_BIG, "Error");
+        fb_msgbox_add_text(-1, 90, SIZE_NORMAL, "Unsupported ROM type.");
+        fb_msgbox_add_text(-1, 180, SIZE_NORMAL, "See XDA thread for more info.");
+        fb_msgbox_add_text(-1, active_msgbox->h-60, SIZE_NORMAL, "Touch anywhere to close");
+
+        fb_draw();
+        fb_freeze(1);
+        set_touch_handlers_mode(HANDLERS_ALL);
+        return;
+    }
 
     if(rom->has_bootimg && multirom_has_kexec() != 0)
     {

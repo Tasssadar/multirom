@@ -23,7 +23,6 @@
 #define KEXEC_BIN "kexec"
 #define INTERNAL_ROM_NAME "Internal"
 #define BOOT_BLK "/dev/block/mmcblk0p2"
-#define IN_ROOT "is_in_root"
 #define MAX_ROM_NAME_LEN 26
 #define LAYOUT_VERSION "/data/.layout_version"
 
@@ -228,9 +227,6 @@ int multirom_default_status(struct multirom_status *s)
 
         rom->type = multirom_get_rom_type(rom);
 
-        sprintf(path, "%s/%s", rom->base_path, IN_ROOT);
-        rom->is_in_root = access(path, R_OK) == 0 ? 1 : 0;
-
         sprintf(path, "%s/boot.img", rom->base_path, rom->name);
         rom->has_bootimg = access(path, R_OK) == 0 ? 1 : 0;
 
@@ -432,9 +428,6 @@ int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_parti
         rom->partition = p;
         rom->type = multirom_get_rom_type(rom);
 
-        sprintf(path, "%s/%s", rom->base_path, IN_ROOT);
-        rom->is_in_root = access(path, R_OK) == 0 ? 1 : 0;
-
         sprintf(path, "%s/boot.img", rom->base_path);
         rom->has_bootimg = access(path, R_OK) == 0 ? 1 : 0;
 
@@ -455,42 +448,57 @@ int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_parti
     return 0;
 }
 
+int multirom_path_exists(char *base, char *filename)
+{
+    char path[256];
+    sprintf(path, "%s/%s", base, filename);
+    if(access(path, R_OK) < 0)
+        return -1;
+    return 0;
+}
+
 int multirom_get_rom_type(struct multirom_rom *rom)
 {
     if(!rom->partition && strcmp(rom->name, INTERNAL_ROM_NAME) == 0)
         return ROM_DEFAULT;
 
-#define FOLDERS 3
-    static const char *folders[][FOLDERS] = 
-    {
-         { "system", "data", "cache" },
-         { "root", NULL, NULL },
-         { "system.img", "data.img", "cache.img" },
-         { "root.img", NULL, NULL }
-    };
-    static const int types_int[] = { ROM_ANDROID_INTERNAL, ROM_UBUNTU_INTERNAL, ROM_UNKNOWN, ROM_UNKNOWN };
-    static const int types_usb[] = { ROM_ANDROID_USB_DIR, ROM_UBUNTU_USB_DIR, ROM_ANDROID_USB_IMG, ROM_UBUNTU_USB_IMG };
+    char *b = rom->base_path;
 
-    char path[256];
-    uint32_t i, y, okay;
-    for(i = 0; i < ARRAY_SIZE(folders); ++i)
+    // Handle android ROMs
+    if(!multirom_path_exists(b, "boot"))
     {
-        okay = 1;
-        for(y = 0; folders[i][y] && y < FOLDERS && okay; ++y)
+        if (!multirom_path_exists(b, "system") && !multirom_path_exists(b, "data") &&
+            !multirom_path_exists(b, "cache"))
         {
-            sprintf(path, "%s/%s", rom->base_path, folders[i][y]);
-            if(access(path, R_OK) < 0)
-                okay = 0;
+            if(!rom->partition) return ROM_ANDROID_INTERNAL;
+            else                return ROM_ANDROID_USB_DIR;
         }
-
-        if(okay)
+        else if(!multirom_path_exists(b, "system.img") && !multirom_path_exists(b, "data.img") &&
+                !multirom_path_exists(b, "cache.img"))
         {
-            if(!rom->partition)
-                return types_int[i];
-            else
-                return types_usb[i];
+            return ROM_ANDROID_USB_IMG;
         }
     }
+
+    // Handle ubuntu
+    if(!multirom_path_exists(b, "root"))
+    {
+        if(multirom_path_exists(b, "boot.img") != 0) // boot.img does not exist: 13.04
+        {
+            if(!rom->partition) return ROM_UBUNTU_INTERNAL;
+            else                return ROM_UBUNTU_USB_DIR;
+        }
+        else
+        {
+            // if it has boot.img, it probably is 12.10, which is unsupported by
+            // v3 and higher
+            if(!rom->partition) return ROM_UNSUPPORTED_INT;
+            else                return ROM_UNSUPPORTED_USB;
+        }
+    }
+    else if(!multirom_path_exists(b, "root.img") && rom->partition)
+        return ROM_UBUNTU_USB_IMG;
+
     return ROM_UNKNOWN;
 }
 
@@ -511,14 +519,7 @@ int multirom_import_internal(void)
 
     // boot image
     sprintf(path, "%s/roms/%s/boot.img", multirom_dir, INTERNAL_ROM_NAME);
-    int res = multirom_dump_boot(path);
-
-    // is_in_root file
-    sprintf(path, "%s/roms/%s/%s", multirom_dir, INTERNAL_ROM_NAME, IN_ROOT);
-    FILE *f = fopen(path, "w");
-    if(f)
-        fclose(f);
-    return res;
+    return multirom_dump_boot(path);
 }
 
 int multirom_dump_boot(const char *dest)
@@ -550,16 +551,6 @@ struct multirom_rom *multirom_get_rom(struct multirom_status *s, const char *nam
             return r;
         }
     }
-
-    return NULL;
-}
-
-struct multirom_rom *multirom_get_rom_in_root(struct multirom_status *s)
-{
-    int i = 0;
-    for(; s->roms && s->roms[i]; ++i)
-        if(s->roms[i]->is_in_root)
-            return s->roms[i];
 
     return NULL;
 }
@@ -596,7 +587,6 @@ void multirom_dump_status(struct multirom_status *s)
         fb_debug("  ROM: %s\n", s->roms[i]->name);
         fb_debug("    base_path: %s\n", s->roms[i]->base_path);
         fb_debug("    type: %d\n", s->roms[i]->type);
-        fb_debug("    is_in_root: %d\n", s->roms[i]->is_in_root);
         fb_debug("    has_bootimg: %d\n", s->roms[i]->has_bootimg);
     }
 }
@@ -604,52 +594,22 @@ void multirom_dump_status(struct multirom_status *s)
 int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to_boot)
 {
     int exit = EXIT_UMOUNT;
+    int type = to_boot->type;
 
-    if(((M(to_boot->type) & MASK_UBUNTU) ||  to_boot->has_bootimg) && to_boot->type != ROM_DEFAULT && s->is_second_boot == 0)
+    if(((M(type) & MASK_UBUNTU) || to_boot->has_bootimg) && type != ROM_DEFAULT && s->is_second_boot == 0)
     {
         if(multirom_load_kexec(s, to_boot) != 0)
             return -1;
         exit |= EXIT_KEXEC;
     }
 
-    if(to_boot == s->current_rom)
-        fb_debug("To-boot rom is the same as previous rom.\n");
-
-    int type_now = s->current_rom->type;
-    int type_to = to_boot->type;
-
-    // move root if needed
-    if (!to_boot->is_in_root &&
-        (to_boot->type == ROM_UBUNTU_INTERNAL || to_boot->type == ROM_DEFAULT))
-    {
-        struct multirom_rom *in_root = multirom_get_rom_in_root(s);
-        if(!in_root)
-        {
-            ERROR("No rom in root!");
-            return -1;
-        }
-
-        if (multirom_move_out_of_root(in_root) == -1 ||
-            multirom_move_to_root(to_boot) == -1)
-            return -1;
-    }
-
-    switch(type_to)
+    switch(type)
     {
         case ROM_DEFAULT:
         case ROM_UBUNTU_USB_DIR:
         case ROM_UBUNTU_USB_IMG:
-            break;
         case ROM_UBUNTU_INTERNAL:
-        {
-            struct stat info;
-            if(!(exit & (EXIT_REBOOT | EXIT_KEXEC)) && stat("/init.rc", &info) >= 0)
-            {
-                ERROR("Trying to boot ubuntu with android boot.img, aborting!\n");
-                return -1;
-            }
             break;
-        }
         case ROM_ANDROID_USB_IMG:
         case ROM_ANDROID_USB_DIR:
         case ROM_ANDROID_INTERNAL:
@@ -680,97 +640,6 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     }
 
     return exit;
-}
-
-int multirom_move_out_of_root(struct multirom_rom *rom)
-{
-    fb_debug("Moving ROM %s out of root...\n", rom->name);
-
-    char path_to[256];
-    sprintf(path_to, "%s/roms/%s/root/", multirom_dir, rom->name);
-
-    mkdir(path_to, 0777);
-
-    DIR *d = opendir(REALDATA);
-    if(!d)
-    {
-        fb_debug("Failed to open /realdata!\n");
-        return -1;
-    }
-
-    //              0           1     2            3
-    char *cmd[] = { busybox_path, "mv", malloc(256), path_to, NULL };
-    struct dirent *dr;
-    while((dr = readdir(d)))
-    {
-        if(dr->d_name[0] == '.' && (dr->d_name[1] == '.' || dr->d_name[1] == 0))
-            continue;
-
-        if(strcmp(dr->d_name, "media") == 0)
-            continue;
-
-        sprintf(cmd[2], REALDATA"/%s", dr->d_name);
-        int res = run_cmd(cmd);
-        if(res != 0)
-        {
-            fb_debug("Move failed %d\n%s\n%s\n%s\n%s\n", res, cmd[0], cmd[1], cmd[2], cmd[3]);
-            free(cmd[2]);
-            closedir(d);
-            return -1;
-        }
-    }
-    closedir(d);
-    free(cmd[2]);
-
-    sprintf(path_to, "%s/roms/%s/%s", multirom_dir, rom->name, IN_ROOT);
-    unlink(path_to);
-
-    return 0;
-}
-
-int multirom_move_to_root(struct multirom_rom *rom)
-{
-    fb_debug("Moving ROM %s to root...\n", rom->name);
-
-    char path_from[256];
-    sprintf(path_from, "%s/roms/%s/root/", multirom_dir, rom->name);
-
-    DIR *d = opendir(path_from);
-    if(!d)
-    {
-        fb_debug("Failed to open %s!\n", path_from);
-        return -1;
-    }
-
-    //              0           1     2            3
-    char *cmd[] = { busybox_path, "mv", malloc(256), "/realdata/", NULL };
-    struct dirent *dr;
-    while((dr = readdir(d)))
-    {
-        if(dr->d_name[0] == '.' && (dr->d_name[1] == '.' || dr->d_name[1] == 0))
-            continue;
-
-        if(strcmp(dr->d_name, "media") == 0)
-            continue;
-
-        sprintf(cmd[2], "%s%s", path_from, dr->d_name);
-        int res = run_cmd(cmd);
-        if(res != 0)
-        {
-            fb_debug("Move failed %d\n%s\n%s\n%s\n%s\n", res, cmd[0], cmd[1], cmd[2], cmd[3]);
-            free(cmd[2]);
-            closedir(d);
-            return -1;
-        }
-    }
-    closedir(d);
-    free(cmd[2]);
-    sprintf(path_from, "%s/roms/%s/%s", multirom_dir, rom->name, IN_ROOT);
-    FILE *f = fopen(path_from, "w");
-    if(f)
-        fclose(f);
-
-    return 0;
 }
 
 void multirom_free_status(struct multirom_status *s)
@@ -1221,24 +1090,19 @@ int multirom_fill_kexec_ubuntu(struct multirom_status *s, struct multirom_rom *r
     int loop_mounted = 0;
     int res = -1;
 
-    if(rom->is_in_root == 0)
-    {
-        if(!rom->partition || strstr(rom->partition->fs, "ext"))
-            sprintf(rom_path, "%s/root/boot", rom->base_path);
-        else
-        {
-            // mount the image file
-            mkdir("/mnt/image", 0777);
-            sprintf(rom_path, "%s/root.img", rom->base_path);
-            if(multirom_mount_loop(rom_path, "/mnt/image", MS_NOATIME) < 0)
-                return -1;
-
-            loop_mounted = 1;
-            strcpy(rom_path, "/mnt/image/boot");
-        }
-    }
+    if(!rom->partition || strstr(rom->partition->fs, "ext"))
+        sprintf(rom_path, "%s/root/boot", rom->base_path);
     else
-        sprintf(rom_path, "%s/boot", REALDATA);
+    {
+        // mount the image file
+        mkdir("/mnt/image", 0777);
+        sprintf(rom_path, "%s/root.img", rom->base_path);
+        if(multirom_mount_loop(rom_path, "/mnt/image", MS_NOATIME) < 0)
+            return -1;
+
+        loop_mounted = 1;
+        strcpy(rom_path, "/mnt/image/boot");
+    }
 
     if(multirom_find_file(cmd[2], "vmlinuz", rom_path) == -1)
     {
@@ -1420,6 +1284,9 @@ int multirom_update_partitions(struct multirom_status *s)
     }
     pthread_mutex_unlock(&parts_mutex);
     free(res);
+
+    multirom_dump_status(s);
+
     return 0;
 }
 
