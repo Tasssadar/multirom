@@ -278,7 +278,7 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
         if(d->partition)
         {
             d->part_it = fb_add_text(0, 0, GRAY, SIZE_NORMAL, d->partition);
-            d->part_it->head.x = x + w - (strlen(d->partition)+1)*8*SIZE_NORMAL;
+            d->part_it->head.x = x + w - (strchr(d->partition, '\n')-d->partition+1)*8*SIZE_NORMAL;
         }
     }
 
@@ -286,7 +286,7 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
     d->bottom_line->head.y = y+ROM_ITEM_H-2;
 
     if(d->part_it)
-        d->part_it->head.y = center_y(y, ROM_ITEM_H, SIZE_NORMAL);
+        d->part_it->head.y = center_y(y, ROM_ITEM_H, SIZE_NORMAL*2);
 
     if(it->flags & IT_HOVER)
     {

@@ -248,6 +248,7 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
     struct multirom_rom *rom;
     void *data;
     listview_item *it;
+    char part_desc[64];
     for(i = 0; mrom_status->roms && mrom_status->roms[i]; ++i)
     {
         rom = mrom_status->roms[i];
@@ -255,7 +256,10 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
         if(!(M(rom->type) & mask))
             continue;
 
-        data = rom_item_create(rom->name, rom->partition ? rom->partition->name : NULL);
+        if(rom->partition)
+            sprintf(part_desc, "%s\n%s", rom->partition->name, rom->partition->fs);
+
+        data = rom_item_create(rom->name, rom->partition ? part_desc : NULL);
         it = listview_add_item(view, rom->id, data);
 
         if ((mrom_status->auto_boot_rom && rom == mrom_status->auto_boot_rom) ||
@@ -427,7 +431,8 @@ void *multirom_ui_tab_rom_init(int tab_type)
     };
     assert(tab_type < 2);
 
-    multirom_ui_fill_rom_list(t->list, rom_mask[tab_type]);
+    if(tab_type == TAB_INTERNAL)
+        multirom_ui_fill_rom_list(t->list, rom_mask[tab_type]);
     listview_update_ui(t->list);
 
     int has_roms = (int)(t->list->items == NULL);

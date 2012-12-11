@@ -289,7 +289,7 @@ int multirom_load_status(struct multirom_status *s)
         return -1;
     }
 
-    s->is_second_boot = (int)(strstr(line, "multirom_kexeced=1") != NULL);
+    s->is_second_boot = (int)(strstr(line, "mrom_kexecd=1") != NULL);
 
     while((fgets(line, sizeof(line), f)))
     {
@@ -394,7 +394,8 @@ void multirom_find_usb_roms(struct multirom_status *s)
     struct usb_partition *p;
     pthread_mutex_lock(&parts_mutex);
     for(i = 0; s->partitions && s->partitions[i]; ++i)
-        multirom_scan_partition_for_roms(s, s->partitions[i]);
+        if(!strstr(s->partitions[i]->name, "mmcblk"))
+            multirom_scan_partition_for_roms(s, s->partitions[i]);
     pthread_mutex_unlock(&parts_mutex);
 }
 
@@ -604,9 +605,9 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
 {
     int exit = EXIT_UMOUNT;
 
-    if(to_boot->has_bootimg && to_boot->type != ROM_DEFAULT && s->is_second_boot == 0)
+    if(((M(to_boot->type) & MASK_UBUNTU) ||  to_boot->has_bootimg) && to_boot->type != ROM_DEFAULT && s->is_second_boot == 0)
     {
-        if(multirom_load_kexec(to_boot) != 0)
+        if(multirom_load_kexec(s, to_boot) != 0)
             return -1;
         exit |= EXIT_KEXEC;
     }
@@ -636,6 +637,8 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     switch(type_to)
     {
         case ROM_DEFAULT:
+        case ROM_UBUNTU_USB_DIR:
+        case ROM_UBUNTU_USB_IMG:
             break;
         case ROM_UBUNTU_INTERNAL:
         {
@@ -1104,13 +1107,21 @@ int multirom_get_cmdline(char *str, size_t size)
     FILE *f = fopen("/proc/cmdline", "r");
     if(!f)
         return -1;
-    fread(str, 1, size, f);
+
+    memset(str, 0, size);
+
+    char buff[1024];
+    while(fgets(buff, sizeof(buff), f))
+        strcat(str, buff);
+
     fclose(f);
 
     char *c;
     for(c = str; *c; ++c)
+    {
         if(*c == '\n')
             *c = ' ';
+    }
 
     return 0;
 }
@@ -1139,19 +1150,28 @@ int multirom_find_file(char *res, const char *name_part, const char *path)
     return ret;
 }
 
-int multirom_load_kexec(struct multirom_rom *rom)
+int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
 {
+    // to find /data partition
+    if(!rom->partition && multirom_update_partitions(s) < 0)
+    {
+        ERROR("Failed to update partitions\n");
+        return -1;
+    }
+
     int res = -1;
     // kexec --load-hardboot ./zImage --command-line="$(cat /proc/cmdline)" --mem-min=0xA0000000 --initrd=./rd.img
     //                    0            1                 2            3                       4            5            6
     char *cmd[] = { kexec_path, "--load-hardboot", malloc(1024), "--mem-min=0xA0000000", malloc(1024), malloc(1024), NULL };
 
+    int loop_mounted = 0;
     switch(rom->type)
     {
         case ROM_UBUNTU_INTERNAL:
         case ROM_UBUNTU_USB_DIR:
         case ROM_UBUNTU_USB_IMG:
-            if(multirom_fill_kexec_ubuntu(rom, cmd) != 0)
+            loop_mounted = multirom_fill_kexec_ubuntu(s, rom, cmd);
+            if(loop_mounted < 0)
                 goto exit;
             break;
         case ROM_ANDROID_INTERNAL:
@@ -1166,14 +1186,21 @@ int multirom_load_kexec(struct multirom_rom *rom)
     }
 
     ERROR("Loading kexec: %s %s %s %s %s %s\n", cmd[0], cmd[1], cmd[2], cmd[3], cmd[4], cmd[5]);
+    ERROR("%s\n", cmd[5]);
+
     if(run_cmd(cmd) == 0)
         res = 0;
     else
-        ERROR("kexec call failed\n");
+        ERROR("kexec call failed!\n");
 
     char *cmd_cp[] = { busybox_path, "cp", kexec_path, "/kexec", NULL };
     run_cmd(cmd_cp);
     chmod("/kexec", 0755);
+
+    if(loop_mounted)
+        umount("/mnt/image");
+
+    multirom_copy_log();
 
 exit:
     free(cmd[2]);
@@ -1182,25 +1209,48 @@ exit:
     return res;
 }
 
-int multirom_fill_kexec_ubuntu(struct multirom_rom *rom, char **cmd)
+// PURGE ac100-tarball-installer
+// export FLASH_KERNEL_SKIP=1
+// upravit init a scripts/local
+// touch /var/lib/oem-config/run
+// update-initramfs
+
+int multirom_fill_kexec_ubuntu(struct multirom_status *s, struct multirom_rom *rom, char **cmd)
 {
     char rom_path[256];
+    int loop_mounted = 0;
+    int res = -1;
+
     if(rom->is_in_root == 0)
-        sprintf(rom_path, "%s/root/boot", rom->base_path);
+    {
+        if(!rom->partition || strstr(rom->partition->fs, "ext"))
+            sprintf(rom_path, "%s/root/boot", rom->base_path);
+        else
+        {
+            // mount the image file
+            mkdir("/mnt/image", 0777);
+            sprintf(rom_path, "%s/root.img", rom->base_path);
+            if(multirom_mount_loop(rom_path, "/mnt/image", MS_NOATIME) < 0)
+                return -1;
+
+            loop_mounted = 1;
+            strcpy(rom_path, "/mnt/image/boot");
+        }
+    }
     else
         sprintf(rom_path, "%s/boot", REALDATA);
 
     if(multirom_find_file(cmd[2], "vmlinuz", rom_path) == -1)
     {
         ERROR("Failed to get vmlinuz path\n");
-        return -1;
+        goto exit;
     }
 
     char str[1000];
     if(multirom_find_file(str, "initrd.img", rom_path) == -1)
     {
         ERROR("Failed to get initrd path\n");
-        return -1;
+        goto exit;
     }
 
     sprintf(cmd[4], "--initrd=%s", str);
@@ -1211,9 +1261,28 @@ int multirom_fill_kexec_ubuntu(struct multirom_rom *rom, char **cmd)
         return -1;
     }
 
-    // TODO correct root
-    sprintf(cmd[5], "--command-line=%s multirom_kexeced=1 root=/dev/mmcblk0p9 ro console=tty1 fbcon=rotate:1 quiet", str);
-    return 0;
+    struct usb_partition *p = rom->partition;
+    if(!p && (p = multirom_get_data_partition(s)) == NULL)
+    {
+        ERROR("Failed to find ubuntu root partition!\n");
+        goto exit;
+    }
+
+    char folder[256];
+    if(!rom->partition)
+        sprintf(folder, "rootsubdir=%s/root", rom->base_path + strlen(REALDATA));
+    else
+    {
+        if(!strstr(p->fs, "ext"))
+            sprintf(folder, "loop=%s/root.img loopfstype=ext4", strstr(rom->base_path, "/multirom/"));
+        else
+            sprintf(folder, "rootsubdir=%s/root", strstr(rom->base_path, "/multirom/"));
+    }
+
+    sprintf(cmd[5], "--command-line=%s root=UUID=%s ro console=tty1 fbcon=rotate:1 mrom_kexecd=1 %s", str, p->uuid, folder);
+    res = loop_mounted;
+exit:
+    return res;
 }
 
 int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd)
@@ -1251,7 +1320,7 @@ int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd)
 
     strcpy(cmd[2], "/zImage");
     strcpy(cmd[4], "--initrd=/initrd.img");
-    sprintf(cmd[5], "--command-line=%s multirom_kexeced=1 %s", cmdline, header.cmdline);
+    sprintf(cmd[5], "--command-line=%s mrom_kexecd=1 %s", cmdline, header.cmdline);
 
     res = 0;
 exit:
@@ -1308,12 +1377,6 @@ int multirom_update_partitions(struct multirom_status *s)
     char *p = strtok(res, "\n");
     while(p != NULL)
     {
-        if(!strstr(p, "/sd"))
-        {
-            p = strtok(NULL, "\n");
-            continue;
-        }
-
         struct usb_partition *part = malloc(sizeof(struct usb_partition));
         memset(part, 0, sizeof(struct usb_partition));
 
@@ -1342,7 +1405,7 @@ int multirom_update_partitions(struct multirom_status *s)
             part->fs = strndup(t, strchr(t, '"') - t);
         }
 
-        if(multirom_mount_usb(part) == 0)
+        if(strstr(part->name, "mmcblk") || multirom_mount_usb(part) == 0)
         {
             list_add(part, &s->partitions);
             ERROR("Found part %s: %s, %s\n", part->name, part->uuid, part->fs);
@@ -1515,5 +1578,18 @@ struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uu
     for(i = 0; s->partitions && s->partitions[i]; ++i)
         if(strcmp(s->partitions[i]->uuid, uuid) == 0)
             return s->partitions[i];
+    return NULL;
+}
+
+struct usb_partition *multirom_get_data_partition(struct multirom_status *s)
+{
+    int i;
+    struct usb_partition *p;
+    for(i = 0; s->partitions && s->partitions[i]; ++i)
+    {
+        p = s->partitions[i];
+        if(strstr(p->name, "mmcblk") == p->name && strstr(p->fs, "ext") == p->fs)
+            return p;
+    }
     return NULL;
 }

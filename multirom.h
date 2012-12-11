@@ -101,10 +101,10 @@ int multirom_get_rom_type(struct multirom_rom *rom);
 void multirom_take_screenshot(void);
 int multirom_get_trampoline_ver(void);
 int multirom_has_kexec(void);
-int multirom_load_kexec(struct multirom_rom *rom);
+int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom);
 int multirom_get_cmdline(char *str, size_t size);
 int multirom_find_file(char *res, const char *name_part, const char *path);
-int multirom_fill_kexec_ubuntu(struct multirom_rom *rom, char **cmd);
+int multirom_fill_kexec_ubuntu(struct multirom_status *s, struct multirom_rom *rom, char **cmd);
 int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd);
 int multirom_extract_bytes(const char *dst, FILE *src, size_t size);
 int multirom_update_partitions(struct multirom_status *s);
@@ -116,6 +116,7 @@ int multirom_mount_loop(const char *src, const char *dst, int flags);
 int multirom_copy_log(void);
 int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_partition *p);
 struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uuid);
+struct usb_partition *multirom_get_data_partition(struct multirom_status *s);
 
 /*
 ** +-----------------+ 

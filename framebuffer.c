@@ -165,14 +165,14 @@ void fb_draw_text(fb_text *t)
         {
             case '\n':
                 y += c_height;
-                x = 0;
+                x = t->head.x;
                 continue;
             case '\r':
-                x = 0;
+                x = t->head.x;
                 continue;
             case '\f':
-                x = 0; 
-                y = 0;
+                x = t->head.x; 
+                y = t->head.y;
                 continue;
         }
         fb_draw_char(x, y, t->text[i], t->color, t->size);
