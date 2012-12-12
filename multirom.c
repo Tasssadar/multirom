@@ -21,6 +21,7 @@
 #define REALDATA "/realdata"
 #define BUSYBOX_BIN "busybox"
 #define KEXEC_BIN "kexec"
+#define NTFS_BIN "ntfs-3g"
 #define INTERNAL_ROM_NAME "Internal"
 #define BOOT_BLK "/dev/block/mmcblk0p2"
 #define MAX_ROM_NAME_LEN 26
@@ -29,8 +30,10 @@
 #define T_FOLDER 4
 
 static char multirom_dir[64] = { 0 };
-static char busybox_path[128] = { 0 };
-static char kexec_path[128] = { 0 };
+static char busybox_path[64] = { 0 };
+static char kexec_path[64] = { 0 };
+static char ntfs_path[64] = { 0 };
+
 static volatile int run_usb_refresh = 0;
 static pthread_t usb_refresh_thread;
 static pthread_mutex_t parts_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -55,6 +58,10 @@ int multirom_find_base_dir(void)
         strcpy(multirom_dir, paths[i]);
         sprintf(busybox_path, "%s/%s", paths[i], BUSYBOX_BIN);
         sprintf(kexec_path, "%s/%s", paths[i], KEXEC_BIN);
+        sprintf(ntfs_path, "%s/%s", paths[i], NTFS_BIN);
+
+        chmod(kexec_path, 0777);
+        chmod(ntfs_path, 0777);
         return 0;
     }
     return -1;
@@ -1111,7 +1118,7 @@ int multirom_fill_kexec_ubuntu(struct multirom_status *s, struct multirom_rom *r
     }
 
     char str[1000];
-    if(multirom_find_file(str, "initrd.img", rom_path) == -1)
+    if(multirom_find_file(str, "initrd.img-", rom_path) == -1)
     {
         ERROR("Failed to get initrd path\n");
         goto exit;
@@ -1144,6 +1151,10 @@ int multirom_fill_kexec_ubuntu(struct multirom_status *s, struct multirom_rom *r
     }
 
     sprintf(cmd[5], "--command-line=%s root=UUID=%s ro console=tty1 fbcon=rotate:1 mrom_kexecd=1 %s", str, p->uuid, folder);
+
+    if(rom->partition && strstr(rom->partition->fs, "ntfs"))
+        strcat(cmd[5], " rootfstype=ntfs-3g");
+
     res = loop_mounted;
 exit:
     return res;
@@ -1305,10 +1316,22 @@ int multirom_mount_usb(struct usb_partition *part)
     char src[256];
     sprintf(src, "/dev/block/%s", part->name);
 
-    if(mount(src, path, part->fs, MS_NOATIME, "") < 0)
+    if(!strstr(part->fs, "ntfs"))
     {
-        ERROR("Failed to mount %s (%d: %s)\n", src, errno, strerror(errno));
-        return -1;
+        if(mount(src, path, part->fs, MS_NOATIME, "") < 0)
+        {
+            ERROR("Failed to mount %s (%d: %s)\n", src, errno, strerror(errno));
+            return -1;
+        }
+    }
+    else // ntfs
+    {
+        char *cmd[] = { ntfs_path, src, path, NULL };
+        if(run_cmd(cmd) != 0)
+        {
+            ERROR("Failed to mount %s with ntfs-3g\n", src);
+            return -1;
+        }
     }
     part->mount_path = strdup(path);
     return 0;
