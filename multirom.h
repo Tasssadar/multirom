@@ -109,5 +109,6 @@ int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_parti
 struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uuid);
 struct usb_partition *multirom_get_data_partition(struct multirom_status *s);
 int multirom_path_exists(char *base, char *filename);
+int multirom_search_last_kmsg(const char *expr);
 
 #endif

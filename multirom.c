@@ -26,6 +26,7 @@
 #define BOOT_BLK "/dev/block/mmcblk0p2"
 #define MAX_ROM_NAME_LEN 26
 #define LAYOUT_VERSION "/data/.layout_version"
+#define SECOND_BOOT_KMESG "MultiromSaysNextBootShouldBeSecondMagic108"
 
 #define T_FOLDER 4
 
@@ -292,7 +293,8 @@ int multirom_load_status(struct multirom_status *s)
         return -1;
     }
 
-    s->is_second_boot = (int)(strstr(line, "mrom_kexecd=1") != NULL);
+    if(multirom_search_last_kmsg(SECOND_BOOT_KMESG) == 0)
+        s->is_second_boot = 1;
 
     while((fgets(line, sizeof(line), f)))
     {
@@ -1197,6 +1199,9 @@ int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd)
     strcpy(cmd[4], "--initrd=/initrd.img");
     sprintf(cmd[5], "--command-line=%s mrom_kexecd=1 %s", cmdline, header.cmdline);
 
+    // mrom_kexecd=1 param might be lost if kernel does not have kexec patches
+    ERROR(SECOND_BOOT_KMESG);
+
     res = 0;
 exit:
     fclose(f);
@@ -1482,4 +1487,24 @@ struct usb_partition *multirom_get_data_partition(struct multirom_status *s)
             return p;
     }
     return NULL;
+}
+
+int multirom_search_last_kmsg(const char *expr)
+{
+    FILE *f = fopen("/proc/last_kmsg", "r");
+    if(!f)
+        return -1;
+
+    char *buff = malloc(2048);
+    int res = -1;
+
+    while(res == -1 && fgets(buff, 2048, f))
+    {
+        if(strstr(buff, expr))
+            res = 0;
+    }
+
+    free(buff);
+    fclose(f);
+    return res;
 }
