@@ -1142,17 +1142,27 @@ int multirom_fill_kexec_ubuntu(struct multirom_status *s, struct multirom_rom *r
     }
 
     char folder[256];
+    char root[256];
+
     if(!rom->partition)
+    {
+        struct stat info;
+        if(stat("/dev/block/mmcblk0p10", &info) < 0)
+            strcpy(root, "/dev/mmcblk0p9");
+        else
+            strcpy(root, "/dev/mmcblk0p10");
         sprintf(folder, "rootsubdir=%s/root", rom->base_path + strlen(REALDATA));
+    }
     else
     {
+        sprintf(root, "UUID=%s", p->uuid);
         if(!strstr(p->fs, "ext"))
             sprintf(folder, "loop=%s/root.img loopfstype=ext4", strstr(rom->base_path, "/multirom/"));
         else
             sprintf(folder, "rootsubdir=%s/root", strstr(rom->base_path, "/multirom/"));
     }
 
-    sprintf(cmd[5], "--command-line=%s root=UUID=%s ro console=tty1 fbcon=rotate:1 mrom_kexecd=1 %s", str, p->uuid, folder);
+    sprintf(cmd[5], "--command-line=%s root=%s rw console=tty1 fbcon=rotate:1 mrom_kexecd=1 rootflags=defaults,noatime,nodiratime %s", str, root, folder);
 
     if(rom->partition && strstr(rom->partition->fs, "ntfs"))
         strcat(cmd[5], " rootfstype=ntfs-3g");
@@ -1262,6 +1272,7 @@ int multirom_update_partitions(struct multirom_status *s)
 
         char *t = strndup(p, strchr(p, ':') - p);
         part->name = strdup(strrchr(t, '/')+1);
+        free(t);
 
         t = strstr(p, "UUID=\"");
         if(t)
