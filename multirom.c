@@ -182,6 +182,7 @@ static int compare_rom_names(const void *a, const void *b)
 int multirom_default_status(struct multirom_status *s)
 {
     s->is_second_boot = 0;
+    s->set_quiet_ubuntu = 1;
     s->current_rom = NULL;
     s->roms = NULL;
 
@@ -313,6 +314,8 @@ int multirom_load_status(struct multirom_status *s)
             strcpy(auto_boot_rom, arg);
         else if(strstr(name, "curr_rom_part"))
             s->curr_rom_part = strdup(arg);
+        else if(strstr(name, "set_quiet_ubuntu"))
+            s->set_quiet_ubuntu = atoi(arg);
     }
 
     fclose(f);
@@ -376,6 +379,7 @@ int multirom_save_status(struct multirom_status *s)
     fprintf(f, "auto_boot_seconds=%d\n", s->auto_boot_seconds);
     fprintf(f, "auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "");
     fprintf(f, "curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "");
+    fprintf(f, "set_quiet_ubuntu=%d\n", s->set_quiet_ubuntu);
 
     fclose(f);
     return 0;
@@ -1162,10 +1166,13 @@ int multirom_fill_kexec_ubuntu(struct multirom_status *s, struct multirom_rom *r
             sprintf(folder, "rootsubdir=%s/root", strstr(rom->base_path, "/multirom/"));
     }
 
-    sprintf(cmd[5], "--command-line=%s root=%s rw console=tty1 fbcon=rotate:1 access=m2 quiet splash mrom_kexecd=1 rootflags=defaults,noatime,nodiratime %s", str, root, folder);
+    sprintf(cmd[5], "--command-line=%s root=%s rw console=tty1 fbcon=rotate:1 access=m2 splash mrom_kexecd=1 rootflags=defaults,noatime,nodiratime %s", str, root, folder);
 
     if(rom->partition && strstr(rom->partition->fs, "ntfs"))
         strcat(cmd[5], " rootfstype=ntfs-3g");
+
+    if(s->set_quiet_ubuntu)
+        strcat(cmd[5], " quiet");
 
     res = loop_mounted;
 exit:

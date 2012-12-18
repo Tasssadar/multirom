@@ -60,6 +60,7 @@ struct multirom_rom
 struct multirom_status
 {
     int is_second_boot;
+    int set_quiet_ubuntu;
     int auto_boot_seconds;
     struct multirom_rom *auto_boot_rom;
     struct multirom_rom *current_rom;

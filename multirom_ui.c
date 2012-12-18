@@ -507,7 +507,8 @@ void multirom_ui_tab_rom_boot_btn(int action)
     if(!rom)
         return;
 
-    if(M(rom->type) & MASK_UNSUPPORTED)
+    int m = M(rom->type);
+    if(m & MASK_UNSUPPORTED)
     {
         active_msgbox = fb_create_msgbox(550, 360);
         fb_msgbox_add_text(-1, 30, SIZE_BIG, "Error");
@@ -521,7 +522,8 @@ void multirom_ui_tab_rom_boot_btn(int action)
         return;
     }
 
-    if(rom->has_bootimg && multirom_has_kexec() != 0)
+    if (((m & MASK_UBUNTU) || ((m & MASK_ANDROID) && rom->has_bootimg)) &&
+        multirom_has_kexec() != 0)
     {
         active_msgbox = fb_create_msgbox(550, 360);
         fb_msgbox_add_text(-1, 30, SIZE_BIG, "Error");
