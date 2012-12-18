@@ -1162,7 +1162,7 @@ int multirom_fill_kexec_ubuntu(struct multirom_status *s, struct multirom_rom *r
             sprintf(folder, "rootsubdir=%s/root", strstr(rom->base_path, "/multirom/"));
     }
 
-    sprintf(cmd[5], "--command-line=%s root=%s rw console=tty1 fbcon=rotate:1 mrom_kexecd=1 rootflags=defaults,noatime,nodiratime %s", str, root, folder);
+    sprintf(cmd[5], "--command-line=%s root=%s rw console=tty1 fbcon=rotate:1 access=m2 quiet splash mrom_kexecd=1 rootflags=defaults,noatime,nodiratime %s", str, root, folder);
 
     if(rom->partition && strstr(rom->partition->fs, "ntfs"))
         strcat(cmd[5], " rootfstype=ntfs-3g");
