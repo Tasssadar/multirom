@@ -39,9 +39,7 @@ void multirom_ui_tab_rom_selected(listview_item *prev, listview_item *now);
 void multirom_ui_tab_rom_boot_btn(int action);
 void multirom_ui_tab_rom_refresh_usb(int action);
 void multirom_ui_tab_rom_update_usb(void *data);
-
-void *multirom_ui_tab_usb_init();
-void multirom_ui_tab_usb_destroy(void *data);
+void multirom_ui_tab_rom_set_empty(void *data, int empty);
 
 void *multirom_ui_tab_misc_init(void);
 void multirom_ui_tab_misc_destroy(void *data);

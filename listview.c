@@ -276,17 +276,14 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
         d->box = checkbox_create(0, 0, NULL);
 
         if(d->partition)
-        {
-            d->part_it = fb_add_text(0, 0, GRAY, SIZE_NORMAL, d->partition);
-            d->part_it->head.x = x + w - (strchr(d->partition, '\n')-d->partition+1)*8*SIZE_NORMAL;
-        }
+            d->part_it = fb_add_text(x+100, 0, GRAY, SIZE_SMALL, d->partition);
     }
 
     d->text_it->head.y = center_y(y, ROM_ITEM_H, SIZE_BIG);
     d->bottom_line->head.y = y+ROM_ITEM_H-2;
 
     if(d->part_it)
-        d->part_it->head.y = center_y(y, ROM_ITEM_H, SIZE_NORMAL*2);
+        d->part_it->head.y = d->text_it->head.y + SIZE_BIG*16 + 2;
 
     if(it->flags & IT_HOVER)
     {

@@ -257,7 +257,7 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
             continue;
 
         if(rom->partition)
-            sprintf(part_desc, "%s\n%s", rom->partition->name, rom->partition->fs);
+            sprintf(part_desc, "%s (%s)", rom->partition->name, rom->partition->fs);
 
         data = rom_item_create(rom->name, rom->partition ? part_desc : NULL);
         it = listview_add_item(view, rom->id, data);
@@ -392,6 +392,7 @@ typedef struct
     void **ui_elements;
     fb_text *rom_name;
     fb_text *title_text;
+    fb_text *usb_text;
     button *boot_btn;
 } tab_roms;
 
@@ -431,11 +432,11 @@ void *multirom_ui_tab_rom_init(int tab_type)
     int has_roms = (int)(t->list->items == NULL);
 
     // header
-    const char *str[] = { "Select ROM to boot:", "No ROMs in this location!" };
-    int x = center_x(0, fb_width, SIZE_BIG, str[has_roms]);
     int y = center_y(HEADER_HEIGHT, ROMS_HEADER_H, SIZE_BIG);
-    t->title_text = fb_add_text(x, y, LBLUE, SIZE_BIG, str[has_roms]);
+    t->title_text = fb_add_text(0, y, LBLUE, SIZE_BIG, "");
     list_add(t->title_text, &t->ui_elements);
+
+    multirom_ui_tab_rom_set_empty((void*)t, has_roms);
 
     // footer
     fb_rect *sep = fb_add_rect(0, fb_height-ROMS_FOOTER_H, fb_width, 2, LBLUE);
@@ -556,54 +557,41 @@ void multirom_ui_tab_rom_update_usb(void *data)
     multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
     listview_update_ui(t->list);
 
-    int has_roms = (int)(t->list->items == NULL);
-    const char *str[] = { "Select ROM to boot:", "No ROMs in this location!" };
-
-    t->title_text->head.x = center_x(0, fb_width, SIZE_BIG, str[has_roms]);
-    t->title_text->text = realloc(t->title_text->text, strlen(str[has_roms])+1);
-    strcpy(t->title_text->text, str[has_roms]);
-
-    button_enable(t->boot_btn, !has_roms);
-
+    multirom_ui_tab_rom_set_empty(data, (int)(t->list->items == NULL));
     fb_draw();
-}
-
-typedef struct 
-{
-    void **ui_elements;
-} tab_usb;
-
-void *multirom_ui_tab_usb_init()
-{
-    tab_usb *t = malloc(sizeof(tab_usb));
-    memset(t, 0, sizeof(tab_usb));
-
-    int i;
-    int y = center_y(HEADER_HEIGHT, fb_height-HEADER_HEIGHT, SIZE_BIG*2);
-    const char *str[] = { "Booting from USB", "is not yet supported.", NULL };
-    for(i = 0; str[i]; ++i)
-    {
-        int x = center_x(0, fb_width, SIZE_BIG, str[i]);
-        fb_text *text = fb_add_text(x, y, LBLUE, SIZE_BIG, str[i]);
-        list_add(text, &t->ui_elements);
-
-        y += 40;
-    }
-    return t;
-}
-
-void multirom_ui_tab_usb_destroy(void *data)
-{
-    tab_usb *t = (tab_usb*)data;
-
-    list_clear(&t->ui_elements, &fb_remove_item);
-
-    free(t);
 }
 
 void multirom_ui_tab_rom_refresh_usb(int action)
 {
     multirom_update_partitions(mrom_status);
+}
+
+void multirom_ui_tab_rom_set_empty(void *data, int empty)
+{
+    assert(empty == 0 || empty == 1);
+    tab_roms *t = (tab_roms*)data;
+
+    static const char *str[] = { "Select ROM to boot:", "No ROMs in this location!" };
+    t->title_text->head.x = center_x(0, fb_width, SIZE_BIG, str[empty]);
+    t->title_text->text = realloc(t->title_text->text, strlen(str[empty])+1);
+    strcpy(t->title_text->text, str[empty]);
+
+    if(t->boot_btn)
+        button_enable(t->boot_btn, !empty);
+
+    if(empty && !t->usb_text)
+    {
+        static const char *txt = "This list is refreshed automagically,\njust plug in the USB drive and  wait.";
+        int x = (fb_width/2 - (37*ISO_CHAR_WIDTH*SIZE_NORMAL)/2);
+        int y = center_y(HEADER_HEIGHT, t->list->h, SIZE_NORMAL);
+        t->usb_text = fb_add_text(x, y, WHITE, SIZE_NORMAL, txt);
+        list_add(t->usb_text, &t->ui_elements);
+    }
+    else if(!empty && t->usb_text)
+    {
+        list_rm(t->usb_text, &t->ui_elements, &fb_remove_item);
+        t->usb_text = NULL;
+    }
 }
 
 #define MISCBTN_W 530
