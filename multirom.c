@@ -742,31 +742,17 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
                     add_dummy = 0;
                     fputs("    export DUMMY_LINE_INGORE_IT 1\n", f_out);
                 }
-                fputc((int)'#', f_out);
-            }
-            // fixup sdcard tool
-            else if(strstr(line, "service sdcard") == line)
-            {
-                // not needed, now I use bind insead of link
-                // so just put the line as is
-                fputs(line, f_out);
-                /*char *p = strtok(line, " ");
-                while(p)
+
+                // This is needed to start sdcard and gps daemon
+                // (class late_start). Calling "on unencrypted"
+                // is in mount_all cmd, which is just not cool.
+                if(strstr(line, "mount_all"))
                 {
-                    if(strcmp(p, "/data/media") == 0)
-                        fputs("/realdata/media", f_out);
-                    else
-                        fputs(p, f_out);
+                    fputs("    setprop ro.crypto.state unencrypted\n", f_out);
+                    fputs("    trigger nonencrypted\n", f_out);
+                }
 
-                    if((p = strtok(NULL, " ")))
-                        fputc((int)' ', f_out);
-                }*/
-
-                // put it to main class and skip next line,
-                // it does not start on CM10 when it is in late_start, wtf?
-                fputs("    class main\n", f_out);
-                fgets(line, sizeof(line), f_in); // skip next line, should be "class late_start"
-                continue;
+                fputc((int)'#', f_out);
             }
             fputs(line, f_out);
         }
