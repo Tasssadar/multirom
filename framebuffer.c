@@ -74,10 +74,12 @@ int fb_open(void)
     fb_width = vi.xres;
     fb_height = vi.yres;
     fb_frozen = 0;
+    active_fb = 0;
 
     uint32_t *b_store = malloc(vi.xres*vi.yres*4);
     android_memset32(b_store, BLACK, vi.xres*vi.yres*4);
 
+    fb = framebuffers[0];
     fb->fd = fd;
     fb->size = vi.xres*vi.yres*4;
     fb->vi = vi;
