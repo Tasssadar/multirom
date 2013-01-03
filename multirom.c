@@ -512,6 +512,10 @@ int multirom_get_rom_type(struct multirom_rom *rom)
     else if(!multirom_path_exists(b, "root.img") && rom->partition)
         return ROM_UBUNTU_USB_IMG;
 
+    // Handle webOS
+    if(!multirom_path_exists(b, "webos-root"))
+        return ROM_WEBOS_INTERNAL;
+
     return ROM_UNKNOWN;
 }
 
@@ -609,7 +613,7 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     int exit = EXIT_UMOUNT;
     int type = to_boot->type;
 
-    if(((M(type) & MASK_UBUNTU) || to_boot->has_bootimg) && type != ROM_DEFAULT && s->is_second_boot == 0)
+    if(((M(type) & MASK_KEXEC) || to_boot->has_bootimg) && type != ROM_DEFAULT && s->is_second_boot == 0)
     {
         if(multirom_load_kexec(s, to_boot) != 0)
             return -1;
@@ -622,6 +626,7 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
         case ROM_UBUNTU_USB_DIR:
         case ROM_UBUNTU_USB_IMG:
         case ROM_UBUNTU_INTERNAL:
+        case ROM_WEBOS_INTERNAL:
             break;
         case ROM_ANDROID_USB_IMG:
         case ROM_ANDROID_USB_DIR:
@@ -1032,6 +1037,8 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
     //                    0            1                 2            3                       4            5            6
     char *cmd[] = { kexec_path, "--load-hardboot", malloc(1024), "--mem-min=0xA0000000", malloc(1024), malloc(1024), NULL };
 
+    ERROR("Filling kexec parameters...");
+
     int loop_mounted = 0;
     switch(rom->type)
     {
@@ -1046,6 +1053,10 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
         case ROM_ANDROID_USB_DIR:
         case ROM_ANDROID_USB_IMG:
             if(multirom_fill_kexec_android(rom, cmd) != 0)
+                goto exit;
+            break;
+        case ROM_WEBOS_INTERNAL:
+            if(multirom_fill_kexec_webos(rom, cmd) != 0)
                 goto exit;
             break;
         default:
@@ -1208,6 +1219,41 @@ int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd)
     res = 0;
 exit:
     fclose(f);
+    return res;
+}
+
+int multirom_fill_kexec_webos(struct multirom_rom *rom, char **cmd)
+{
+    char rom_path[256];
+    int loop_mounted = 0;
+    int res = -1;
+
+    sprintf(rom_path, "%s/webos-root/boot", rom->base_path);
+
+    if(multirom_find_file(cmd[2], "zImage", rom_path) == -1)
+    {
+        ERROR("Failed to get zImage path\n");
+        goto exit;
+    }
+
+    char str[1000];
+    if(multirom_find_file(str, "initrd.img", rom_path) == -1)
+    {
+        ERROR("Failed to get initrd path\n");
+        goto exit;
+    }
+
+    sprintf(cmd[4], "--initrd=%s", str);
+
+    if(multirom_get_cmdline(str, sizeof(str)) == -1)
+    {
+        ERROR("Failed to get cmdline\n");
+        return -1;
+    }
+
+    sprintf(cmd[5], "--command-line=%s mrom_kexecd=1 rootsubdir=/sdcard/%s/webos-root", str, rom->base_path + strlen(REALDATA));
+    res = 0;
+exit:
     return res;
 }
 
