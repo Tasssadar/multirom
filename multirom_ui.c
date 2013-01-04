@@ -540,6 +540,20 @@ void multirom_ui_tab_rom_boot_btn(int action)
         return;
     }
 
+    if((m & MASK_KEXEC) && strchr(rom->name, ' '))
+    {
+        active_msgbox = fb_create_msgbox(550, 360);
+        fb_msgbox_add_text(-1, 30, SIZE_BIG, "Error");
+        fb_msgbox_add_text(-1, 90, SIZE_NORMAL, "ROM's name contains spaces");
+        fb_msgbox_add_text(-1, 180, SIZE_NORMAL, "Remove spaces from ROM's name");
+        fb_msgbox_add_text(-1, active_msgbox->h-60, SIZE_NORMAL, "Touch anywhere to close");
+
+        fb_draw();
+        fb_freeze(1);
+        set_touch_handlers_mode(HANDLERS_ALL);
+        return;
+    }
+
     pthread_mutex_lock(&exit_code_mutex);
     selected_rom = rom;
     exit_ui_code = UI_EXIT_BOOT_ROM;
