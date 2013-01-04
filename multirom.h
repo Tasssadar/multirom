@@ -13,23 +13,18 @@ enum
     ROM_UBUNTU_USB_IMG    = 4,
     ROM_ANDROID_USB_DIR   = 5,
     ROM_UBUNTU_USB_DIR    = 6,
-    ROM_WEBOS_INTERNAL    = 7,
-    ROM_WEBOS_USB_IMG     = 8,
-    ROM_WEBOS_USB_DIR     = 9,
 
-    ROM_UNSUPPORTED_INT   = 10,
-    ROM_UNSUPPORTED_USB   = 11,
-    ROM_UNKNOWN           = 12
+    ROM_UNSUPPORTED_INT   = 7,
+    ROM_UNSUPPORTED_USB   = 8,
+    ROM_UNKNOWN           = 9
 };
 
 #define M(x) (1 << x)
-#define MASK_INTERNAL (M(ROM_DEFAULT) | M(ROM_ANDROID_INTERNAL) | M(ROM_UBUNTU_INTERNAL) | M(ROM_UNSUPPORTED_INT) | M(ROM_WEBOS_INTERNAL))
+#define MASK_INTERNAL (M(ROM_DEFAULT) | M(ROM_ANDROID_INTERNAL) | M(ROM_UBUNTU_INTERNAL) | M(ROM_UNSUPPORTED_INT))
 #define MASK_USB_ROMS (M(ROM_ANDROID_USB_IMG) | M(ROM_UBUNTU_USB_IMG) | M(ROM_ANDROID_USB_DIR) | M(ROM_UBUNTU_USB_DIR) | M(ROM_UNSUPPORTED_USB))
 #define MASK_UBUNTU (M(ROM_UBUNTU_INTERNAL) | M(ROM_UBUNTU_USB_IMG)| M(ROM_UBUNTU_USB_DIR))
 #define MASK_ANDROID (M(ROM_ANDROID_USB_DIR) | M(ROM_ANDROID_USB_IMG) | M(ROM_ANDROID_INTERNAL))
 #define MASK_UNSUPPORTED (M(ROM_UNSUPPORTED_USB) | M(ROM_UNSUPPORTED_INT))
-#define MASK_WEBOS (M(ROM_WEBOS_INTERNAL) | M(ROM_WEBOS_USB_IMG) | M(ROM_WEBOS_USB_DIR))
-#define MASK_KEXEC (MASK_UBUNTU | MASK_WEBOS)
 
 enum 
 {
@@ -103,7 +98,6 @@ int multirom_get_cmdline(char *str, size_t size);
 int multirom_find_file(char *res, const char *name_part, const char *path);
 int multirom_fill_kexec_ubuntu(struct multirom_status *s, struct multirom_rom *rom, char **cmd);
 int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd);
-int multirom_fill_kexec_webos(struct multirom_rom *rom, char **cmd);
 int multirom_extract_bytes(const char *dst, FILE *src, size_t size);
 int multirom_update_partitions(struct multirom_status *s);
 void multirom_destroy_partition(void *part);
