@@ -3,28 +3,37 @@
 
 #include <pthread.h>
 #include "boot_img_hdr.h"
+#include "util.h"
 
 enum
 {
     ROM_DEFAULT           = 0,
-    ROM_ANDROID_INTERNAL  = 1,
-    ROM_UBUNTU_INTERNAL   = 2,
-    ROM_ANDROID_USB_IMG   = 3,
-    ROM_UBUNTU_USB_IMG    = 4,
-    ROM_ANDROID_USB_DIR   = 5,
-    ROM_UBUNTU_USB_DIR    = 6,
 
-    ROM_UNSUPPORTED_INT   = 7,
-    ROM_UNSUPPORTED_USB   = 8,
-    ROM_UNKNOWN           = 9
+    ROM_ANDROID_INTERNAL  = 1,
+    ROM_ANDROID_USB_IMG   = 2,
+    ROM_ANDROID_USB_DIR   = 3,
+
+    ROM_LINUX_INTERNAL    = 4,
+    ROM_LINUX_USB         = 5,
+
+    // deprecated
+    ROM_UBUNTU_INTERNAL   = 6, 
+    ROM_UBUNTU_USB_IMG    = 7,
+    ROM_UBUNTU_USB_DIR    = 8,
+
+    ROM_UNSUPPORTED_INT   = 9,
+    ROM_UNSUPPORTED_USB   = 10,
+    ROM_UNKNOWN           = 11
 };
 
 #define M(x) (1 << x)
-#define MASK_INTERNAL (M(ROM_DEFAULT) | M(ROM_ANDROID_INTERNAL) | M(ROM_UBUNTU_INTERNAL) | M(ROM_UNSUPPORTED_INT))
-#define MASK_USB_ROMS (M(ROM_ANDROID_USB_IMG) | M(ROM_UBUNTU_USB_IMG) | M(ROM_ANDROID_USB_DIR) | M(ROM_UBUNTU_USB_DIR) | M(ROM_UNSUPPORTED_USB))
-#define MASK_UBUNTU (M(ROM_UBUNTU_INTERNAL) | M(ROM_UBUNTU_USB_IMG)| M(ROM_UBUNTU_USB_DIR))
+#define MASK_INTERNAL (M(ROM_DEFAULT) | M(ROM_ANDROID_INTERNAL) | M(ROM_UBUNTU_INTERNAL) | M(ROM_UNSUPPORTED_INT) | M(ROM_LINUX_INTERNAL))
+#define MASK_USB_ROMS (M(ROM_ANDROID_USB_IMG) | M(ROM_UBUNTU_USB_IMG) | M(ROM_ANDROID_USB_DIR) | M(ROM_UBUNTU_USB_DIR) | M(ROM_UNSUPPORTED_USB) | M(ROM_LINUX_USB))
 #define MASK_ANDROID (M(ROM_ANDROID_USB_DIR) | M(ROM_ANDROID_USB_IMG) | M(ROM_ANDROID_INTERNAL))
 #define MASK_UNSUPPORTED (M(ROM_UNSUPPORTED_USB) | M(ROM_UNSUPPORTED_INT))
+#define MASK_LINUX (M(ROM_LINUX_INTERNAL) | M(ROM_LINUX_USB))
+#define MASK_UBUNTU (M(ROM_UBUNTU_INTERNAL) | M(ROM_UBUNTU_USB_IMG)| M(ROM_UBUNTU_USB_DIR)) // deprecated
+#define MASK_KEXEC (MASK_LINUX | MASK_UBUNTU)
 
 enum 
 {
@@ -45,6 +54,11 @@ struct usb_partition
     char *uuid;
     char *fs;
     int keep_mounted;
+};
+
+struct rom_info {
+    // for future vals?
+    map *str_vals;
 };
 
 struct multirom_rom
@@ -97,6 +111,7 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom);
 int multirom_get_cmdline(char *str, size_t size);
 int multirom_find_file(char *res, const char *name_part, const char *path);
 int multirom_fill_kexec_ubuntu(struct multirom_status *s, struct multirom_rom *rom, char **cmd);
+int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *rom, char **cmd);
 int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd);
 int multirom_extract_bytes(const char *dst, FILE *src, size_t size);
 int multirom_update_partitions(struct multirom_status *s);
@@ -104,12 +119,16 @@ void multirom_destroy_partition(void *part);
 void multirom_set_usb_refresh_thread(struct multirom_status *s, int run);
 void multirom_set_usb_refresh_handler(void (*handler)(void));
 int multirom_mount_usb(struct usb_partition *part);
-int multirom_mount_loop(const char *src, const char *dst, int flags);
+int multirom_mount_loop(const char *src, const char *dst, const char *fs, int flags);
 int multirom_copy_log(void);
 int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_partition *p);
 struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uuid);
 struct usb_partition *multirom_get_data_partition(struct multirom_status *s);
 int multirom_path_exists(char *base, char *filename);
 int multirom_search_last_kmsg(const char *expr);
+struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multirom_rom *rom);
+void multirom_destroy_rom_info(struct rom_info *info);
+char **multirom_get_rom_info_str(struct rom_info *info, char *key);
+int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multirom_status *status, struct multirom_rom *rom);
 
 #endif

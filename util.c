@@ -652,6 +652,32 @@ int list_rm(void *item, void ***list, void (*destroy_callback)(void*))
     return -1;
 }
 
+int list_rm_at(int idx, void ***list, void (*destroy_callback)(void*))
+{
+    int size = list_size(*list);
+    if(idx < 0 || idx >= size-1)
+        return -1;
+
+    void *item = (*list)[idx];
+    if(destroy_callback)
+        (*destroy_callback)(item);
+
+    --size;
+    if(size == 1)
+    {
+        free(*list);
+        *list = NULL;
+        return 0;
+    }
+
+    int i = idx;
+    for(; i+1 < size; ++i)
+        (*list)[i] = (*list)[i+1];
+
+    *list= realloc(*list, size*sizeof(item));
+    return 0;
+}
+
 void list_clear(void ***list, void (*destroy_callback)(void*))
 {
     if(*list == NULL)
@@ -706,4 +732,86 @@ int in_rect(int x, int y, int rx, int ry, int rw, int rh)
     if(x > rx+rw || y > ry+rh)
         return 0;
     return 1;
+}
+
+char *parse_string(char *src)
+{
+    char *start = strchr(src, '"');
+    char *end = strrchr(src, '"');
+
+    if(!start || start == end || start+1 == end)
+        return NULL;
+    ++start;
+    return strndup(start, end-start);
+}
+
+map *map_create(void)
+{
+    map *m = malloc(sizeof(map));
+    memset(m, 0, sizeof(map));
+    return m;
+}
+
+void map_destroy(map *m, void (*destroy_callback)(void*))
+{
+    if(!m)
+        return;
+
+    list_clear(&m->keys, &free);
+    list_clear(&m->values, destroy_callback);
+    free(m);
+}
+
+void map_add(map *m, char *key, void *val, void (*destroy_callback)(void*))
+{
+    int idx = map_find(m, key);
+    if(idx >= 0)
+    {
+        if(destroy_callback)
+            (*destroy_callback)(m->values[idx]);
+        m->values[idx] = val;
+    }
+    else
+        map_add_not_exist(m, key, val);
+}
+
+void map_add_not_exist(map *m, char *key, void *val)
+{
+    list_add(strdup(key), &m->keys);
+    list_add(val, &m->values);
+}
+
+void map_rm(map *m, char *key, void (*destroy_callback)(void*))
+{
+    int idx = map_find(m, key);
+    if(idx < 0)
+        return;
+
+    list_rm_at(idx, &m->keys, &free);
+    list_rm_at(idx, &m->values, destroy_callback);
+}
+
+int map_find(map *m, char *key)
+{
+    int i;
+    for(i = 0; m->keys && m->keys[i]; ++i)
+        if(strcmp(m->keys[i], key) == 0)
+            return i;
+    return -1; 
+}
+
+void *map_get_val(map *m, char *key)
+{
+    int idx = map_find(m, key);
+    if(idx < 0)
+        return NULL;
+    return m->values[idx];
+}
+
+void **map_get_ref(map *m, char *key)
+{
+    int idx = map_find(m, key);
+    if(idx < 0)
+        return NULL;
+    return &m->values[idx];
 }

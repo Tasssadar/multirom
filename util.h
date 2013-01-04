@@ -44,8 +44,11 @@ int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const cha
 int run_cmd(char **cmd);
 char *run_get_stdout(char **cmd);
 
+char *parse_string(char *src);
+
 void list_add(void *item, void ***list);
 int list_rm(void *item, void ***list, void (*destroy_callback)(void*));
+int list_rm_at(int idx, void ***list, void (*destroy_callback)(void*));
 int list_size(void **list);
 int list_item_count(void **list);
 int list_copy(void **source, void ***dest);
@@ -53,5 +56,20 @@ int list_move(void ***source, void ***dest);
 void list_clear(void ***list, void (*destroy_callback)(void*));
 
 inline int in_rect(int x, int y, int rx, int ry, int rw, int rh);
+
+typedef struct
+{
+    char **keys;
+    void **values;
+} map;
+
+map *map_create(void);
+void map_destroy(map *m, void (*destroy_callback)(void*));
+void map_add(map *m, char *key, void *val, void (*destroy_callback)(void*));
+void map_add_not_exist(map *m, char *key, void *val);
+void map_rm(map *m, char *key, void (*destroy_callback)(void*));
+int map_find(map *m, char *key);
+void *map_get_val(map *m, char *key);
+void **map_get_ref(map *m, char *key);
 
 #endif

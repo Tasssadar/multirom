@@ -147,6 +147,20 @@ int multirom(void)
     return exit;
 }
 
+int multirom_init_fb(void)
+{
+    vt_set_mode(1);
+
+    if(fb_open() < 0)
+    {
+        ERROR("Failed to open framebuffer!");
+        return -1;
+    }
+
+    fb_fill(BLACK);
+    return 0;
+}
+
 void multirom_emergency_reboot(void)
 {
     if(multirom_init_fb() < 0)
@@ -493,6 +507,15 @@ int multirom_get_rom_type(struct multirom_rom *rom)
         }
     }
 
+    // handle linux ROMs
+    if(!multirom_path_exists(b, "rom_info.txt"))
+    {
+        if(!rom->partition)
+            return ROM_LINUX_INTERNAL;
+        else
+            return ROM_LINUX_USB;
+    }
+
     // Handle ubuntu
     if(!multirom_path_exists(b, "root"))
     {
@@ -609,7 +632,7 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     int exit = EXIT_UMOUNT;
     int type = to_boot->type;
 
-    if(((M(type) & MASK_UBUNTU) || to_boot->has_bootimg) && type != ROM_DEFAULT && s->is_second_boot == 0)
+    if(((M(type) & MASK_KEXEC) || to_boot->has_bootimg) && type != ROM_DEFAULT && s->is_second_boot == 0)
     {
         if(multirom_load_kexec(s, to_boot) != 0)
             return -1;
@@ -622,6 +645,8 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
         case ROM_UBUNTU_USB_DIR:
         case ROM_UBUNTU_USB_IMG:
         case ROM_UBUNTU_INTERNAL:
+        case ROM_LINUX_INTERNAL:
+        case ROM_LINUX_USB:
             break;
         case ROM_ANDROID_USB_IMG:
         case ROM_ANDROID_USB_DIR:
@@ -667,20 +692,6 @@ void multirom_free_rom(void *rom)
     free(((struct multirom_rom*)rom)->name);
     free(((struct multirom_rom*)rom)->base_path);
     free(rom);
-}
-
-int multirom_init_fb(void)
-{
-    vt_set_mode(1);
-
-    if(fb_open() < 0)
-    {
-        ERROR("Failed to open framebuffer!");
-        return -1;
-    }
-
-    fb_fill(BLACK);
-    return 0;
 }
 
 #define EXEC_MASK (S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP)
@@ -798,7 +809,7 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
         }
         else
         {
-            if(multirom_mount_loop(from, to, flags[img][i]) < 0)
+            if(multirom_mount_loop(from, to, "ext4", flags[img][i]) < 0)
                 return -1;
         }
     }
@@ -1000,6 +1011,16 @@ int multirom_find_file(char *res, const char *name_part, const char *path)
     if(!d)
         return -1;
 
+    int wild = 0;
+    int len = strlen(name_part);
+    char *name = (char*)name_part;
+    char *i;
+    if((i = strchr(name_part, '*')))
+    {
+        wild = 1;
+        name = strndup(name_part, i-name);
+    }
+
     int ret= -1;
     struct dirent *dr;
     while(ret == -1 && (dr = readdir(d)))
@@ -1007,14 +1028,16 @@ int multirom_find_file(char *res, const char *name_part, const char *path)
         if(dr->d_name[0] == '.')
             continue;
 
-        if(!strstr(dr->d_name, name_part))
+        if ((!wild && strcmp(dr->d_name, name)) ||
+           ((wild && !strstr(dr->d_name, name))))
             continue;
 
         sprintf(res, "%s/%s", path, dr->d_name);
         ret = 0;
     }
-
     closedir(d);
+    if(wild)
+        free(name);
     return ret;
 }
 
@@ -1046,6 +1069,12 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
         case ROM_ANDROID_USB_DIR:
         case ROM_ANDROID_USB_IMG:
             if(multirom_fill_kexec_android(rom, cmd) != 0)
+                goto exit;
+            break;
+        case ROM_LINUX_INTERNAL:
+        case ROM_LINUX_USB:
+            loop_mounted = multirom_fill_kexec_linux(s, rom, cmd);
+            if(loop_mounted < 0)
                 goto exit;
             break;
         default:
@@ -1096,7 +1125,7 @@ int multirom_fill_kexec_ubuntu(struct multirom_status *s, struct multirom_rom *r
         // mount the image file
         mkdir("/mnt/image", 0777);
         sprintf(rom_path, "%s/root.img", rom->base_path);
-        if(multirom_mount_loop(rom_path, "/mnt/image", MS_NOATIME) < 0)
+        if(multirom_mount_loop(rom_path, "/mnt/image", "ext4", MS_NOATIME) < 0)
             return -1;
 
         loop_mounted = 1;
@@ -1209,6 +1238,340 @@ int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd)
 exit:
     fclose(f);
     return res;
+}
+
+static char *find_boot_file(char *path, char *root_path, char *base_path)
+{
+    if(!path)
+        return NULL;
+
+    struct stat info;
+    char cmd[256];
+    char *root = strstr(path, "%r");
+    if(root)
+        sprintf(cmd, "%s/%s", root_path, root+2);
+    else
+        sprintf(cmd, "%s/%s", base_path, path);
+
+    char *last = strrchr(cmd, '/');
+    if(!last)
+    {
+        ERROR("Failed to find boot file: %s\n", cmd);
+        return NULL;
+    }
+
+    *last = 0;
+
+    char *name = strdup(last+1);
+    char res[256];
+    if(multirom_find_file(res, name, cmd) < 0)
+    {
+        ERROR("Failed to find boot file: %s\n", cmd);
+        free(name);
+        return NULL;
+    }
+    return strdup(res);
+}
+
+int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *rom, char **cmd)
+{
+    struct rom_info *info = multirom_parse_rom_info(s, rom);
+    if(!info)
+        return -1;
+
+    int res = -1;
+    int root_type = -1; // 0 = dir, 1 = img
+    int loop_mounted = 0;
+    char root_path[256];
+
+    struct stat st;
+    char path[256];
+    char *tmp;
+    if((tmp = map_get_val(info->str_vals, "root_dir")))
+    {
+        sprintf(path, "%s/%s", rom->base_path, tmp);
+        if(stat(path, &st) >= 0)
+        {
+            root_type = 0;
+            strcpy(root_path, path);
+        }
+        else
+            ERROR("Path %s not found!\n", path);
+    }
+
+    if(root_type == -1 && (tmp = map_get_val(info->str_vals, "root_img")))
+    {
+        sprintf(path, "%s/%s", rom->base_path, tmp);
+        if(stat(path, &st) >= 0)
+        {
+            root_type = 1;
+
+            char *img_fs = map_get_val(info->str_vals, "root_img_fs");
+
+            // mount the image file
+            mkdir("/mnt/image", 0777);
+            if(multirom_mount_loop(path, "/mnt/image", img_fs ? img_fs : "ext4", MS_NOATIME) < 0)
+                goto exit;
+
+            loop_mounted = 1;
+            strcpy(root_path, "/mnt/image");
+        }
+        else
+            ERROR("Path %s not found!\n", path);
+    }
+
+    if(root_type == -1)
+    {
+        ERROR("Failed to find root of the ROM!\n");
+        goto exit;
+    }
+
+    char *str = find_boot_file(map_get_val(info->str_vals, "kernel_path"), root_path, rom->base_path);
+    if(!str)
+        goto exit;
+
+    cmd[2] = str;
+
+    str = find_boot_file(map_get_val(info->str_vals, "initrd_path"), root_path, rom->base_path);
+    if(str)
+    {
+        sprintf(cmd[4], "--initrd=%s", str);
+        free(str);
+    }
+
+    sprintf(cmd[5], "--command-line=%s ", map_get_val(info->str_vals, "base_cmdline"));
+
+    if(root_type == 0 && (str = map_get_val(info->str_vals, "dir_cmdline")))
+        strcat(cmd[5], str);
+    else if(root_type == 1 && (str = map_get_val(info->str_vals, "img_cmdline")))
+        strcat(cmd[5], str);
+
+    res = loop_mounted;
+exit:
+    multirom_destroy_rom_info(info);
+    return res;
+}
+
+#define INFO_LINE_BUFF 4096
+struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multirom_rom *rom)
+{
+    char path[256];
+
+    sprintf(path, "%s/rom_info.txt", rom->base_path);
+    ERROR("Parsing %s...\n", path);
+
+    FILE *f = fopen(path, "r");
+    if(!f)
+    {
+        ERROR("Failed to open %s!\n", path);
+        return NULL;
+    }
+
+    struct rom_info *i = malloc(sizeof(struct rom_info));
+    memset(i, 0, sizeof(struct rom_info));
+    i->str_vals = map_create();
+
+    char *line = malloc(INFO_LINE_BUFF);
+    char key[32];
+    int line_cnt = 1;
+    for(; fgets(line, INFO_LINE_BUFF, f); ++line_cnt)
+    {
+        if(line[0] == '#')
+            continue;
+
+        char *val = strchr(line, '=');
+        if(!val || val-line >= sizeof(key)-1)
+            continue;
+
+        strncpy(key, line, val-line);
+        key[val-line] = 0;
+        ++val; // skip '=' char
+
+        // if string value
+        {
+            char *str = parse_string(val);
+            if(str)
+                map_add(i->str_vals, key, str, &free);
+            else
+                ERROR("Line %d: failed to parse string\n", line_cnt);
+        }
+    }
+    free(line);
+    fclose(f);
+
+    static const char *roots[] = { "root_dir", "root_img", NULL };
+    int found_root = 0;
+    int y;
+    for(y = 0; roots[y] && !found_root; ++y)
+    {
+        if(map_find(i->str_vals, roots[y]) >= 0)
+            found_root = 1;
+    }
+
+    if(!found_root)
+        ERROR("Failed to find any root key in %s\n", path);
+
+    static const char *req_keys[] = { "type", "kernel_path", "base_cmdline", NULL};
+    int failed = !found_root;
+    for(y = 0; req_keys[y]; ++y)
+    {
+        if(map_find(i->str_vals, req_keys[y]) < 0)
+        {
+            ERROR("Key \"%s\" key not found in %s\n", req_keys[y], path);
+            failed = 1;
+        }
+    }
+
+    if(failed == 1)
+    {
+        multirom_destroy_rom_info(i);
+        return NULL;
+    }
+
+    ERROR("Replacing aliases in the cmdline...\n");
+    static const char *cmdlines[] = { "base_cmdline", "img_cmdline", "dir_cmdline", NULL };
+    char **ref;
+    for(y = 0; cmdlines[y]; ++y)
+        if((ref = map_get_ref(i->str_vals, cmdlines[y])))
+            multirom_replace_aliases_cmdline(ref, i, s, rom);
+    return i;
+}
+
+void multirom_destroy_rom_info(struct rom_info *info)
+{
+    if(!info)
+        return;
+
+    map_destroy(info->str_vals, &free);
+    free(info);
+}
+
+/*
+# Set up the cmdline
+# img_cmdline and dir_cmdline are appended to base_cmdline.
+# Several aliases are used:
+#  - %b - base command line from bootloader. You want this as first thing in cmdline.
+#  - %d - root device. is either "UUID=..." (USB drive) or "/dev/mmcblk0p9" or "/dev/mmcblk0p10"
+#  - %r - root fs type
+#  - %s - root directory, from root of the root device
+#  - %i - root image, from root of the root device
+#  - %f - fs of the root image
+*/
+int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multirom_status *status, struct multirom_rom *rom)
+{
+    size_t c = strcspn (*s, "%");
+
+    if(strlen(*s) == c)
+        return 0;
+
+    struct usb_partition *p = rom->partition;
+    if(!p && (p = multirom_get_data_partition(status)) == NULL)
+    {
+        ERROR("Failed to find ROM's root partition!\n");
+        return 0;
+    }
+
+    char *buff = malloc(4096);
+    memset(buff, 0, 4096);
+
+    char *itr_o = buff;
+    char *itr_i = *s;
+    int res = -1;
+
+    while(1)
+    {
+        memcpy(itr_o, itr_i, c);
+        itr_o += c;
+        itr_i += c;
+
+        if(*itr_i != '%')
+            break;
+
+        ++itr_i;
+        switch(*itr_i)
+        {
+            // base command line from bootloader. You want this as first thing in cmdline.
+            case 'b':
+            {
+                if(multirom_get_cmdline(itr_o, 1024) == -1)
+                {
+                    ERROR("Failed to get cmdline\n");
+                    goto fail;
+                }
+                break;
+            }
+            // root device. is either "UUID=..." (USB drive) or "/dev/mmcblk0p9" or "/dev/mmcblk0p10"
+            case 'd':
+            {
+                if(!rom->partition)
+                {
+                    struct stat info;
+                    if(stat("/dev/block/mmcblk0p10", &info) < 0)
+                        strcpy(itr_o, "/dev/mmcblk0p9");
+                    else
+                        strcpy(itr_o, "/dev/mmcblk0p10");
+                }
+                else
+                    sprintf(itr_o, "UUID=%s", rom->partition->uuid);
+                break;
+            }
+            // root fs type
+            case 'r':
+                if(!strcmp(p->fs, "ntfs"))
+                    strcpy(itr_o, "ntfs-3g");
+                else
+                    strcpy(itr_o, p->fs);
+                break;
+            // root directory, from root of the root device
+            case 's':
+            {
+                char *d = map_get_val(i->str_vals, "root_dir");
+                if(!d)
+                {
+                    ERROR("%%s alias found in cmdline, but root_dir key was not found!\n");
+                    break;
+                }
+                sprintf(itr_o, "%s/%s", rom->base_path+strlen(REALDATA), d);
+                break;
+            }
+            // root image, from root of the root device
+            case 'i':
+            {
+                char *d = map_get_val(i->str_vals, "root_img");
+                if(!d)
+                {
+                    ERROR("%%s alias found in cmdline, but root_img key was not found!\n");
+                    break;
+                }
+                sprintf(itr_o, "%s/%s", rom->base_path+strlen(REALDATA), d);
+                break;
+            }
+            // fs of the root image
+            case 'f':
+            {
+                char *d = map_get_val(i->str_vals, "root_img_fs");
+                if(!d)
+                {
+                    ERROR("%%s alias found in cmdline, but root_img_fs key was not found!\n");
+                    break;
+                }
+                strcpy(itr_o, d);
+                break;
+            }
+        }
+        itr_o += strlen(itr_o);
+        c = strcspn (++itr_i, "%");
+    }
+
+    free(*s);
+    *s = realloc(buff, strlen(buff)+1);
+
+    ERROR("Alias-replaced cmdline: %s\n", *s);
+    return 0;
+
+fail:
+    free(buff);
+    return -1;
 }
 
 int multirom_extract_bytes(const char *dst, FILE *src, size_t size)
@@ -1389,7 +1752,7 @@ void multirom_set_usb_refresh_handler(void (*handler)(void))
     usb_refresh_handler = handler;
 }
 
-int multirom_mount_loop(const char *src, const char *dst, int flags)
+int multirom_mount_loop(const char *src, const char *dst, const char *fs, int flags)
 {
     int file_fd, device_fd, res = -1;
 
@@ -1423,7 +1786,7 @@ int multirom_mount_loop(const char *src, const char *dst, int flags)
         goto close_dev;
     }
 
-    if(mount(path, dst, "ext4", flags, "") < 0)
+    if(mount(path, dst, fs, flags, "") < 0)
         ERROR("Failed to mount loop (%d: %s)\n", errno, strerror(errno));
     else
         res = 0;
