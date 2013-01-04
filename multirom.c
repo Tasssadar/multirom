@@ -1283,13 +1283,19 @@ int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *ro
     int root_type = -1; // 0 = dir, 1 = img
     int loop_mounted = 0;
     char root_path[256];
+    char base_path[64];
+
+    if(!rom->partition)
+        strcpy(base_path, REALDATA);
+    else
+        strcpy(base_path, rom->partition->mount_path);
 
     struct stat st;
     char path[256];
     char *tmp;
     if((tmp = map_get_val(info->str_vals, "root_dir")))
     {
-        sprintf(path, "%s/%s", rom->base_path, tmp);
+        sprintf(path, "%s/%s", base_path, tmp);
         if(stat(path, &st) >= 0)
         {
             root_type = 0;
@@ -1301,7 +1307,7 @@ int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *ro
 
     if(root_type == -1 && (tmp = map_get_val(info->str_vals, "root_img")))
     {
-        sprintf(path, "%s/%s", rom->base_path, tmp);
+        sprintf(path, "%s/%s", base_path, tmp);
         if(stat(path, &st) >= 0)
         {
             root_type = 1;
@@ -1428,12 +1434,18 @@ struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multi
         return NULL;
     }
 
+    char **ref;
+    ERROR("Replacing aliases in root paths...\n");
+    for(y = 0; roots[y]; ++y)
+        if((ref = map_get_ref(i->str_vals, roots[y])))
+            multirom_replace_aliases_root_path(ref, rom);
+
     ERROR("Replacing aliases in the cmdline...\n");
     static const char *cmdlines[] = { "base_cmdline", "img_cmdline", "dir_cmdline", NULL };
-    char **ref;
     for(y = 0; cmdlines[y]; ++y)
         if((ref = map_get_ref(i->str_vals, cmdlines[y])))
             multirom_replace_aliases_cmdline(ref, i, s, rom);
+
     return i;
 }
 
@@ -1531,7 +1543,7 @@ int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multir
                     ERROR("%%s alias found in cmdline, but root_dir key was not found!\n");
                     break;
                 }
-                sprintf(itr_o, "%s/%s", rom->base_path+strlen(REALDATA), d);
+                sprintf(itr_o, "%s", d);
                 break;
             }
             // root image, from root of the root device
@@ -1543,7 +1555,7 @@ int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multir
                     ERROR("%%s alias found in cmdline, but root_img key was not found!\n");
                     break;
                 }
-                sprintf(itr_o, "%s/%s", rom->base_path+strlen(REALDATA), d);
+                sprintf(itr_o, "%s", d);
                 break;
             }
             // fs of the root image
@@ -1572,6 +1584,25 @@ int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multir
 fail:
     free(buff);
     return -1;
+}
+
+// - %m - ROMs folder (eg. /sdcard/multirom/roms/*rom_name*)
+int multirom_replace_aliases_root_path(char **s, struct multirom_rom *rom)
+{
+    char *alias = strstr(*s, "%m");
+    if(!alias)
+        return 0;
+
+    char *buff[256] = { 0 };
+    memcpy(buff, *s, alias-*s);
+    strcat(buff, rom->base_path+strlen(rom->partition ? rom->partition->mount_path : REALDATA));
+    strcat(buff, alias+2);
+
+    ERROR("Alias-replaced path: %s\n", buff);
+
+    free(*s);
+    *s = strdup(buff);
+    return 0;
 }
 
 int multirom_extract_bytes(const char *dst, FILE *src, size_t size)

@@ -130,5 +130,6 @@ struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multi
 void multirom_destroy_rom_info(struct rom_info *info);
 char **multirom_get_rom_info_str(struct rom_info *info, char *key);
 int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multirom_status *status, struct multirom_rom *rom);
+int multirom_replace_aliases_root_path(char **s, struct multirom_rom *rom);
 
 #endif
