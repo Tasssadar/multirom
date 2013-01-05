@@ -1139,7 +1139,7 @@ int multirom_fill_kexec_ubuntu(struct multirom_status *s, struct multirom_rom *r
     }
 
     char str[1000];
-    if(multirom_find_file(str, "initrd.img-", rom_path) == -1)
+    if(multirom_find_file(str, "initrd.img-*", rom_path) == -1)
     {
         ERROR("Failed to get initrd path\n");
         goto exit;
