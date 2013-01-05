@@ -1,5 +1,6 @@
 # This file contains info about ROMs capabilites and boot process.
-# It should be placed in ROM's folder.
+# It should be placed in ROM's folder (eg. /media/multirom/roms/*rom_name*)
+# and must be named "rom_info.txt".
 # Make sure you got the syntax correct, as the parser is probably pretty
 # dumb. Lines with comments must start with #. Beware the whitespaces.
 # If you need to use " character in string, just use it, no need to escape it
