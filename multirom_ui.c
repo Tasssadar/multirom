@@ -523,7 +523,7 @@ void multirom_ui_tab_rom_boot_btn(int action)
         return;
     }
 
-    if (((m & MASK_UBUNTU) || ((m & MASK_ANDROID) && rom->has_bootimg)) &&
+    if (((m & MASK_KEXEC) || ((m & MASK_ANDROID) && rom->has_bootimg)) &&
         multirom_has_kexec() != 0)
     {
         active_msgbox = fb_create_msgbox(550, 360);
