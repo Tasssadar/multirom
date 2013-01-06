@@ -962,6 +962,7 @@ int multirom_has_kexec(void)
     struct stat info;
     if(stat("/proc/config.gz", &info) < 0)
     {
+        ERROR("Failed to open /proc/config.gz!\n");
         has_kexec = -1;
         return has_kexec;
     }
@@ -972,11 +973,21 @@ int multirom_has_kexec(void)
     char *cmd_gzip[] = { busybox_path, "gzip", "-d", "/config.gz", NULL };
     run_cmd(cmd_gzip);
 
-    char *cmd_grep[] = { busybox_path, "grep", "CONFIG_KEXEC_HARDBOOT=y", "/config", NULL };
-    if(run_cmd(cmd_grep) == 0)
-        has_kexec = 0;
-    else
-        has_kexec = -1;
+    has_kexec = 0;
+
+    int i;
+    static const char *checks[] = { "CONFIG_KEXEC_HARDBOOT=y", "CONFIG_ATAGS_PROC=y" };
+    //                   0             1       2     3
+    char *cmd_grep[] = { busybox_path, "grep", NULL, "/config", NULL };
+    for(i = 0; i < ARRAY_SIZE(checks); ++i)
+    {
+        cmd_grep[2] = checks[i];
+        if(run_cmd(cmd_grep) != 0)
+        {
+            has_kexec = -1;
+            ERROR("%s not found in /proc/config.gz!\n", checks[i]);
+        }
+    }
 
     return has_kexec;
 }
