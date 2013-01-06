@@ -1082,13 +1082,36 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
             goto exit;
     }
 
-    ERROR("Loading kexec: %s %s %s %s %s %s\n", cmd[0], cmd[1], cmd[2], cmd[3], cmd[4], cmd[5]);
-    ERROR("%s\n", cmd[5]);
+    ERROR("Loading kexec: %s %s %s %s %s\n", cmd[0], cmd[1], cmd[2], cmd[3], cmd[4]);
+    ERROR("With cmdline: ");
+    char *itr = cmd[5];
+    int len;
+    for(len = strlen(itr); len > 0; len = strlen(itr))
+    {
+       if(len > 450)
+           len = 450;
+       char *b = strndup(itr, len);
+       ERROR("  %s\n", b);
+       free(b);
+       itr += len;
+    }
 
     if(run_cmd(cmd) == 0)
         res = 0;
     else
-        ERROR("kexec call failed!\n");
+    {
+        ERROR("kexec call failed, re-running it to get info:\n");
+        char *r = run_get_stdout(cmd);
+        if(!r)
+            ERROR("run_get_stdout returned NULL!\n");
+        char *p = strtok(r, "\n\r");
+        while(p)
+        {
+            ERROR("  %s\n", p);
+            p = strtok(NULL, "\n\r");
+        }
+        free(r);
+    }
 
     char *cmd_cp[] = { busybox_path, "cp", kexec_path, "/kexec", NULL };
     run_cmd(cmd_cp);
