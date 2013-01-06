@@ -1,5 +1,5 @@
 #!/sbin/sh
-ROM_NAME="plasma"
+ROM_NAME="reference"
 
 path=""
 if [ -d "/data/media/multirom/roms" ] ; then

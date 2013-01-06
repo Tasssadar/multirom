@@ -10,14 +10,29 @@ run_program("/sbin/busybox", "mount", "/data");
 package_extract_dir("scripts", "/tmp/");
 
 set_perm(0, 0, 0777, "/tmp/extract.sh");
+set_perm(0, 0, 0777, "/tmp/check.sh");
 set_perm(0, 0, 0777, "/tmp/gnutar");
+
+ui_print("Checking MultiROM version...");
+ifelse(run_program("/tmp/check.sh") != 0,
+(
+    ui_print("** Your MultiROM version too low for this ZIP file");
+    ui_print("** or unable to find MultiROM binary.");
+    abort();
+),"");
 
 ui_print("Exracting archive to tmp...");
 package_extract_dir("rom", "/tmp/rom/");
 
 ui_print("Extracting archive to ROM folder (will take a while)...");
-assert(run_program("/tmp/extract.sh") == 0);
+ifelse(run_program("/tmp/extract.sh") != 0,
+(
+    ui_print("** Failed to exract archive. Probably not enough space in /data");
+    abort();
+),"");
 
 delete("/tmp/extract.sh");
+delete("/tmp/check.sh");
+delete("/tmp/gnutar");
 delete_recursive("/tmp/rom");
 ui_print("Installation complete!");

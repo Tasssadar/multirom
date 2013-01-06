@@ -204,7 +204,9 @@ int main(int argc, char *argv[])
 
     klog_init();
 
-    ERROR("Initializing devices");
+    ERROR("Running trampoline v%d\n", VERSION_TRAMPOLINE);
+
+    ERROR("Initializing devices...");
     devices_init();
     ERROR("Done initializing");
 

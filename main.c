@@ -57,6 +57,8 @@ int main(int argc, char *argv[])
     srand(time(0));
     klog_init();
 
+    ERROR("Running MultiROM v%d\n", VERSION_MULTIROM);
+
     int exit = multirom();
 
     if(exit >= 0)
