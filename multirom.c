@@ -207,6 +207,12 @@ static int compare_rom_names(const void *a, const void *b)
 {
     struct multirom_rom *rom_a = *((struct multirom_rom **)a);
     struct multirom_rom *rom_b = *((struct multirom_rom **)b);
+
+    if(strcmp(rom_a->name, INTERNAL_ROM_NAME) == 0)
+        return -1;
+    else if(strcmp(rom_b->name, INTERNAL_ROM_NAME) == 0)
+        return 1;
+
     return strcoll(rom_a->name, rom_b->name);
 }
 
