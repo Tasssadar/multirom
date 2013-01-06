@@ -120,7 +120,7 @@ void multirom_set_usb_refresh_thread(struct multirom_status *s, int run);
 void multirom_set_usb_refresh_handler(void (*handler)(void));
 int multirom_mount_usb(struct usb_partition *part);
 int multirom_mount_loop(const char *src, const char *dst, const char *fs, int flags);
-int multirom_copy_log(void);
+int multirom_copy_log(char *klog);
 int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_partition *p);
 struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uuid);
 struct usb_partition *multirom_get_data_partition(struct multirom_status *s);
@@ -131,5 +131,6 @@ void multirom_destroy_rom_info(struct rom_info *info);
 char **multirom_get_rom_info_str(struct rom_info *info, char *key);
 int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multirom_status *status, struct multirom_rom *rom);
 int multirom_replace_aliases_root_path(char **s, struct multirom_rom *rom);
+char *multirom_get_klog(void);
 
 #endif

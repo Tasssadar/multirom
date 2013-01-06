@@ -98,6 +98,7 @@ typedef struct
 void fb_remove_item(void *item);
 int fb_generate_item_id();
 fb_text *fb_add_text(int x, int y, int color, int size, const char *fmt, ...);
+fb_text *fb_add_text_long(int x, int y, int color, int size, char *text);
 fb_rect *fb_add_rect(int x, int y, int w, int h, int color);
 fb_msgbox *fb_create_msgbox(int w, int h);
 fb_text *fb_msgbox_add_text(int x, int y, int size, char *txt, ...);

@@ -177,7 +177,8 @@ void fb_draw_text(fb_text *t)
                 y = t->head.y;
                 continue;
         }
-        fb_draw_char(x, y, t->text[i], t->color, t->size);
+        if(x < fb_width)
+            fb_draw_char(x, y, t->text[i], t->color, t->size);
         x += c_width;
     }
 }
@@ -292,7 +293,12 @@ fb_text *fb_add_text(int x, int y, int color, int size, const char *fmt, ...)
     vsnprintf(txt, sizeof(txt), fmt, ap);
     va_end(ap);
 
-    fb_text *t = fb_create_text_item(x, y, color, size, txt);
+    return fb_add_text_long(x, y, color, size, txt);
+}
+
+fb_text *fb_add_text_long(int x, int y, int color, int size, char *text)
+{
+    fb_text *t = fb_create_text_item(x, y, color, size, text);
 
     pthread_mutex_lock(&fb_mutex);
     list_add(t, &fb_items.texts);

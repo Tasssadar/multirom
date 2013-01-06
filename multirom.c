@@ -169,16 +169,33 @@ void multirom_emergency_reboot(void)
         return;
     }
 
-    fb_add_text(0, 150, WHITE, SIZE_NORMAL, 
+    char *klog = multirom_get_klog();
+
+    fb_add_text(0, 120, WHITE, SIZE_NORMAL, 
                 "An error occured.\nShutting down MultiROM to avoid data corruption.\n"
                 "Report this error to the developer!\nDebug info: /sdcard/multirom/error.txt\n\n"
                 "Press POWER button to reboot.");
+
+    fb_add_text(0, 370, GRAYISH, SIZE_SMALL, "Last lines from klog:");
+    fb_add_rect(0, 390, fb_width, 1, GRAYISH);
+
+    char *tail = klog+strlen(klog);
+    int count = 0;
+    while(tail > klog && count < 50)
+    {
+        --tail;
+        if(*tail == '\n')
+            ++count;
+    }
+
+    fb_add_text_long(0, 395, GRAYISH, SIZE_SMALL, ++tail);
 
     fb_draw();
     fb_clear();
     fb_close();
 
-    multirom_copy_log();
+    multirom_copy_log(klog);
+    free(klog);
 
     // Wait for power key
     start_input_thread();
@@ -1131,7 +1148,7 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
     if(loop_mounted)
         umount("/mnt/image");
 
-    multirom_copy_log();
+    multirom_copy_log(NULL);
 
 exit:
     free(cmd[2]);
@@ -1863,24 +1880,39 @@ close_file:
     return res;
 }
 
-int multirom_copy_log(void)
+char *multirom_get_klog(void)
 {
-    int res = 0;
-
     int len = klogctl(10, NULL, 0);
     if      (len < 16*1024)      len = 16*1024;
     else if (len > 16*1024*1024) len = 16*1024*1024;
 
     char *buff = malloc(len);
     klogctl(3, buff, len);
-    if(len > 0)
+    if(len <= 0)
+    {
+        ERROR("Could not get klog!\n");
+        free(buff);
+        return NULL;
+    }
+    return buff;
+}
+
+int multirom_copy_log(char *klog)
+{
+    int res = 0;
+    int freeLog = (klog == NULL);
+
+    if(!klog)
+        klog = multirom_get_klog();
+
+    if(klog)
     {
         char path[256];
         sprintf(path, "%s/error.txt", multirom_dir);
         FILE *f = fopen(path, "w");
         if(f)
         {
-            fwrite(buff, 1, len, f);
+            fwrite(klog, 1, strlen(klog), f);
             fclose(f);
             chmod(REALDATA"/media/multirom/error.txt", 0777);
         }
@@ -1895,7 +1927,9 @@ int multirom_copy_log(void)
         ERROR("Could not get klog!\n");
         res = -1;
     }
-    free(buff);
+
+    if(freeLog)
+        free(klog);
     return res;
 }
 
