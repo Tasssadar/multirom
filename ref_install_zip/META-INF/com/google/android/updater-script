@@ -1,0 +1,23 @@
+assert(getprop("ro.product.device") == "grouper" || getprop("ro.build.product") == "grouper" ||
+       getprop("ro.product.device") == "tilapia" || getprop("ro.build.product") == "tilapia");
+
+ui_print("Plasma active testing zip");
+show_progress(1.00000, 10);
+
+ui_print("Extracting scripts...");
+run_program("/sbin/busybox", "mount", "/data");
+
+package_extract_dir("scripts", "/tmp/");
+
+set_perm(0, 0, 0777, "/tmp/extract.sh");
+set_perm(0, 0, 0777, "/tmp/gnutar");
+
+ui_print("Exracting archive to tmp...");
+package_extract_dir("rom", "/tmp/rom/");
+
+ui_print("Extracting archive to ROM folder (will take a while)...");
+assert(run_program("/tmp/extract.sh") == 0);
+
+delete("/tmp/extract.sh");
+delete_recursive("/tmp/rom");
+ui_print("Installation complete!");
