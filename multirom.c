@@ -203,6 +203,20 @@ void multirom_emergency_reboot(void)
     stop_input_thread();
 }
 
+static int find_idx(int c)
+{
+    static const char *capital = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    static const char *normal  = "abcdefghijklmnopqrstuvwxyz";
+
+    char *p;
+    if((p = strchr(capital, c)))
+        return p - capital;
+    else if((p = strchr(normal, c)))
+        return p - normal;
+
+    return -c;
+}
+
 static int compare_rom_names(const void *a, const void *b)
 {
     struct multirom_rom *rom_a = *((struct multirom_rom **)a);
@@ -213,7 +227,36 @@ static int compare_rom_names(const void *a, const void *b)
     else if(strcmp(rom_b->name, INTERNAL_ROM_NAME) == 0)
         return 1;
 
-    return strcoll(rom_a->name, rom_b->name);
+    char *itr_a = rom_a->name;
+    char *itr_b = rom_b->name;
+
+    while(1)
+    {
+        if(*itr_a == 0)
+            return -1;
+        else if(*itr_b == 0)
+            return 1;
+
+        if(*itr_a == *itr_b)
+        {
+            ++itr_a;
+            ++itr_b;
+            continue;
+        }
+
+        int idx_a = find_idx(*itr_a);
+        int idx_b = find_idx(*itr_b);
+
+        if(idx_a == idx_b)
+        {
+            ++itr_a;
+            ++itr_b;
+            continue;
+        }
+
+        return idx_a < idx_b ? -1 : 1;
+    }
+    return 0;
 }
 
 int multirom_default_status(struct multirom_status *s)
