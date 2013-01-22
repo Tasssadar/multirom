@@ -1054,7 +1054,8 @@ int multirom_has_kexec(void)
             ERROR("%s not found in /proc/config.gz!\n", checks[i]);
         }
     }
-
+    
+    remove("/config");
     return has_kexec;
 }
 
