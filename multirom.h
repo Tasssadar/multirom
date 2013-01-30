@@ -16,24 +16,18 @@ enum
     ROM_LINUX_INTERNAL    = 4,
     ROM_LINUX_USB         = 5,
 
-    // deprecated
-    ROM_UBUNTU_INTERNAL   = 6, 
-    ROM_UBUNTU_USB_IMG    = 7,
-    ROM_UBUNTU_USB_DIR    = 8,
-
-    ROM_UNSUPPORTED_INT   = 9,
-    ROM_UNSUPPORTED_USB   = 10,
-    ROM_UNKNOWN           = 11
+    ROM_UNSUPPORTED_INT   = 6,
+    ROM_UNSUPPORTED_USB   = 7,
+    ROM_UNKNOWN           = 8
 };
 
 #define M(x) (1 << x)
-#define MASK_INTERNAL (M(ROM_DEFAULT) | M(ROM_ANDROID_INTERNAL) | M(ROM_UBUNTU_INTERNAL) | M(ROM_UNSUPPORTED_INT) | M(ROM_LINUX_INTERNAL))
-#define MASK_USB_ROMS (M(ROM_ANDROID_USB_IMG) | M(ROM_UBUNTU_USB_IMG) | M(ROM_ANDROID_USB_DIR) | M(ROM_UBUNTU_USB_DIR) | M(ROM_UNSUPPORTED_USB) | M(ROM_LINUX_USB))
+#define MASK_INTERNAL (M(ROM_DEFAULT) | M(ROM_ANDROID_INTERNAL) | M(ROM_UNSUPPORTED_INT) | M(ROM_LINUX_INTERNAL))
+#define MASK_USB_ROMS (M(ROM_ANDROID_USB_IMG) | M(ROM_ANDROID_USB_DIR) | M(ROM_UNSUPPORTED_USB) | M(ROM_LINUX_USB))
 #define MASK_ANDROID (M(ROM_ANDROID_USB_DIR) | M(ROM_ANDROID_USB_IMG) | M(ROM_ANDROID_INTERNAL))
 #define MASK_UNSUPPORTED (M(ROM_UNSUPPORTED_USB) | M(ROM_UNSUPPORTED_INT))
 #define MASK_LINUX (M(ROM_LINUX_INTERNAL) | M(ROM_LINUX_USB))
-#define MASK_UBUNTU (M(ROM_UBUNTU_INTERNAL) | M(ROM_UBUNTU_USB_IMG)| M(ROM_UBUNTU_USB_DIR)) // deprecated
-#define MASK_KEXEC (MASK_LINUX | MASK_UBUNTU)
+#define MASK_KEXEC (MASK_LINUX)
 
 enum 
 {
@@ -74,7 +68,6 @@ struct multirom_rom
 struct multirom_status
 {
     int is_second_boot;
-    int set_quiet_ubuntu;
     int auto_boot_seconds;
     struct multirom_rom *auto_boot_rom;
     struct multirom_rom *current_rom;
@@ -110,7 +103,6 @@ int multirom_has_kexec(void);
 int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom);
 int multirom_get_cmdline(char *str, size_t size);
 int multirom_find_file(char *res, const char *name_part, const char *path);
-int multirom_fill_kexec_ubuntu(struct multirom_status *s, struct multirom_rom *rom, char **cmd);
 int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *rom, char **cmd);
 int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd);
 int multirom_extract_bytes(const char *dst, FILE *src, size_t size);

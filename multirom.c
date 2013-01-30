@@ -262,7 +262,6 @@ static int compare_rom_names(const void *a, const void *b)
 int multirom_default_status(struct multirom_status *s)
 {
     s->is_second_boot = 0;
-    s->set_quiet_ubuntu = 1;
     s->current_rom = NULL;
     s->roms = NULL;
 
@@ -394,8 +393,6 @@ int multirom_load_status(struct multirom_status *s)
             strcpy(auto_boot_rom, arg);
         else if(strstr(name, "curr_rom_part"))
             s->curr_rom_part = strdup(arg);
-        else if(strstr(name, "set_quiet_ubuntu"))
-            s->set_quiet_ubuntu = atoi(arg);
     }
 
     fclose(f);
@@ -459,7 +456,6 @@ int multirom_save_status(struct multirom_status *s)
     fprintf(f, "auto_boot_seconds=%d\n", s->auto_boot_seconds);
     fprintf(f, "auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "");
     fprintf(f, "curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "");
-    fprintf(f, "set_quiet_ubuntu=%d\n", s->set_quiet_ubuntu);
 
     fclose(f);
     return 0;
@@ -582,24 +578,40 @@ int multirom_get_rom_type(struct multirom_rom *rom)
             return ROM_LINUX_USB;
     }
 
-    // Handle ubuntu
-    if(!multirom_path_exists(b, "root"))
+    // Handle Ubuntu 13.04 - deprecated
+    if ((!multirom_path_exists(b, "root") && multirom_path_exists(b, "boot.img")) ||
+       (!multirom_path_exists(b, "root.img") && rom->partition))
     {
-        if(multirom_path_exists(b, "boot.img") != 0) // boot.img does not exist: 13.04
+        // try to copy rom_info.txt in there, ubuntu is deprecated
+        ERROR("Found deprecated Ubuntu 13.04, trying to copy rom_info.txt...\n");
+        char *cmd[] = { busybox_path, "cp", malloc(256), malloc(256), NULL };
+        sprintf(cmd[2], "%s/infos/ubuntu.txt", multirom_dir);
+        sprintf(cmd[3], "%s/rom_info.txt", b);
+
+        int res = run_cmd(cmd);
+
+        free(cmd[2]);
+        free(cmd[3]);
+
+        if(res != 0)
         {
-            if(!rom->partition) return ROM_UBUNTU_INTERNAL;
-            else                return ROM_UBUNTU_USB_DIR;
-        }
-        else
-        {
-            // if it has boot.img, it probably is 12.10, which is unsupported by
-            // v3 and higher
+            ERROR("Failed to copy rom_info for Ubuntu!\n");
             if(!rom->partition) return ROM_UNSUPPORTED_INT;
             else                return ROM_UNSUPPORTED_USB;
         }
+        else
+        {
+            if(!rom->partition) return ROM_LINUX_INTERNAL;
+            else                return ROM_LINUX_USB;
+        }
     }
-    else if(!multirom_path_exists(b, "root.img") && rom->partition)
-        return ROM_UBUNTU_USB_IMG;
+
+    // Handle ubuntu 12.10
+    if(!multirom_path_exists(b, "root") && !multirom_path_exists(b, "boot.img"))
+    {
+        if(!rom->partition) return ROM_UNSUPPORTED_INT;
+        else                return ROM_UNSUPPORTED_USB;
+    }
 
     return ROM_UNKNOWN;
 }
@@ -708,9 +720,6 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     switch(type)
     {
         case ROM_DEFAULT:
-        case ROM_UBUNTU_USB_DIR:
-        case ROM_UBUNTU_USB_IMG:
-        case ROM_UBUNTU_INTERNAL:
         case ROM_LINUX_INTERNAL:
         case ROM_LINUX_USB:
             break;
@@ -729,13 +738,6 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
 
             if(to_boot->partition)
                 to_boot->partition->keep_mounted = 1;
-
-            struct stat info;
-            if(!(exit & (EXIT_REBOOT | EXIT_KEXEC)) && stat("/init.rc", &info) < 0)
-            {
-                ERROR("Trying to boot android with ubuntu boot.img, aborting!\n");
-                return -1;
-            }
             break;
         }
         default:
@@ -1054,7 +1056,7 @@ int multirom_has_kexec(void)
             ERROR("%s not found in /proc/config.gz!\n", checks[i]);
         }
     }
-    
+
     remove("/config");
     return has_kexec;
 }
@@ -1136,13 +1138,6 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
     int loop_mounted = 0;
     switch(rom->type)
     {
-        case ROM_UBUNTU_INTERNAL:
-        case ROM_UBUNTU_USB_DIR:
-        case ROM_UBUNTU_USB_IMG:
-            loop_mounted = multirom_fill_kexec_ubuntu(s, rom, cmd);
-            if(loop_mounted < 0)
-                goto exit;
-            break;
         case ROM_ANDROID_INTERNAL:
         case ROM_ANDROID_USB_DIR:
         case ROM_ANDROID_USB_IMG:
@@ -1204,94 +1199,6 @@ exit:
     free(cmd[2]);
     free(cmd[4]);
     free(cmd[5]);
-    return res;
-}
-
-// PURGE ac100-tarball-installer
-// export FLASH_KERNEL_SKIP=1
-// upravit init a scripts/local
-// touch /var/lib/oem-config/run
-// update-initramfs
-
-int multirom_fill_kexec_ubuntu(struct multirom_status *s, struct multirom_rom *rom, char **cmd)
-{
-    char rom_path[256];
-    int loop_mounted = 0;
-    int res = -1;
-
-    if(!rom->partition || strstr(rom->partition->fs, "ext"))
-        sprintf(rom_path, "%s/root/boot", rom->base_path);
-    else
-    {
-        // mount the image file
-        mkdir("/mnt/image", 0777);
-        sprintf(rom_path, "%s/root.img", rom->base_path);
-        if(multirom_mount_loop(rom_path, "/mnt/image", "ext4", MS_NOATIME) < 0)
-            return -1;
-
-        loop_mounted = 1;
-        strcpy(rom_path, "/mnt/image/boot");
-    }
-
-    if(multirom_find_file(cmd[2], "vmlinuz", rom_path) == -1)
-    {
-        ERROR("Failed to get vmlinuz path\n");
-        goto exit;
-    }
-
-    char str[1000];
-    if(multirom_find_file(str, "initrd.img-*", rom_path) == -1)
-    {
-        ERROR("Failed to get initrd path\n");
-        goto exit;
-    }
-
-    sprintf(cmd[4], "--initrd=%s", str);
-
-    if(multirom_get_cmdline(str, sizeof(str)) == -1)
-    {
-        ERROR("Failed to get cmdline\n");
-        return -1;
-    }
-
-    struct usb_partition *p = rom->partition;
-    if(!p && (p = multirom_get_data_partition(s)) == NULL)
-    {
-        ERROR("Failed to find ubuntu root partition!\n");
-        goto exit;
-    }
-
-    char folder[256];
-    char root[256];
-
-    if(!rom->partition)
-    {
-        struct stat info;
-        if(stat("/dev/block/mmcblk0p10", &info) < 0)
-            strcpy(root, "/dev/mmcblk0p9");
-        else
-            strcpy(root, "/dev/mmcblk0p10");
-        sprintf(folder, "rootsubdir=%s/root", rom->base_path + strlen(REALDATA));
-    }
-    else
-    {
-        sprintf(root, "UUID=%s", p->uuid);
-        if(!strstr(p->fs, "ext"))
-            sprintf(folder, "loop=%s/root.img loopfstype=ext4", strstr(rom->base_path, "/multirom/"));
-        else
-            sprintf(folder, "rootsubdir=%s/root", strstr(rom->base_path, "/multirom/"));
-    }
-
-    sprintf(cmd[5], "--command-line=%s root=%s rw console=tty0 fbcon=rotate:1 access=m2 splash mrom_kexecd=1 rootflags=defaults,noatime,nodiratime %s", str, root, folder);
-
-    if(rom->partition && strstr(rom->partition->fs, "ntfs"))
-        strcat(cmd[5], " rootfstype=ntfs-3g");
-
-    if(s->set_quiet_ubuntu)
-        strcat(cmd[5], " quiet");
-
-    res = loop_mounted;
-exit:
     return res;
 }
 

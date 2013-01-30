@@ -28,7 +28,7 @@ root_img_fs="ext4"
 # If ROM is in images, it will mount the image and load it from there.
 # You can use  * _at the end of the filename_ as wildcard character.
 kernel_path="%r/boot/vmlinuz"
-initrd_path="%r/boot/initrd.img-*"
+initrd_path="%r/boot/initrd.img"
 
 # Set up the cmdline
 # img_cmdline and dir_cmdline are appended to base_cmdline.
@@ -39,6 +39,6 @@ initrd_path="%r/boot/initrd.img-*"
 #  - %s - root directory, from root of the root device
 #  - %i - root image, from root of the root device
 #  - %f - fs of the root image
-base_cmdline="%b root=%d rootfstype=%r rw console=tty0 fbcon=rotate:1 access=m2 splash rootflags=defaults,noatime,nodiratime quiet"
+base_cmdline="%b root=%d rootfstype=%r rw console=tty0 fbcon=rotate:1 access=m2 quiet splash rootflags=defaults,noatime,nodiratime"
 img_cmdline="loop=%i loopfstype=%f"
 dir_cmdline="rootsubdir=%s"
