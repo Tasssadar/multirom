@@ -14,7 +14,8 @@ LOCAL_SRC_FILES:= \
 	listview.c \
 	checkbox.c \
 	button.c \
-	pong.c
+	pong.c \
+	progressdots.c
 
 LOCAL_MODULE:= multirom
 LOCAL_MODULE_TAGS := eng

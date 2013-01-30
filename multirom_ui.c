@@ -16,6 +16,7 @@
 #include "checkbox.h"
 #include "version.h"
 #include "pong.h"
+#include "progressdots.h"
 
 #define HEADER_HEIGHT 75
 #define TAB_BTN_WIDTH 165
@@ -394,6 +395,7 @@ typedef struct
     fb_text *title_text;
     fb_text *usb_text;
     button *boot_btn;
+    progdots *usb_prog;
 } tab_roms;
 
 void *multirom_ui_tab_rom_init(int tab_type)
@@ -474,6 +476,9 @@ void multirom_ui_tab_rom_destroy(void *data)
     listview_destroy(t->list);
 
     fb_rm_text(t->rom_name);
+
+    if(t->usb_prog)
+        progdots_destroy(t->usb_prog);
 
     free(t);
 }
@@ -600,9 +605,15 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
         int y = center_y(HEADER_HEIGHT, t->list->h, SIZE_NORMAL);
         t->usb_text = fb_add_text(x, y, WHITE, SIZE_NORMAL, txt);
         list_add(t->usb_text, &t->ui_elements);
+
+        x = (fb_width/2) - (PROGDOTS_W/2);
+        t->usb_prog = progdots_create(x, y+100);
     }
     else if(!empty && t->usb_text)
     {
+        progdots_destroy(t->usb_prog);
+        t->usb_prog = NULL;
+
         list_rm(t->usb_text, &t->ui_elements, &fb_remove_item);
         t->usb_text = NULL;
     }

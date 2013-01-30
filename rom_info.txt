@@ -39,6 +39,6 @@ initrd_path="%r/boot/initrd.img"
 #  - %s - root directory, from root of the root device
 #  - %i - root image, from root of the root device
 #  - %f - fs of the root image
-base_cmdline="%b root=%d rootfstype=%r rw console=tty0 fbcon=rotate:1 access=m2 quiet splash rootflags=defaults,noatime,nodiratime"
+base_cmdline="%b root=%d rootfstype=%r rw console=tty0 access=m2 quiet splash rootflags=defaults,noatime,nodiratime"
 img_cmdline="loop=%i loopfstype=%f"
 dir_cmdline="rootsubdir=%s"

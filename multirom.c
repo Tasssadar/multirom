@@ -1761,8 +1761,10 @@ void *multirom_usb_refresh_thread_work(void *status)
             if(stat("/dev/block", &info) >= 0 && info.st_ctime > last_change)
             {
                 multirom_update_partitions((struct multirom_status*)status);
+
                 if(usb_refresh_handler)
                     (*usb_refresh_handler)();
+
                 last_change = info.st_ctime;
             }
             timer = 500;
