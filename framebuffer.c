@@ -481,9 +481,9 @@ void fb_draw(void)
         return;
 
     uint32_t i;
-    fb_fill(BLACK);
-
     pthread_mutex_lock(&fb_mutex);
+
+    fb_fill(BLACK);
 
     // rectangles
     for(i = 0; fb_items.rects && fb_items.rects[i]; ++i)
