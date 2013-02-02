@@ -84,6 +84,9 @@ static const char *uevent_paths[] =
     "/sys/devices/virtual/input/input1",
     "/sys/devices/virtual/input/input1/event1",
 
+    // USB drive is in here
+    "/sys/devices/platform/tegra-ehci.0*",
+
     NULL
 };
 
@@ -113,6 +116,64 @@ static void *uevent_thread_work(void *cookie)
     return NULL;
 }
 
+static void init_single_path(const char *path)
+{
+    int fd, dfd;
+    DIR *d;
+
+    INFO("Initializing device %s", path);
+    d = opendir(path);
+    if(!d)
+    {
+        ERROR("Failed to open dir %s", path);
+        return;
+    }
+
+    dfd = dirfd(d);
+
+    fd = openat(dfd, "uevent", O_WRONLY);
+    if(fd >= 0)
+    {
+        write(fd, "add\n", 4);
+        close(fd);
+        handle_device_fd();
+    }
+    else
+        ERROR("Failed to open uevent at %s", path);
+
+    closedir(d);
+}
+
+static void init_folder(const char *path)
+{
+    init_single_path(path);
+
+    DIR *d = opendir(path);
+    if(!d)
+    {
+        ERROR("Failed to open folder %s\n", path);
+        return;
+    }
+
+    struct dirent *dr;
+    while((dr = readdir(d)))
+    {
+        if (dr->d_type != DT_DIR ||
+           (dr->d_name[0] == '.' && (dr->d_name[1] == 0 || dr->d_name[1] == '.')))
+           continue;
+
+        char *p = malloc(strlen(path) + strlen(dr->d_name) + 2);
+        strcpy(p, path);
+        strcat(p, "/");
+        strcat(p, dr->d_name);
+
+        init_folder(p);
+
+        free(p);
+    }
+    closedir(d);
+}
+
 void devices_init(void)
 {
     /* is 64K enough? udev uses 16MB! */
@@ -123,31 +184,18 @@ void devices_init(void)
     fcntl(device_fd, F_SETFD, FD_CLOEXEC);
     fcntl(device_fd, F_SETFL, O_NONBLOCK);
 
-    int i, fd, dfd;
-    DIR *d;
+    int i, len;
     for(i = 0; uevent_paths[i]; ++i)
     {
-        INFO("Initializing device %s", uevent_paths[i]);
-        d = opendir(uevent_paths[i]);
-        if(!d)
-        {
-            ERROR("Failed to open dir %s", uevent_paths[i]);
-            continue;
-        }
-
-        dfd = dirfd(d);
-
-        fd = openat(dfd, "uevent", O_WRONLY);
-        if(fd >= 0)
-        {
-            write(fd, "add\n", 4);
-            close(fd);
-            handle_device_fd();
-        }
+        len = strlen(uevent_paths[i]);
+        if(uevent_paths[i][len-1] != '*')
+            init_single_path(uevent_paths[i]);
         else
-            ERROR("Failed to open uevent at %s", uevent_paths[i]);
-
-        closedir(d);
+        {
+            char *path = strndup(uevent_paths[i], len-1);
+            init_folder(path);
+            free(path);
+        }
     }
 
     run_event_thread = 1;
