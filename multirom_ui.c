@@ -159,16 +159,17 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
 void multirom_ui_init_header(void)
 {
-    fb_add_text(15, 5, WHITE, SIZE_EXTRA, "MultiROM");
-
-    static const char *str[] = { "Internal", "USB", "Misc" };
-
+    int i, text_x, text_y;
     int x = fb_width - (TAB_BTN_WIDTH*TAB_COUNT);
+
+    static const char *str[] = { "Internal", "USB", "Misc", "MultiROM" };
+
+    text_x = center_x(0, x, SIZE_EXTRA, str[3]);
+    fb_add_text(text_x, 5, WHITE, SIZE_EXTRA, str[3]);
 
     pong_btn_w = x;
     pong_btn_h = HEADER_HEIGHT;
 
-    int i, text_x, text_y;
     for(i = 0; i < TAB_COUNT; ++i)
     {
         text_x = center_x(x, TAB_BTN_WIDTH, SIZE_NORMAL, str[i]);
@@ -280,7 +281,10 @@ int multirom_ui_touch_handler(touch_event *ev, void *data)
     if(ev->changed & TCHNG_ADDED)
     {
         if(++touch_count == 4)
+        {
             multirom_take_screenshot();
+            touch_count = 0;
+        }
 
         if(active_msgbox)
         {
@@ -300,7 +304,8 @@ int multirom_ui_touch_handler(touch_event *ev, void *data)
     if(ev->x < pong_btn_w && ev->y < pong_btn_h)
         start_pong = 1;
 
-    --touch_count;
+    if(touch_count > 0)
+        --touch_count;
 
     int x = fb_width - (TAB_BTN_WIDTH*TAB_COUNT);
     if(ev->y > HEADER_HEIGHT || ev->x < x)
