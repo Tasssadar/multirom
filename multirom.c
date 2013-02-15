@@ -1133,7 +1133,7 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
     int res = -1;
     // kexec --load-hardboot ./zImage --command-line="$(cat /proc/cmdline)" --mem-min=0xA0000000 --initrd=./rd.img
     //                    0            1                 2            3                       4            5            6
-    char *cmd[] = { kexec_path, "--load-hardboot", malloc(1024), "--mem-min=0xA0000000", malloc(1024), malloc(1024), NULL };
+    char *cmd[] = { kexec_path, "--load-hardboot", malloc(1024), "--mem-min=0x90000000", malloc(1024), malloc(1024), NULL };
 
     int loop_mounted = 0;
     switch(rom->type)
