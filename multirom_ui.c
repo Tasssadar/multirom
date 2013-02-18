@@ -23,6 +23,7 @@
 
 static fb_text *tab_texts[TAB_COUNT] = { 0 };
 static fb_rect *selected_tab_rect = NULL;
+static button *tab_btns[TAB_COUNT] = { NULL };
 static int selected_tab = -1;
 static void *tab_data = NULL;
 static struct multirom_status *mrom_status = NULL;
@@ -31,8 +32,7 @@ static volatile int exit_ui_code = -1;
 static fb_msgbox *active_msgbox = NULL;
 static volatile int update_usb_roms = 0;
 static volatile int start_pong = 0;
-static int pong_btn_w = 0;
-static int pong_btn_h = 0;
+static button *pong_btn = NULL;
 
 static pthread_mutex_t exit_code_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -148,6 +148,16 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     fb_draw();
     fb_freeze(1);
 
+    button_destroy(pong_btn);
+    free(pong_btn);
+
+    int i;
+    for(i = 0; i < TAB_COUNT; ++i)
+    {
+        button_destroy(tab_btns[i]);
+        free(tab_btns[i]);
+    }
+
     stop_input_thread();
 
     multirom_ui_destroy_tab(selected_tab);
@@ -167,8 +177,12 @@ void multirom_ui_init_header(void)
     text_x = center_x(0, x, SIZE_EXTRA, str[3]);
     fb_add_text(text_x, 5, WHITE, SIZE_EXTRA, str[3]);
 
-    pong_btn_w = x;
-    pong_btn_h = HEADER_HEIGHT;
+    pong_btn = malloc(sizeof(button));
+    memset(pong_btn, 0, sizeof(button));
+    pong_btn->w = x;
+    pong_btn->h = HEADER_HEIGHT;
+    pong_btn->clicked = &multirom_ui_start_pong;
+    button_init_ui(pong_btn, NULL, 0);
 
     for(i = 0; i < TAB_COUNT; ++i)
     {
@@ -177,6 +191,15 @@ void multirom_ui_init_header(void)
         tab_texts[i] = fb_add_text(text_x, text_y, WHITE, SIZE_NORMAL, str[i]);
 
         fb_add_rect(x, 0, 2, HEADER_HEIGHT, WHITE);
+
+        tab_btns[i] = malloc(sizeof(button));
+        memset(tab_btns[i], 0, sizeof(button));
+        tab_btns[i]->x = x;
+        tab_btns[i]->w = TAB_BTN_WIDTH;
+        tab_btns[i]->h = HEADER_HEIGHT;
+        tab_btns[i]->action = i;
+        tab_btns[i]->clicked = &multirom_ui_switch;
+        button_init_ui(tab_btns[i], NULL, 0);
 
         x += TAB_BTN_WIDTH;
     }
@@ -298,30 +321,8 @@ int multirom_ui_touch_handler(touch_event *ev, void *data)
         }
     }
 
-    if(!(ev->changed & TCHNG_REMOVED))
-        return -1;
-
-    if(ev->x < pong_btn_w && ev->y < pong_btn_h)
-        start_pong = 1;
-
-    if(touch_count > 0)
+    if((ev->changed & TCHNG_REMOVED) && touch_count > 0)
         --touch_count;
-
-    int x = fb_width - (TAB_BTN_WIDTH*TAB_COUNT);
-    if(ev->y > HEADER_HEIGHT || ev->x < x)
-        return -1;
-
-    int i, nextx;
-    for(i = 0; i < TAB_COUNT; ++i)
-    {
-        nextx = x + TAB_BTN_WIDTH;
-        if(ev->x > x && ev->x < nextx)
-        {
-            multirom_ui_switch(i);
-            return 0;
-        }
-        x = nextx;
-    }
 
     return -1;
 }
@@ -380,6 +381,11 @@ void multirom_ui_refresh_usb_handler(void)
     pthread_mutex_lock(&exit_code_mutex);
     update_usb_roms = 1;
     pthread_mutex_unlock(&exit_code_mutex);
+}
+
+void multirom_ui_start_pong(int action)
+{
+    start_pong = 1;
 }
 
 #define ROMS_FOOTER_H 130

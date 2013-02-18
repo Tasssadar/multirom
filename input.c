@@ -203,6 +203,7 @@ static void handle_touch_event(struct input_event *ev)
             if(!mt_events[i].changed)
                 continue;
 
+            ERROR("Ev %d 0x%X\n", mt_events[i].id, mt_events[i].changed);
             it = mt_handlers;
             while(it)
             {

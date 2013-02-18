@@ -119,7 +119,7 @@ void listview_update_scroll_mark(listview *view)
 int listview_touch_handler(touch_event *ev, void *data)
 {
     listview *view = (listview*)data;
-    if(view->touch.id == -1)
+    if(view->touch.id == -1 && (ev->changed & TCHNG_ADDED))
     {
         if (ev->x < view->x || ev->y < view->y ||
             ev->x > view->x+view->w || ev->y > view->y+view->h)

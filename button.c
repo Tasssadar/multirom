@@ -8,11 +8,28 @@ void button_init_ui(button *b, const char *text, int size)
 {
     b->touch_id = -1;
 
-    b->rect = fb_add_rect(b->x, b->y, b->w, b->h, LBLUE);
+    if(text != NULL)
+    {
+        b->c[CLR_NORMAL][0] = LBLUE;
+        b->c[CLR_NORMAL][1] = WHITE;
+        b->c[CLR_HOVER][0] = LBLUE2;
+        b->c[CLR_HOVER][1] = WHITE;
+        b->c[CLR_DIS][0] = GRAY;
+        b->c[CLR_DIS][1] = WHITE;
+        b->c[CLR_CHECK][0] = LBLUE2;
+        b->c[CLR_CHECK][1] = WHITE;
 
-    int text_x = center_x(b->x, b->w, size, text);
-    int text_y = center_y(b->y, b->h, size);
-    b->text = fb_add_text(text_x, text_y, WHITE, size, text);
+        b->rect = fb_add_rect(b->x, b->y, b->w, b->h, b->c[CLR_NORMAL][0]);
+
+        int text_x = center_x(b->x, b->w, size, text);
+        int text_y = center_y(b->y, b->h, size);
+        b->text = fb_add_text(text_x, text_y, b->c[CLR_NORMAL][1], size, text);
+    }
+    else
+    {
+        b->text = NULL;
+        b->rect = NULL;
+    }
 
     add_touch_handler(&button_touch_handler, b);
 }
@@ -21,8 +38,11 @@ void button_destroy(button *b)
 {
     rm_touch_handler(&button_touch_handler, b);
 
-    fb_rm_rect(b->rect);
-    fb_rm_text(b->text);
+    if(b->text)
+    {
+        fb_rm_rect(b->rect);
+        fb_rm_text(b->text);
+    }
 
     free(b);
 }
@@ -32,48 +52,44 @@ void button_move(button *b, int x, int y)
     b->x = x;
     b->y = y;
 
-    b->rect->head.x = x;
-    b->rect->head.y = y;
+    if(b->text)
+    {
+        b->rect->head.x = x;
+        b->rect->head.y = y;
 
-    b->text->head.x = center_x(x, b->w, b->text->size, b->text->text);
-    b->text->head.y = center_y(y, b->h, b->text->size);
+        b->text->head.x = center_x(x, b->w, b->text->size, b->text->text);
+        b->text->head.y = center_y(y, b->h, b->text->size);
+    }
 }
 
 void button_set_hover(button *b, int hover)
 {
-    if(!( ((b->flags & BTN_HOVER) != 0) ^ (hover == 1) ))
+    if((hover == 1) == ((b->flags & BTN_HOVER) != 0))
         return;
 
     if(hover)
-    {
         b->flags |= BTN_HOVER;
-        b->rect->color = LBLUE2;
-    }
     else
-    {
         b->flags &= ~(BTN_HOVER);
-        b->rect->color = LBLUE;
-    }
 
+    button_update_colors(b);
     fb_draw();
 }
 
 void button_enable(button *b, int enable)
 {
-    if(!( ((b->flags & BTN_DISABLED) == 0) ^ (enable == 1) ))
+    if((enable == 1) == ((b->flags & BTN_DISABLED) == 0))
         return;
 
     if(enable)
-    {
         b->flags &= ~(BTN_DISABLED);
-        b->rect->color = LBLUE;
-    }
     else
     {
         b->flags |= BTN_DISABLED;
         b->flags &= ~(BTN_HOVER);
-        b->rect->color = GRAY;
     }
+
+    button_update_colors(b);
     fb_draw();
 }
 
@@ -84,7 +100,7 @@ int button_touch_handler(touch_event *ev, void *data)
     if(b->flags & BTN_DISABLED)
         return -1;
 
-    if(b->touch_id == -1)
+    if(b->touch_id == -1 && (ev->changed & TCHNG_ADDED))
     {
         if(!in_rect(ev->x, ev->y, b->x, b->y, b->w, b->h))
             return -1;
@@ -106,4 +122,41 @@ int button_touch_handler(touch_event *ev, void *data)
         button_set_hover(b, in_rect(ev->x, ev->y, b->x, b->y, b->w, b->h));
 
     return 0;
+}
+
+void button_set_color(button *b, int idx, int text, uint32_t color)
+{
+    b->c[idx][text] = color;
+    button_update_colors(b);
+}
+
+void button_update_colors(button *b)
+{
+    int state = CLR_NORMAL;
+    if(b->flags & BTN_DISABLED)
+        state = CLR_DIS;
+    else if(b->flags & BTN_HOVER)
+        state = CLR_HOVER;
+    else if(b->flags & BTN_CHECKED)
+        state = CLR_CHECK;
+
+    if(b->text)
+    {
+        b->rect->color = b->c[state][0];
+        b->text->color = b->c[state][1];
+    }
+}
+
+void button_set_checked(button *b, int checked)
+{
+    if((checked == 1) == ((b->flags & BTN_CHECKED) != 0))
+        return;
+
+    if(checked)
+        b->flags |= BTN_CHECKED;
+    else
+        b->flags &= ~(BTN_CHECKED);
+
+    button_update_colors(b);
+    fb_draw();
 }

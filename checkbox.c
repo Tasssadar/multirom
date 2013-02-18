@@ -98,7 +98,7 @@ int checkbox_touch_handler(touch_event *ev, void *data)
 {
     checkbox *box = (checkbox*)data;
 
-    if(box->touch_id == -1)
+    if(box->touch_id == -1 && (ev->changed & TCHNG_ADDED))
     {
         if(!in_rect(ev->x, ev->y, box->x-TOUCH, box->y-TOUCH, CHECKBOX_SIZE+TOUCH*2, CHECKBOX_SIZE+TOUCH*2))
             return -1;
