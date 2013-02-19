@@ -149,13 +149,13 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     fb_freeze(1);
 
     button_destroy(pong_btn);
-    free(pong_btn);
+    pong_btn = NULL;
 
     int i;
     for(i = 0; i < TAB_COUNT; ++i)
     {
         button_destroy(tab_btns[i]);
-        free(tab_btns[i]);
+        tab_btns[i] = NULL;
     }
 
     stop_input_thread();
