@@ -2,6 +2,8 @@
 #define MULTIROM_H
 
 #include <pthread.h>
+#include <stdio.h>
+
 #include "boot_img_hdr.h"
 #include "util.h"
 
@@ -69,6 +71,7 @@ struct multirom_status
 {
     int is_second_boot;
     int auto_boot_seconds;
+    char *colors;
     struct multirom_rom *auto_boot_rom;
     struct multirom_rom *current_rom;
     struct multirom_rom **roms;

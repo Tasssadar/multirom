@@ -5,6 +5,7 @@
 #include "util.h"
 #include "log.h"
 #include "checkbox.h"
+#include "multirom_ui.h"
 
 #define MARK_W 10
 #define MARK_H 50
@@ -288,7 +289,7 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
     if(it->flags & IT_HOVER)
     {
         if(!d->hover_rect)
-            d->hover_rect = fb_add_rect(x, 0, w, rom_item_height(it->data), LBLUE2);
+            d->hover_rect = fb_add_rect(x, 0, w, rom_item_height(it->data), CLR_SECONDARY);
         d->hover_rect->head.y = y;
     }
     else if(d->hover_rect)

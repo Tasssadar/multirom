@@ -1,5 +1,6 @@
 #include <unistd.h>
 #include "progressdots.h"
+#include "multirom_ui.h"
 
 // ms
 #define SWITCH_SPEED 800
@@ -40,7 +41,7 @@ progdots *progdots_create(int x, int y)
     int i;
     for(i = 0; i < PROGDOTS_CNT; ++i)
     {
-        p->dots[i] = fb_add_rect(x, y, PROGDOTS_H, PROGDOTS_H, (i == 0 ? LBLUE : WHITE));
+        p->dots[i] = fb_add_rect(x, y, PROGDOTS_H, PROGDOTS_H, (i == 0 ? CLR_PRIMARY : WHITE));
         x += PROGDOTS_H + (PROGDOTS_W - (PROGDOTS_CNT*PROGDOTS_H))/(PROGDOTS_CNT-1);
     }
     pthread_create(&p->thread, NULL, progdots_thread, p);
@@ -64,5 +65,5 @@ void progdots_set_active(progdots *p, int dot)
     p->active_dot = dot;
     int i;
     for(i = 0; i < PROGDOTS_CNT; ++i)
-        p->dots[i]->color = (i == dot ? LBLUE : WHITE);
+        p->dots[i]->color = (i == dot ? CLR_PRIMARY : WHITE);
 }

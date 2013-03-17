@@ -264,6 +264,7 @@ int multirom_default_status(struct multirom_status *s)
     s->is_second_boot = 0;
     s->current_rom = NULL;
     s->roms = NULL;
+    s->colors = 0;
 
     char roms_path[256];
     sprintf(roms_path, "%s/roms/"INTERNAL_ROM_NAME, multirom_dir);
@@ -393,6 +394,8 @@ int multirom_load_status(struct multirom_status *s)
             strcpy(auto_boot_rom, arg);
         else if(strstr(name, "curr_rom_part"))
             s->curr_rom_part = strdup(arg);
+        else if(strstr(name, "colors"))
+            s->colors = atoi(arg);
     }
 
     fclose(f);
@@ -456,6 +459,7 @@ int multirom_save_status(struct multirom_status *s)
     fprintf(f, "auto_boot_seconds=%d\n", s->auto_boot_seconds);
     fprintf(f, "auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "");
     fprintf(f, "curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "");
+    fprintf(f, "colors=%d\n", s->colors);
 
     fclose(f);
     return 0;

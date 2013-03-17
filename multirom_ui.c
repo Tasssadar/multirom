@@ -30,11 +30,17 @@ static struct multirom_status *mrom_status = NULL;
 static struct multirom_rom *selected_rom = NULL;
 static volatile int exit_ui_code = -1;
 static fb_msgbox *active_msgbox = NULL;
-static volatile int update_usb_roms = 0;
-static volatile int start_pong = 0;
+static volatile int loop_act = 0;
 static button *pong_btn = NULL;
 
 static pthread_mutex_t exit_code_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+int CLR_PRIMARY = LBLUE;
+int CLR_SECONDARY = LBLUE2;
+
+#define LOOP_UPDATE_USB 0x01
+#define LOOP_START_PONG 0x02
+#define LOOP_CHANGE_CLR 0x04
 
 static void list_block(char *path, int rec)
 {
@@ -78,6 +84,8 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     selected_rom = NULL;
     active_msgbox = NULL;
 
+    multirom_ui_setup_colors(s->colors, &CLR_PRIMARY, &CLR_SECONDARY);
+
     selected_tab = -1;
     multirom_ui_init_header();
     multirom_ui_switch(TAB_INTERNAL);
@@ -100,17 +108,18 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
             pthread_mutex_unlock(&exit_code_mutex);
             break;
         }
-        if(update_usb_roms)
+
+        if(loop_act & LOOP_UPDATE_USB)
         {
             multirom_find_usb_roms(mrom_status);
             if(selected_tab == TAB_USB)
                 multirom_ui_tab_rom_update_usb(tab_data);
-            update_usb_roms = 0;
+            loop_act &= ~(LOOP_UPDATE_USB);
         }
 
-        if(start_pong)
+        if(loop_act & LOOP_START_PONG)
         {
-            start_pong = 0;
+            loop_act &= ~(LOOP_START_PONG);
             input_push_context();
             fb_push_context();
 
@@ -119,6 +128,26 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
             fb_pop_context();
             input_pop_context();
         }
+
+        if(loop_act & LOOP_CHANGE_CLR)
+        {
+            fb_freeze(1);
+
+            multirom_ui_setup_colors(s->colors, &CLR_PRIMARY, &CLR_SECONDARY);
+
+            // force redraw tab
+            int tab = selected_tab;
+            selected_tab = -1;
+
+            multirom_ui_destroy_tab(tab);
+            multirom_ui_switch(tab);
+
+            fb_freeze(0);
+            fb_draw();
+
+            loop_act &= ~(LOOP_CHANGE_CLR);
+        }
+
         pthread_mutex_unlock(&exit_code_mutex);
 
         usleep(100000);
@@ -126,7 +155,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     rm_touch_handler(&multirom_ui_touch_handler, NULL);
 
-    fb_create_msgbox(500, 250, LBLUE);
+    fb_create_msgbox(500, 250, CLR_PRIMARY);
 
     switch(exit_ui_code)
     {
@@ -165,6 +194,40 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     fb_close();
 
     return exit_ui_code;
+}
+
+
+void multirom_ui_setup_colors(int clr, int *primary, int *secondary)
+{
+    // Note: colors are OxAAGGBBRR
+    switch(clr)
+    {
+        default:
+        case CLRS_BLUE:
+            *primary = LBLUE;
+            *secondary = LBLUE2;
+            break;
+        case CLRS_PURPLE:
+            *primary = 0xFFCC66AA;
+            *secondary = 0xFFCC89B6;
+            break;
+        case CLRS_GREEN:
+            *primary = 0xFF00BD8A;
+            *secondary = 0xFF51F2C9;
+            break;
+        case CLRS_ORANGE:
+            *primary = 0xFF008AFF;
+            *secondary = 0xFF51AEFF;
+            break;
+        case CLRS_RED:
+            *primary = 0xFF0000CC;
+            *secondary = 0xFF6363FF;
+            break;
+        case CLRS_BROWN:
+            *primary = 0xFF2F5EB8;
+            *secondary = 0xFF689CFF;
+            break;
+    }
 }
 
 void multirom_ui_init_header(void)
@@ -223,6 +286,8 @@ void multirom_ui_destroy_tab(int tab)
 {
     switch(tab)
     {
+        case -1:
+            break;
         case TAB_USB:
         case TAB_INTERNAL:
             multirom_ui_tab_rom_destroy(tab_data);
@@ -330,7 +395,7 @@ int multirom_ui_touch_handler(touch_event *ev, void *data)
 void multirom_ui_auto_boot(void)
 {
     int seconds = mrom_status->auto_boot_seconds*1000;
-    active_msgbox = fb_create_msgbox(500, 300, LBLUE);
+    active_msgbox = fb_create_msgbox(500, 300, CLR_PRIMARY);
 
     fb_msgbox_add_text(-1, 40, SIZE_BIG, "Auto-boot");
     fb_msgbox_add_text(-1, active_msgbox->h-100, SIZE_NORMAL, "ROM: %s", mrom_status->auto_boot_rom->name);
@@ -379,13 +444,15 @@ void multirom_ui_auto_boot(void)
 void multirom_ui_refresh_usb_handler(void)
 {
     pthread_mutex_lock(&exit_code_mutex);
-    update_usb_roms = 1;
+    loop_act |= LOOP_UPDATE_USB;
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
 void multirom_ui_start_pong(int action)
 {
-    start_pong = 1;
+    pthread_mutex_lock(&exit_code_mutex);
+    loop_act |= LOOP_START_PONG;
+    pthread_mutex_unlock(&exit_code_mutex);
 }
 
 #define ROMS_FOOTER_H 130
@@ -446,13 +513,13 @@ void *multirom_ui_tab_rom_init(int tab_type)
 
     // header
     int y = center_y(HEADER_HEIGHT, ROMS_HEADER_H, SIZE_BIG);
-    t->title_text = fb_add_text(0, y, LBLUE, SIZE_BIG, "");
+    t->title_text = fb_add_text(0, y, CLR_PRIMARY, SIZE_BIG, "");
     list_add(t->title_text, &t->ui_elements);
 
     multirom_ui_tab_rom_set_empty((void*)t, has_roms);
 
     // footer
-    fb_rect *sep = fb_add_rect(0, fb_height-ROMS_FOOTER_H, fb_width, 2, LBLUE);
+    fb_rect *sep = fb_add_rect(0, fb_height-ROMS_FOOTER_H, fb_width, 2, CLR_PRIMARY);
     list_add(sep, &t->ui_elements);
 
     button *b = malloc(sizeof(button));
@@ -633,6 +700,11 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
 #define MISCBTN_W 530
 #define MISCBTN_H 100
 
+#define CLRBTN_W 50
+#define CLRBTN_B 10
+#define CLRBTN_TOTAL (CLRBTN_W+CLRBTN_B)
+#define CLRBTN_Y 1150
+
 typedef struct 
 {
     button **buttons;
@@ -676,7 +748,7 @@ void *multirom_ui_tab_misc_init(void)
     int i;
     for(i = 0; texts[i]; ++i)
     {
-        button *b = malloc(sizeof(button));
+        b = malloc(sizeof(button));
         memset(b, 0, sizeof(button));
         b->x = x;
         b->y = y;
@@ -695,6 +767,36 @@ void *multirom_ui_tab_misc_init(void)
     fb_text *ver = fb_add_text(0, fb_height-16, WHITE, SIZE_SMALL, "MultiROM v%d with trampoline v%d.",
                                VERSION_MULTIROM, multirom_get_trampoline_ver());
     list_add(ver, &t->ui_elements);
+
+    x = fb_width/2 - (CLRS_MAX*CLRBTN_TOTAL)/2;
+    int p, s;
+    fb_rect *r;
+    for(i = 0; i < CLRS_MAX; ++i)
+    {
+        multirom_ui_setup_colors(i, &p, &s);
+
+        if(i == mrom_status->colors)
+        {
+            r = fb_add_rect(x, CLRBTN_Y, CLRBTN_TOTAL, CLRBTN_TOTAL, WHITE);
+            list_add(r, &t->ui_elements);
+        }
+
+        r = fb_add_rect(x+CLRBTN_B/2, CLRBTN_Y+CLRBTN_B/2, CLRBTN_W, CLRBTN_W, p);
+        list_add(r, &t->ui_elements);
+
+        b = malloc(sizeof(button));
+        memset(b, 0, sizeof(button));
+        b->x = x;
+        b->y = CLRBTN_Y;
+        b->w = CLRBTN_TOTAL;
+        b->h = CLRBTN_TOTAL;
+        b->action = i;
+        b->clicked = &multirom_ui_tab_misc_change_clr;
+        button_init_ui(b, NULL, 0);
+        list_add(b, &t->buttons);
+
+        x += CLRBTN_TOTAL;
+    }
     return t;
 }
 
@@ -706,6 +808,17 @@ void multirom_ui_tab_misc_destroy(void *data)
     list_clear(&t->buttons, &button_destroy);
 
     free(t);
+}
+
+void multirom_ui_tab_misc_change_clr(int clr)
+{
+    if((loop_act & LOOP_CHANGE_CLR) || mrom_status->colors == clr)
+        return;
+
+    pthread_mutex_lock(&exit_code_mutex);
+    mrom_status->colors = clr;
+    loop_act |= LOOP_CHANGE_CLR;
+    pthread_mutex_unlock(&exit_code_mutex);
 }
 
 void multirom_ui_reboot_btn(int action)
@@ -723,7 +836,7 @@ void multirom_ui_tab_misc_copy_log(int action)
 
     static const char *text[] = { "Failed to copy log to sdcard!", "Successfully copied error log!" };
 
-    active_msgbox = fb_create_msgbox(550, 260, res ? DRED : LBLUE);
+    active_msgbox = fb_create_msgbox(550, 260, res ? DRED : CLR_PRIMARY);
     fb_msgbox_add_text(-1, 50, SIZE_NORMAL, text[res+1]);
     if(res == 0)
         fb_msgbox_add_text(-1, -1, SIZE_NORMAL, "/sdcard/multirom/error.txt");

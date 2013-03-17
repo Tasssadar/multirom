@@ -3,6 +3,7 @@
 #include "button.h"
 #include "input.h"
 #include "util.h"
+#include "multirom_ui.h"
 
 void button_init_ui(button *b, const char *text, int size)
 {
@@ -10,13 +11,13 @@ void button_init_ui(button *b, const char *text, int size)
 
     if(text != NULL)
     {
-        b->c[CLR_NORMAL][0] = LBLUE;
+        b->c[CLR_NORMAL][0] = CLR_PRIMARY;
         b->c[CLR_NORMAL][1] = WHITE;
-        b->c[CLR_HOVER][0] = LBLUE2;
+        b->c[CLR_HOVER][0] = CLR_SECONDARY;
         b->c[CLR_HOVER][1] = WHITE;
         b->c[CLR_DIS][0] = GRAY;
         b->c[CLR_DIS][1] = WHITE;
-        b->c[CLR_CHECK][0] = LBLUE2;
+        b->c[CLR_CHECK][0] = CLR_SECONDARY;
         b->c[CLR_CHECK][1] = WHITE;
 
         b->rect = fb_add_rect(b->x, b->y, b->w, b->h, b->c[CLR_NORMAL][0]);
@@ -72,8 +73,11 @@ void button_set_hover(button *b, int hover)
     else
         b->flags &= ~(BTN_HOVER);
 
-    button_update_colors(b);
-    fb_draw();
+    if(b->text)
+    {
+        button_update_colors(b);
+        fb_draw();
+    }
 }
 
 void button_enable(button *b, int enable)
@@ -89,8 +93,11 @@ void button_enable(button *b, int enable)
         b->flags &= ~(BTN_HOVER);
     }
 
-    button_update_colors(b);
-    fb_draw();
+    if(b->text)
+    {
+        button_update_colors(b);
+        fb_draw();
+    }
 }
 
 int button_touch_handler(touch_event *ev, void *data)
