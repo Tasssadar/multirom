@@ -126,7 +126,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     rm_touch_handler(&multirom_ui_touch_handler, NULL);
 
-    fb_create_msgbox(500, 250);
+    fb_create_msgbox(500, 250, LBLUE);
 
     switch(exit_ui_code)
     {
@@ -330,7 +330,7 @@ int multirom_ui_touch_handler(touch_event *ev, void *data)
 void multirom_ui_auto_boot(void)
 {
     int seconds = mrom_status->auto_boot_seconds*1000;
-    active_msgbox = fb_create_msgbox(500, 300);
+    active_msgbox = fb_create_msgbox(500, 300, LBLUE);
 
     fb_msgbox_add_text(-1, 40, SIZE_BIG, "Auto-boot");
     fb_msgbox_add_text(-1, active_msgbox->h-100, SIZE_NORMAL, "ROM: %s", mrom_status->auto_boot_rom->name);
@@ -527,7 +527,7 @@ void multirom_ui_tab_rom_boot_btn(int action)
     int m = M(rom->type);
     if(m & MASK_UNSUPPORTED)
     {
-        active_msgbox = fb_create_msgbox(550, 360);
+        active_msgbox = fb_create_msgbox(550, 360, DRED);
         fb_msgbox_add_text(-1, 30, SIZE_BIG, "Error");
         fb_msgbox_add_text(-1, 90, SIZE_NORMAL, "Unsupported ROM type.");
         fb_msgbox_add_text(-1, 180, SIZE_NORMAL, "See XDA thread for more info.");
@@ -542,7 +542,7 @@ void multirom_ui_tab_rom_boot_btn(int action)
     if (((m & MASK_KEXEC) || ((m & MASK_ANDROID) && rom->has_bootimg)) &&
         multirom_has_kexec() != 0)
     {
-        active_msgbox = fb_create_msgbox(550, 360);
+        active_msgbox = fb_create_msgbox(550, 360, DRED);
         fb_msgbox_add_text(-1, 30, SIZE_BIG, "Error");
         fb_msgbox_add_text(-1, 90, SIZE_NORMAL, "Kexec-hardboot support");
         fb_msgbox_add_text(-1, 125, SIZE_NORMAL, "required to boot this ROM.");
@@ -558,7 +558,7 @@ void multirom_ui_tab_rom_boot_btn(int action)
 
     if((m & MASK_KEXEC) && strchr(rom->name, ' '))
     {
-        active_msgbox = fb_create_msgbox(550, 360);
+        active_msgbox = fb_create_msgbox(550, 360, DRED);
         fb_msgbox_add_text(-1, 30, SIZE_BIG, "Error");
         fb_msgbox_add_text(-1, 90, SIZE_NORMAL, "ROM's name contains spaces");
         fb_msgbox_add_text(-1, 180, SIZE_NORMAL, "Remove spaces from ROM's name");
@@ -723,7 +723,7 @@ void multirom_ui_tab_misc_copy_log(int action)
 
     static const char *text[] = { "Failed to copy log to sdcard!", "Successfully copied error log!" };
 
-    active_msgbox = fb_create_msgbox(550, 260);
+    active_msgbox = fb_create_msgbox(550, 260, res ? DRED : LBLUE);
     fb_msgbox_add_text(-1, 50, SIZE_NORMAL, text[res+1]);
     if(res == 0)
         fb_msgbox_add_text(-1, -1, SIZE_NORMAL, "/sdcard/multirom/error.txt");

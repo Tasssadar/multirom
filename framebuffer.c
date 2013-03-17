@@ -348,7 +348,7 @@ void fb_rm_rect(fb_rect *r)
 
 #define BOX_BORDER 2
 #define SHADOW 10
-fb_msgbox *fb_create_msgbox(int w, int h)
+fb_msgbox *fb_create_msgbox(int w, int h, int bgcolor)
 {
     if(fb_items.msgbox)
         return fb_items.msgbox;
@@ -369,7 +369,7 @@ fb_msgbox *fb_create_msgbox(int w, int h)
     box->background[0] = fb_add_rect(x+SHADOW, y+SHADOW, w, h, GRAY); // shadow
     box->background[1] = fb_add_rect(x, y, w, h, WHITE); // border
     box->background[2] = fb_add_rect(x+BOX_BORDER, y+BOX_BORDER,
-                                     w-BOX_BORDER*2, h-BOX_BORDER*2, DRED);
+                                     w-BOX_BORDER*2, h-BOX_BORDER*2, bgcolor);
 
     pthread_mutex_lock(&fb_mutex);
     fb_items.msgbox = box;
