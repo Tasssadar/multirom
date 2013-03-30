@@ -199,35 +199,21 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
 void multirom_ui_setup_colors(int clr, int *primary, int *secondary)
 {
-    // Note: colors are OxAAGGBBRR
-    switch(clr)
-    {
-        default:
-        case CLRS_BLUE:
-            *primary = LBLUE;
-            *secondary = LBLUE2;
-            break;
-        case CLRS_PURPLE:
-            *primary = 0xFFCC66AA;
-            *secondary = 0xFFCC89B6;
-            break;
-        case CLRS_GREEN:
-            *primary = 0xFF00BD8A;
-            *secondary = 0xFF51F2C9;
-            break;
-        case CLRS_ORANGE:
-            *primary = 0xFF008AFF;
-            *secondary = 0xFF51AEFF;
-            break;
-        case CLRS_RED:
-            *primary = 0xFF0000CC;
-            *secondary = 0xFF6363FF;
-            break;
-        case CLRS_BROWN:
-            *primary = 0xFF2F5EB8;
-            *secondary = 0xFF689CFF;
-            break;
-    }
+    static const int clrs[][2] = {
+        // Primary,   Secondary - OxAAGGBBRR
+        { LBLUE,      LBLUE2 },     // CLRS_BLUE
+        { 0xFFCC66AA, 0xFFCC89B6 }, // CLRS_PURPLE
+        { 0xFF00BD8A, 0xFF51F2C9 }, // CLRS_GREEN
+        { 0xFF008AFF, 0xFF51AEFF }, // CLRS_ORANGE
+        { 0xFF0000CC, 0xFF6363FF }, // CLRS_RED
+        { 0xFF2F5EB8, 0xFF689CFF }, // CLRS_BROWN
+    };
+
+    if(clr < 0 || clr >= sizeof(clrs)/sizeof(clrs[0]))
+        clr = 0;
+
+    *primary = clrs[clr][0];
+    *secondary = clrs[clr][1];
 }
 
 void multirom_ui_init_header(void)
