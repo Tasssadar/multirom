@@ -1,0 +1,57 @@
+# This file contains info for recovery installation process
+# Should be placed in root of installation zip file and must be
+# named "manifest.txt".
+# Make sure you got the syntax correct, as the parser is probably pretty
+# dumb. Lines with comments must start with #. Beware the whitespaces.
+# If you need to use " character in string, just use it, no need to escape it
+# MultiROM searches for first and last " on the line.
+# These comments should not be deleted.
+
+# Manifest version
+manifest_ver="1"
+
+# Min MultiROM version
+min_mrom_ver="5"
+
+# Supported devices codenames. These are checked against
+# ro.product.device property
+devices="grouper tilapia"
+
+# ROM name. If not specified, name of the installation file is used,
+# which is recommmended. Don't use spaces.
+#rom_name="Generic_ROM"
+
+# Installation text, it is displayed in recovery during installation.
+# Use \n to make newlines
+install_text="Generic ROM 1.2.3.4\nWelcome to Generic ROM!\n\n This installation process may take a while"
+
+# Available install locations, "1" means it can be installed to that location
+# You usually want all of these
+# loc_internal - Internal memory
+# loc_usb_dir - USB drive with extX filesystem
+# loc_usb_img - USB drive with FAT32/NTFS filesystem, so ext4 images are used
+loc_internal="1"
+loc_usb_dir="1"
+loc_usb_img="1"
+
+# ROM base folders - the ones in root of ROM folder.
+# There can only be maximum of 5 base folders!
+# If USB drive w/ FAT32/NTFS image is used, each of these is separate image.
+# If this is a Linux ROM, you usually want just "root". If it is Android-based,
+# you probably want "cache", "system" and "data"
+# Example: base_folders="data system cache"
+base_folders="root"
+
+# Image sizes for FAT32/NTFS USB drives. Sizes are in MB.
+# Can be ommited if ROM does not support images. Max size for FAT32 is 4096.
+# Syntax: base_folder_name:MIN:DEFAULT another_base_folder_name:MIN:DEFAULT ...
+# Example: img_sizes="root:1000:1500"
+#          img_sizes="data:50:1024 system:450:640 cache:50:450"
+img_sizes="root:1000:1500"
+
+
+
+
+
+
+
