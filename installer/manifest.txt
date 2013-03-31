@@ -39,19 +39,9 @@ loc_usb_img="1"
 # If USB drive w/ FAT32/NTFS image is used, each of these is separate image.
 # If this is a Linux ROM, you usually want just "root". If it is Android-based,
 # you probably want "cache", "system" and "data"
-# Example: base_folders="data system cache"
-base_folders="root"
-
-# Image sizes for FAT32/NTFS USB drives. Sizes are in MB.
-# Can be ommited if ROM does not support images. Max size for FAT32 is 4096.
-# Syntax: base_folder_name:MIN:DEFAULT another_base_folder_name:MIN:DEFAULT ...
-# Example: img_sizes="root:1000:1500"
-#          img_sizes="data:50:1024 system:450:640 cache:50:450"
-img_sizes="root:1000:1500"
-
-
-
-
-
-
-
+# Specify also min and default size of the image craeted for FAT32/NTFS drives
+# in megabytes. Min value is used to check free space if it is not installed
+# to image.
+# Syntax: name:MIN:DEFAULT name2:MIN:DEFAULT ...
+# Example: base_folders="data:50:1024 system:450:640 cache:50:450"
+base_folders="root:1000:1500"

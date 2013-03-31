@@ -11,6 +11,10 @@ file.
 I recommend not to use compression when making this ZIP, the installation
 will be faster and the ROM is already compressed in .tar.gz files.
 
+While this format should be versatile enough, feel free to contact me if you
+need something changed - if it is reasonable, there will be no problem
+adding changes you need.
+
 ### Content
 * **manifest.txt** - File with info for the recovery. Read the comments in that
                      file to know more.
