@@ -873,7 +873,7 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
 
         if(img == 0)
         {
-            if(mount(from, to, "ext4", flags[img][i], "") < 0)
+            if(mount(from, to, "ext4", flags[img][i], "discard,nomblk_io_submit") < 0)
             {
                 ERROR("Failed to mount %s to %s (%d: %s)", from, to, errno, strerror(errno));
                 return -1;

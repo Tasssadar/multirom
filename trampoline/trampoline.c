@@ -230,7 +230,7 @@ int main(int argc, char *argv[])
         mkdir(REALDATA, 0755);
         if (find_data_dev(data_dev) == 0 &&
             mount(data_dev, REALDATA, "ext4", MS_RELATIME | MS_NOATIME,
-            "user_xattr,acl,barrier=1,data=ordered") >= 0)
+            "user_xattr,acl,barrier=1,data=ordered,discard,nomblk_io_submit") >= 0)
         {
             run_multirom();
         }
