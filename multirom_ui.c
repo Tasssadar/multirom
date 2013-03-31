@@ -750,9 +750,14 @@ void *multirom_ui_tab_misc_init(void)
             y += 50;
     }
 
-    fb_text *ver = fb_add_text(0, fb_height-16, WHITE, SIZE_SMALL, "MultiROM v%d with trampoline v%d.",
+    fb_text *text = fb_add_text(0, fb_height-16, WHITE, SIZE_SMALL, "MultiROM v%d with trampoline v%d.",
                                VERSION_MULTIROM, multirom_get_trampoline_ver());
-    list_add(ver, &t->ui_elements);
+    list_add(text, &t->ui_elements);
+
+    char bat_text[16];
+    sprintf(bat_text, "Battery: %d%%", multirom_get_battery());
+    text = fb_add_text_long(fb_width-strlen(bat_text)*8, fb_height-16, WHITE, SIZE_SMALL, bat_text);
+    list_add(text, &t->ui_elements);
 
     x = fb_width/2 - (CLRS_MAX*CLRBTN_TOTAL)/2;
     int p, s;

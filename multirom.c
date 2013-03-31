@@ -1937,3 +1937,18 @@ int multirom_search_last_kmsg(const char *expr)
     fclose(f);
     return res;
 }
+
+#define BATTERY_CAP "/sys/class/power_supply/battery/capacity"
+int multirom_get_battery(void)
+{
+    char buff[4];
+
+    FILE *f = fopen(BATTERY_CAP, "r");
+    if(!f)
+        return -1;
+
+    fgets(buff, sizeof(buff), f);
+    fclose(f);
+
+    return atoi(buff);
+}

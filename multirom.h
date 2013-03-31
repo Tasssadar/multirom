@@ -127,5 +127,6 @@ char **multirom_get_rom_info_str(struct rom_info *info, char *key);
 int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multirom_status *status, struct multirom_rom *rom);
 int multirom_replace_aliases_root_path(char **s, struct multirom_rom *rom);
 char *multirom_get_klog(void);
+int multirom_get_battery(void);
 
 #endif
