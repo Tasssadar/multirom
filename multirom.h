@@ -71,7 +71,7 @@ struct multirom_status
 {
     int is_second_boot;
     int auto_boot_seconds;
-    char *colors;
+    int colors;
     struct multirom_rom *auto_boot_rom;
     struct multirom_rom *current_rom;
     struct multirom_rom **roms;
