@@ -1450,6 +1450,18 @@ struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multi
         }
     }
 
+    // Only supported type is kexec, check just to make sure older releases
+    // can't try to run newer ROMs
+    if(failed == 0)
+    {
+        char *val = map_get_val(i->str_vals, "type");
+        if(strcmp(val, "kexec") != 0)
+        {
+            ERROR("Only supported rom_info type is \"kexec\", this rom_info has type \"%s\"!", val);
+            failed = 1;
+        }
+    }
+
     if(failed == 1)
     {
         multirom_destroy_rom_info(i);
