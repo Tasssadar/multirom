@@ -72,6 +72,7 @@ struct multirom_status
     int is_second_boot;
     int auto_boot_seconds;
     int colors;
+    int brightness;
     struct multirom_rom *auto_boot_rom;
     struct multirom_rom *current_rom;
     struct multirom_rom **roms;
@@ -128,5 +129,6 @@ int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multir
 int multirom_replace_aliases_root_path(char **s, struct multirom_rom *rom);
 char *multirom_get_klog(void);
 int multirom_get_battery(void);
+void multirom_set_brightness(int val);
 
 #endif

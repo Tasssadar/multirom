@@ -93,6 +93,8 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     add_touch_handler(&multirom_ui_touch_handler, NULL);
     start_input_thread();
 
+    multirom_set_brightness(s->brightness);
+
     fb_freeze(0);
 
     if(s->auto_boot_rom && s->auto_boot_seconds > 0)

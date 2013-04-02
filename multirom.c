@@ -28,6 +28,9 @@
 #define LAYOUT_VERSION "/data/.layout_version"
 #define SECOND_BOOT_KMESG "MultiromSaysNextBootShouldBeSecondMagic108"
 
+#define BATTERY_CAP "/sys/class/power_supply/battery/capacity"
+#define BRIGHTNESS_FILE "/sys/devices/platform/pwm-backlight/backlight/pwm-backlight/brightness"
+
 #define T_FOLDER 4
 
 static char multirom_dir[64] = { 0 };
@@ -265,6 +268,7 @@ int multirom_default_status(struct multirom_status *s)
     s->current_rom = NULL;
     s->roms = NULL;
     s->colors = 0;
+    s->brightness = 40;
 
     char roms_path[256];
     sprintf(roms_path, "%s/roms/"INTERNAL_ROM_NAME, multirom_dir);
@@ -396,6 +400,8 @@ int multirom_load_status(struct multirom_status *s)
             s->curr_rom_part = strdup(arg);
         else if(strstr(name, "colors"))
             s->colors = atoi(arg);
+        else if(strstr(name, "brightness"))
+            s->brightness = atoi(arg);
     }
 
     fclose(f);
@@ -460,6 +466,7 @@ int multirom_save_status(struct multirom_status *s)
     fprintf(f, "auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "");
     fprintf(f, "curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "");
     fprintf(f, "colors=%d\n", s->colors);
+    fprintf(f, "brightness=%d\n", s->brightness);
 
     fclose(f);
     return 0;
@@ -481,6 +488,7 @@ void multirom_find_usb_roms(struct multirom_status *s)
 
     char path[256];
     struct usb_partition *p;
+
     pthread_mutex_lock(&parts_mutex);
     for(i = 0; s->partitions && s->partitions[i]; ++i)
         if(!strstr(s->partitions[i]->name, "mmcblk"))
@@ -693,6 +701,8 @@ void multirom_dump_status(struct multirom_status *s)
     fb_debug("Dumping multirom status:\n");
     fb_debug("  is_second_boot=%d\n", s->is_second_boot);
     fb_debug("  current_rom=%s\n", s->current_rom ? s->current_rom->name : "NULL");
+    fb_debug("  colors=%d\n", s->colors);
+    fb_debug("  brightness=%d\n", s->brightness);
     fb_debug("  auto_boot_seconds=%d\n", s->auto_boot_seconds);
     fb_debug("  auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "NULL");
     fb_debug("  curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "NULL");
@@ -1938,7 +1948,6 @@ int multirom_search_last_kmsg(const char *expr)
     return res;
 }
 
-#define BATTERY_CAP "/sys/class/power_supply/battery/capacity"
 int multirom_get_battery(void)
 {
     char buff[4];
@@ -1951,4 +1960,16 @@ int multirom_get_battery(void)
     fclose(f);
 
     return atoi(buff);
+}
+
+void multirom_set_brightness(int val)
+{
+    FILE *f = fopen(BRIGHTNESS_FILE, "w");
+    if(!f)
+    {
+        ERROR("Failed to set brightness: %s!\n", strerror(errno));
+        return;
+    }
+    fprintf(f, "%d", val);
+    fclose(f);
 }
