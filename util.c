@@ -47,7 +47,7 @@
  */
 static unsigned int android_name_to_id(const char *name)
 {
-    struct android_id_info *info = android_ids;
+    struct android_id_info const *info = android_ids;
     unsigned int n;
 
     for (n = 0; n < android_id_count; n++) {
@@ -595,21 +595,24 @@ char *run_get_stdout(char **cmd)
     return NULL;
 }
 
-int list_item_count(void **list)
+int list_item_count(listItself list)
 {
+    void **l = (void**)list;
     int i = 0;
-    while(list && list[i])
+    while(l && l[i])
         ++i;
     return i;
 }
 
-int list_size(void **list)
+int list_size(listItself list)
 {
     return list_item_count(list)+1;
 }
 
-void list_add(void *item, void ***list)
+void list_add(void *item, ptrToList list_p)
 {
+    void ***list = (void***)list_p;
+
     int i = 0;
     while(*list && (*list)[i])
         ++i;
@@ -621,8 +624,11 @@ void list_add(void *item, void ***list)
     (*list)[--i] = item;
 }
 
-int list_rm(void *item, void ***list, void (*destroy_callback)(void*))
+int list_rm(void *item, ptrToList list_p, callback destroy_callback_p)
 {
+    void ***list = (void***)list_p;
+    callbackPtr destroy_callback = (callbackPtr)destroy_callback_p;
+
     int size = list_size(*list);
 
     int i;
@@ -652,8 +658,11 @@ int list_rm(void *item, void ***list, void (*destroy_callback)(void*))
     return -1;
 }
 
-int list_rm_at(int idx, void ***list, void (*destroy_callback)(void*))
+int list_rm_at(int idx, ptrToList list_p, callback destroy_callback_p)
 {
+    void ***list = (void***)list_p;
+    callbackPtr destroy_callback = (callbackPtr)destroy_callback_p;
+
     int size = list_size(*list);
     if(idx < 0 || idx >= size-1)
         return -1;
@@ -678,8 +687,11 @@ int list_rm_at(int idx, void ***list, void (*destroy_callback)(void*))
     return 0;
 }
 
-void list_clear(void ***list, void (*destroy_callback)(void*))
+void list_clear(ptrToList list_p, callback destroy_callback_p)
 {
+    void ***list = (void***)list_p;
+    callbackPtr destroy_callback = (callbackPtr)destroy_callback_p;
+
     if(*list == NULL)
         return;
 
@@ -694,8 +706,11 @@ void list_clear(void ***list, void (*destroy_callback)(void*))
     *list = NULL;
 }
 
-int list_copy(void **source, void ***dest)
+int list_copy(listItself src, ptrToList dest_p)
 {
+    void **source = (void**)src;
+    void ***dest = (void***)dest_p;
+
     if(!source)
         return 0;
 
@@ -711,8 +726,11 @@ int list_copy(void **source, void ***dest)
     return 0;
 }
 
-int list_move(void ***source, void ***dest)
+int list_move(ptrToList source_p, ptrToList dest_p)
 {
+    void ***source = (void***)source_p;
+    void ***dest = (void***)dest_p;
+
     if(!source)
         return 0;
 
@@ -808,7 +826,7 @@ void *map_get_val(map *m, char *key)
     return m->values[idx];
 }
 
-void **map_get_ref(map *m, char *key)
+void *map_get_ref(map *m, char *key)
 {
     int idx = map_find(m, key);
     if(idx < 0)

@@ -65,7 +65,7 @@ typedef struct
 {
     fb_item_header head;
 
-    int color;
+    uint32_t color;
     int8_t size;
     char *text;
 } fb_text;
@@ -76,7 +76,7 @@ typedef struct
 
     int w;
     int h;
-    int color;
+    uint32_t color;
 } fb_rect;
 
 typedef struct
@@ -97,9 +97,9 @@ typedef struct
 
 void fb_remove_item(void *item);
 int fb_generate_item_id();
-fb_text *fb_add_text(int x, int y, int color, int size, const char *fmt, ...);
-fb_text *fb_add_text_long(int x, int y, int color, int size, char *text);
-fb_rect *fb_add_rect(int x, int y, int w, int h, int color);
+fb_text *fb_add_text(int x, int y, uint32_t color, int size, const char *fmt, ...);
+fb_text *fb_add_text_long(int x, int y, uint32_t color, int size, char *text);
+fb_rect *fb_add_rect(int x, int y, int w, int h, uint32_t color);
 fb_msgbox *fb_create_msgbox(int w, int h, int bgcolor);
 fb_text *fb_msgbox_add_text(int x, int y, int size, char *txt, ...);
 void fb_msgbox_rm_text(fb_text *text);
@@ -108,8 +108,8 @@ void fb_rm_text(fb_text *t);
 void fb_rm_rect(fb_rect *r);
 
 void fb_draw_text(fb_text *t);
-void fb_draw_char(int x, int y, char c, int color, int size);
-void fb_draw_square(int x, int y, int color, int size);
+void fb_draw_char(int x, int y, char c, uint32_t color, int size);
+void fb_draw_square(int x, int y, uint32_t color, int size);
 void fb_draw_overlay(void);
 void fb_draw_rect(fb_rect *r);
 void fb_fill(uint32_t color);

@@ -183,7 +183,7 @@ void fb_draw_text(fb_text *t)
     }
 }
 
-void fb_draw_char(int x, int y, char c, int color, int size)
+void fb_draw_char(int x, int y, char c, uint32_t color, int size)
 {
     int line = 0;
     uint8_t bit = 0;
@@ -201,7 +201,7 @@ void fb_draw_char(int x, int y, char c, int color, int size)
     }
 }
 
-void fb_draw_square(int x, int y, int color, int size)
+void fb_draw_square(int x, int y, uint32_t color, int size)
 {
     uint32_t *bits = fb->bits + (fb_width*y) + x;
     int i;
@@ -268,7 +268,7 @@ int fb_generate_item_id()
     return res;
 }
 
-static fb_text *fb_create_text_item(int x, int y, int color, int size, const char *txt)
+static fb_text *fb_create_text_item(int x, int y, uint32_t color, int size, const char *txt)
 {
     fb_text *t = malloc(sizeof(fb_text));
     t->head.id = fb_generate_item_id();
@@ -285,7 +285,7 @@ static fb_text *fb_create_text_item(int x, int y, int color, int size, const cha
     return t;
 }
 
-fb_text *fb_add_text(int x, int y, int color, int size, const char *fmt, ...)
+fb_text *fb_add_text(int x, int y, uint32_t color, int size, const char *fmt, ...)
 {
     char txt[512];
     va_list ap;
@@ -296,7 +296,7 @@ fb_text *fb_add_text(int x, int y, int color, int size, const char *fmt, ...)
     return fb_add_text_long(x, y, color, size, txt);
 }
 
-fb_text *fb_add_text_long(int x, int y, int color, int size, char *text)
+fb_text *fb_add_text_long(int x, int y, uint32_t color, int size, char *text)
 {
     fb_text *t = fb_create_text_item(x, y, color, size, text);
 
@@ -307,7 +307,7 @@ fb_text *fb_add_text_long(int x, int y, int color, int size, char *text)
     return t;
 }
 
-fb_rect *fb_add_rect(int x, int y, int w, int h, int color)
+fb_rect *fb_add_rect(int x, int y, int w, int h, uint32_t color)
 {
     fb_rect *r = malloc(sizeof(fb_rect));
     r->head.id = fb_generate_item_id();

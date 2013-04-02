@@ -35,8 +35,8 @@ static button *pong_btn = NULL;
 
 static pthread_mutex_t exit_code_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int CLR_PRIMARY = LBLUE;
-int CLR_SECONDARY = LBLUE2;
+uint32_t CLR_PRIMARY = LBLUE;
+uint32_t CLR_SECONDARY = LBLUE2;
 
 #define LOOP_UPDATE_USB 0x01
 #define LOOP_START_PONG 0x02
@@ -74,7 +74,7 @@ static void list_block(char *path, int rec)
 int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 {
     if(multirom_init_fb() < 0)
-        return NULL;
+        return UI_EXIT_BOOT_ROM;
 
     fb_freeze(1);
 
@@ -199,7 +199,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 }
 
 
-void multirom_ui_setup_colors(int clr, int *primary, int *secondary)
+void multirom_ui_setup_colors(int clr, uint32_t *primary, uint32_t *secondary)
 {
     static const int clrs[][2] = {
         // Primary,   Secondary - OxAAGGBBRR
@@ -211,7 +211,7 @@ void multirom_ui_setup_colors(int clr, int *primary, int *secondary)
         { 0xFF2F5EB8, 0xFF689CFF }, // CLRS_BROWN
     };
 
-    if(clr < 0 || clr >= sizeof(clrs)/sizeof(clrs[0]))
+    if(clr < 0 || clr >= (int)ARRAY_SIZE(clrs))
         clr = 0;
 
     *primary = clrs[clr][0];
@@ -762,7 +762,7 @@ void *multirom_ui_tab_misc_init(void)
     list_add(text, &t->ui_elements);
 
     x = fb_width/2 - (CLRS_MAX*CLRBTN_TOTAL)/2;
-    int p, s;
+    uint32_t p, s;
     fb_rect *r;
     for(i = 0; i < CLRS_MAX; ++i)
     {
@@ -830,7 +830,7 @@ void multirom_ui_tab_misc_copy_log(int action)
     static const char *text[] = { "Failed to copy log to sdcard!", "Successfully copied error log!" };
 
     active_msgbox = fb_create_msgbox(550, 260, res ? DRED : CLR_PRIMARY);
-    fb_msgbox_add_text(-1, 50, SIZE_NORMAL, text[res+1]);
+    fb_msgbox_add_text(-1, 50, SIZE_NORMAL, (char*)text[res+1]);
     if(res == 0)
         fb_msgbox_add_text(-1, -1, SIZE_NORMAL, "/sdcard/multirom/error.txt");
     fb_msgbox_add_text(-1, active_msgbox->h-60, SIZE_NORMAL, "Touch anywhere to close");

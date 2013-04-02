@@ -320,7 +320,7 @@ int multirom_default_status(struct multirom_status *s)
 
         rom->type = multirom_get_rom_type(rom);
 
-        sprintf(path, "%s/boot.img", rom->base_path, rom->name);
+        sprintf(path, "%s/boot.img", rom->base_path);
         rom->has_bootimg = access(path, R_OK) == 0 ? 1 : 0;
 
         list_add(rom, &add_roms);
@@ -1057,13 +1057,13 @@ int multirom_has_kexec(void)
 
     has_kexec = 0;
 
-    int i;
+    uint32_t i;
     static const char *checks[] = { "CONFIG_KEXEC_HARDBOOT=y", "CONFIG_ATAGS_PROC=y" };
     //                   0             1       2     3
     char *cmd_grep[] = { busybox_path, "grep", NULL, "/config", NULL };
     for(i = 0; i < ARRAY_SIZE(checks); ++i)
     {
-        cmd_grep[2] = checks[i];
+        cmd_grep[2] = (char*)checks[i];
         if(run_cmd(cmd_grep) != 0)
         {
             has_kexec = -1;
@@ -1367,7 +1367,7 @@ int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *ro
         free(str);
     }
 
-    sprintf(cmd[5], "--command-line=%s ", map_get_val(info->str_vals, "base_cmdline"));
+    sprintf(cmd[5], "--command-line=%s ", (char*)map_get_val(info->str_vals, "base_cmdline"));
 
     if(root_type == 0 && (str = map_get_val(info->str_vals, "dir_cmdline")))
         strcat(cmd[5], str);
@@ -1408,7 +1408,7 @@ struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multi
             continue;
 
         char *val = strchr(line, '=');
-        if(!val || val-line >= sizeof(key)-1)
+        if(!val || val-line >= (int)(sizeof(key)-1))
             continue;
 
         strncpy(key, line, val-line);
@@ -1432,7 +1432,7 @@ struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multi
     int y;
     for(y = 0; roots[y] && !found_root; ++y)
     {
-        if(map_find(i->str_vals, roots[y]) >= 0)
+        if(map_find(i->str_vals, (char*)roots[y]) >= 0)
             found_root = 1;
     }
 
@@ -1443,7 +1443,7 @@ struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multi
     int failed = !found_root;
     for(y = 0; req_keys[y]; ++y)
     {
-        if(map_find(i->str_vals, req_keys[y]) < 0)
+        if(map_find(i->str_vals, (char*)req_keys[y]) < 0)
         {
             ERROR("Key \"%s\" key not found in %s\n", req_keys[y], path);
             failed = 1;
@@ -1471,13 +1471,13 @@ struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multi
     char **ref;
     ERROR("Replacing aliases in root paths...\n");
     for(y = 0; roots[y]; ++y)
-        if((ref = map_get_ref(i->str_vals, roots[y])))
+        if((ref = map_get_ref(i->str_vals, (char*)roots[y])))
             multirom_replace_aliases_root_path(ref, rom);
 
     ERROR("Replacing aliases in the cmdline...\n");
     static const char *cmdlines[] = { "base_cmdline", "img_cmdline", "dir_cmdline", NULL };
     for(y = 0; cmdlines[y]; ++y)
-        if((ref = map_get_ref(i->str_vals, cmdlines[y])))
+        if((ref = map_get_ref(i->str_vals, (char*)cmdlines[y])))
             multirom_replace_aliases_cmdline(ref, i, s, rom);
 
     return i;
@@ -1627,7 +1627,7 @@ int multirom_replace_aliases_root_path(char **s, struct multirom_rom *rom)
     if(!alias)
         return 0;
 
-    char *buff[256] = { 0 };
+    char buff[256] = { 0 };
     memcpy(buff, *s, alias-*s);
     strcat(buff, rom->base_path+strlen(rom->partition ? rom->partition->mount_path : REALDATA));
     strcat(buff, alias+2);
@@ -1777,8 +1777,11 @@ int multirom_mount_usb(struct usb_partition *part)
 void *multirom_usb_refresh_thread_work(void *status)
 {
     uint32_t timer = 0;
-    time_t last_change = 0;
     struct stat info;
+
+    // stat.st_ctime is defined as unsigned long instead
+    // of time_t in android
+    unsigned long last_change = 0;
 
     while(run_usb_refresh)
     {

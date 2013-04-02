@@ -35,8 +35,8 @@ enum
     CLRS_MAX
 };
 
-extern int CLR_PRIMARY;
-extern int CLR_SECONDARY;
+extern uint32_t CLR_PRIMARY;
+extern uint32_t CLR_SECONDARY;
 
 int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot);
 void multirom_ui_init_header(void);
@@ -48,7 +48,7 @@ void multirom_ui_fill_rom_list(listview *view, int mask);
 void multirom_ui_auto_boot(void);
 void multirom_ui_refresh_usb_handler(void);
 void multirom_ui_start_pong(int action);
-void multirom_ui_setup_colors(int clr, int *primary, int *secondary);
+void multirom_ui_setup_colors(int clr, uint32_t *primary, uint32_t *secondary);
 
 void *multirom_ui_tab_rom_init(int tab_type);
 void multirom_ui_tab_rom_destroy(void *data);
