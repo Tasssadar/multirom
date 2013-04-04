@@ -87,7 +87,10 @@ void adb_quit(void)
     run_thread = 0;
 
     if(adb_pid != -1)
+    {
         kill(adb_pid, 9);
+        adb_pid = -1;
+    }
 
     pthread_join(adb_thread, NULL);
 }
