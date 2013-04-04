@@ -84,6 +84,14 @@ static const char *uevent_paths[] =
     "/sys/devices/virtual/input/input1",
     "/sys/devices/virtual/input/input1/event1",
 
+    // for adb
+    "/sys/devices/virtual/tty/ptmx",
+    "/sys/devices/platform/sdhci-tegra.3/mmc_host/mmc0/mmc0:0001/block/mmcblk0/mmcblk0p3", // /system
+    "/sys/devices/platform/sdhci-tegra.3/mmc_host/mmc0/mmc0:0001/block/mmcblk0/mmcblk0p4", // /cache
+    "/sys/devices/virtual/misc/android_adb",
+    "/sys/devices/virtual/android_usb/android0/f_adb",
+    "/sys/bus/usb",
+
     // USB drive is in here
     "/sys/devices/platform/tegra-ehci.0*",
 
@@ -105,13 +113,11 @@ static void *uevent_thread_work(void *cookie)
     while(run_event_thread) {
         ufd.revents = 0;
         nr = poll(&ufd, 1, 0);
-        if (nr <= 0)
-            continue;
 
-        if (ufd.revents == POLLIN)
+        if (nr > 0 && ufd.revents == POLLIN)
             handle_device_fd();
 
-        usleep(10000);
+        usleep(100000);
     }
     return NULL;
 }

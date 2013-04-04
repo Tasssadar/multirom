@@ -22,6 +22,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <time.h>
+#include <dirent.h>
 
 #ifdef HAVE_SELINUX
 #include <selinux/label.h>
@@ -528,6 +529,75 @@ int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const cha
     return 0;
 }
 
+int write_file(const char *path, const char *value)
+{
+    int fd, ret, len;
+
+    fd = open(path, O_WRONLY|O_CREAT, 0622);
+
+    if (fd < 0)
+    {
+        ERROR("Failed to open file %s (%d: %s)\n", path, errno, strerror(errno));
+        return -errno;
+    }
+
+    len = strlen(value);
+
+    do {
+        ret = write(fd, value, len);
+    } while (ret < 0 && errno == EINTR);
+
+    close(fd);
+    if (ret < 0) {
+        return -errno;
+    } else {
+        return 0;
+    }
+}
+
+int remove_dir(const char *dir)
+{
+    struct DIR *d = opendir(dir);
+    if(!dir)
+        return -1;
+
+    struct dirent *dt;
+    int res = 0;
+
+    int dir_len = strlen(dir) + 1;
+    char *n = malloc(dir_len + 1);
+    strcpy(n, dir);
+    strcat(n, "/");
+
+    while(res == 0 && (dt = readdir(d)))
+    {
+        if(dt->d_name[0] == '.' && (dt->d_name[1] == '.' || dt->d_name[1] == 0))
+            continue;
+
+        n = realloc(n, dir_len + strlen(dt->d_name) + 1);
+        n[dir_len] = 0;
+        strcat(n, dt->d_name);
+
+        if(dt->d_type == DT_DIR)
+        {
+            if(remove_dir(n) < 0)
+                res = -1;
+        }
+        else
+        {
+            if(remove(n) < 0)
+                res = -1;
+        }
+    }
+
+    free(n);
+    closedir(d);
+
+    if(res == 0 && remove(dir) < 0)
+        res = -1;
+    return res;
+}
+
 int run_cmd(char **cmd)
 {
     pid_t pID = fork();
@@ -564,6 +634,7 @@ char *run_get_stdout(char **cmd)
         close(fd[1]);
 
         execv(cmd[0], cmd);
+        ERROR("execv failed: %d %s\n", errno, strerror(errno));
         exit(0);
     }
     else

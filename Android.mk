@@ -15,7 +15,8 @@ LOCAL_SRC_FILES:= \
 	checkbox.c \
 	button.c \
 	pong.c \
-	progressdots.c
+	progressdots.c \
+	adb.c
 
 LOCAL_MODULE:= multirom
 LOCAL_MODULE_TAGS := eng

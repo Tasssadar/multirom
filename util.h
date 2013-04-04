@@ -41,6 +41,8 @@ void get_hardware_name(char *hardware, unsigned int *revision);
 void import_kernel_cmdline(int in_qemu, void (*import_kernel_nv)(char *name, int in_qemu));
 int copy_file(const char *from, const char *to);
 int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const char *group);
+int write_file(const char *path, const char *value);
+int remove_dir(const char *dir);
 int run_cmd(char **cmd);
 char *run_get_stdout(char **cmd);
 

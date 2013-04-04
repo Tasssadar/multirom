@@ -73,12 +73,16 @@ struct multirom_status
     int auto_boot_seconds;
     int colors;
     int brightness;
+    int enable_adb;
     struct multirom_rom *auto_boot_rom;
     struct multirom_rom *current_rom;
     struct multirom_rom **roms;
     struct usb_partition **partitions;
     char *curr_rom_part;
 };
+
+extern char busybox_path[64];
+extern char adbd_path[64];
 
 int multirom(void);
 int multirom_find_base_dir(void);

@@ -86,11 +86,13 @@ static void run_multirom(void)
         ERROR("exec failed %d %d %s\n", res, errno, strerror(errno));
         _exit(127);
     }
-    int status = 0;
-    while(waitpid(pID, &status, WNOHANG) == 0) { usleep(300000); }
-
-
-    ERROR("MultiROM exited with status %d", status);
+    else
+    {
+        int status = 0;
+        while(waitpid(pID, &status, WNOHANG) == 0)
+            usleep(300000);
+        ERROR("MultiROM exited with status %d", status);
+    }
 }
 
 struct part_info
