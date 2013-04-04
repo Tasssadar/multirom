@@ -69,8 +69,9 @@ int multirom_find_base_dir(void)
         sprintf(ntfs_path, "%s/%s", paths[i], NTFS_BIN);
         sprintf(adbd_path, "%s/%s", paths[i], ADBD_BIN);
 
-        chmod(kexec_path, 0777);
-        chmod(ntfs_path, 0777);
+        chmod(kexec_path, 0755);
+        chmod(ntfs_path, 0755);
+        chmod(adbd_path, 0755);
         return 0;
     }
     return -1;
