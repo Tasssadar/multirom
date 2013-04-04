@@ -1731,7 +1731,7 @@ int multirom_update_partitions(struct multirom_status *s)
             part->fs = strndup(t, strchr(t, '"') - t);
         }
 
-        if(strstr(part->name, "mmcblk") || multirom_mount_usb(part) == 0)
+        if(part->fs && (strstr(part->name, "mmcblk") || multirom_mount_usb(part) == 0))
         {
             list_add(part, &s->partitions);
             ERROR("Found part %s: %s, %s\n", part->name, part->uuid, part->fs);
