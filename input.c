@@ -181,43 +181,6 @@ static inline int64_t get_us_diff(struct timeval now, struct timeval prev)
 
 static void handle_touch_event(struct input_event *ev)
 {
-    // SYN_REPORT, send events to handlers
-    if(ev->type == EV_SYN && ev->code == SYN_REPORT)
-    {
-        pthread_mutex_lock(&touch_mutex);
-        int has_handlers = (mt_handlers != NULL);
-        pthread_mutex_unlock(&touch_mutex);
-
-        if(!has_handlers)
-            return;
-
-        uint32_t i;
-        touch_handler *h;
-        handler_list_it *it;
-
-        for(i = 0; i < ARRAY_SIZE(mt_events); ++i)
-        {
-            mt_events[i].us_diff = get_us_diff(ev->time, mt_events[i].time);
-            mt_events[i].time = ev->time;
-
-            if(!mt_events[i].changed)
-                continue;
-
-            it = mt_handlers;
-            while(it)
-            {
-                h = it->handler;
-                if((*h->callback)(&mt_events[i], h->data) == 0 && mt_handlers_mode == HANDLERS_FIRST)
-                    break;
-                it = it->next;
-            }
-
-            mt_events[i].changed = 0;
-        }
-        return;
-    }
-
-    // ABS events
     switch(ev->code)
     {
         case ABS_MT_SLOT:
@@ -251,6 +214,114 @@ static void handle_touch_event(struct input_event *ev)
             break;
         }
     }
+}
+
+static void handle_touch_syn(struct input_event *ev)
+{
+    pthread_mutex_lock(&touch_mutex);
+    int has_handlers = (mt_handlers != NULL);
+    pthread_mutex_unlock(&touch_mutex);
+
+    if(!has_handlers)
+        return;
+
+    uint32_t i;
+    touch_handler *h;
+    handler_list_it *it;
+
+    for(i = 0; i < ARRAY_SIZE(mt_events); ++i)
+    {
+        mt_events[i].us_diff = get_us_diff(ev->time, mt_events[i].time);
+        mt_events[i].time = ev->time;
+
+        if(!mt_events[i].changed)
+            continue;
+
+        it = mt_handlers;
+        while(it)
+        {
+            h = it->handler;
+            if((*h->callback)(&mt_events[i], h->data) == 0 && mt_handlers_mode == HANDLERS_FIRST)
+                break;
+            it = it->next;
+        }
+
+        mt_events[i].changed = 0;
+    }
+}
+
+static void *input_thread_work(void *cookie)
+{
+    ev_init();
+    struct input_event ev;
+
+    memset(mt_events, 0, sizeof(mt_events));
+
+    key_itr = 10;
+    mt_slot = 0;
+
+    int res;
+    while(input_run)
+    {
+        while(ev_get(&ev, 1) == 0)
+        {
+            switch(ev.type)
+            {
+                case EV_KEY:
+                    handle_key_event(&ev);
+                    break;
+                case EV_ABS:
+                    handle_touch_event(&ev);
+                    break;
+                case EV_SYN:
+                    if(ev->code == SYN_REPORT)
+                        handle_touch_syn(&ev);
+                    break;
+            }
+        }
+        usleep(10000);
+    }
+    ev_exit();
+    pthread_exit(NULL);
+    return NULL;
+}
+
+int get_last_key(void)
+{
+    int res = -1;
+    pthread_mutex_lock(&key_mutex);
+    if(key_itr != 10)
+        res = key_queue[key_itr++];
+    pthread_mutex_unlock(&key_mutex);
+    return res;
+}
+
+int wait_for_key(void)
+{
+    int res = -1;
+    while(res == -1)
+    {
+        res = get_last_key();
+        usleep(10000);
+    }
+    return res;
+}
+
+void start_input_thread(void)
+{
+    if(input_run)
+        return;
+
+    input_run = 1;
+    pthread_create(&input_thread, NULL, input_thread_work, NULL);
+}
+
+void stop_input_thread(void)
+{
+    if(!input_run)
+        return;
+    input_run = 0;
+    pthread_join(input_thread, NULL);
 }
 
 void add_touch_handler(touch_callback callback, void *data)
@@ -310,77 +381,6 @@ void rm_touch_handler(touch_callback callback, void *data)
 void set_touch_handlers_mode(int mode)
 {
     mt_handlers_mode = mode;
-}
-
-static void *input_thread_work(void *cookie)
-{
-    ev_init();
-    struct input_event ev;
-
-    memset(mt_events, 0, sizeof(mt_events));
-
-    key_itr = 10;
-    mt_slot = 0;
-
-    int res;
-    while(input_run)
-    {
-        while(ev_get(&ev, 1) == 0)
-        {
-            switch(ev.type)
-            {
-                case EV_KEY:
-                    handle_key_event(&ev);
-                    break;
-                case EV_ABS:
-                case EV_SYN:
-                    handle_touch_event(&ev);
-                    break;
-            }
-        }
-        usleep(10000);
-    }
-    ev_exit();
-    pthread_exit(NULL);
-    return NULL;
-}
-
-int get_last_key(void)
-{
-    int res = -1;
-    pthread_mutex_lock(&key_mutex);
-    if(key_itr != 10)
-        res = key_queue[key_itr++];
-    pthread_mutex_unlock(&key_mutex);
-    return res;
-}
-
-int wait_for_key(void)
-{
-    int res = -1;
-    while(res == -1)
-    {
-        res = get_last_key();
-        usleep(10000);
-    }
-    return res;
-}
-
-void start_input_thread(void)
-{
-    if(input_run)
-        return;
-
-    input_run = 1;
-    pthread_create(&input_thread, NULL, input_thread_work, NULL);
-}
-
-void stop_input_thread(void)
-{
-    if(!input_run)
-        return;
-    input_run = 0;
-    pthread_join(input_thread, NULL);
 }
 
 void input_push_context(void)
