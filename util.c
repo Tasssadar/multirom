@@ -695,7 +695,7 @@ void list_add(void *item, ptrToList list_p)
     (*list)[--i] = item;
 }
 
-int list_rm(void *item, ptrToList list_p, callback destroy_callback_p)
+int list_rm_opt(int reorder, void *item, ptrToList list_p, callback destroy_callback_p)
 {
     void ***list = (void***)list_p;
     callbackPtr destroy_callback = (callbackPtr)destroy_callback_p;
@@ -720,13 +720,31 @@ int list_rm(void *item, ptrToList list_p, callback destroy_callback_p)
         }
 
         if(i != size-1)
-            (*list)[i] = (*list)[size-1];
+        {
+            if(reorder)
+                (*list)[i] = (*list)[size-1];
+            else
+            {
+                for(; *list && (*list)[i]; ++i)
+                    (*list)[i] = (*list)[i+1];
+            }
+        }
 
         *list= realloc(*list, size*sizeof(item));
         (*list)[size-1] = NULL;
         return 0;
     }
     return -1;
+}
+
+int list_rm(void *item, ptrToList list_p, callback destroy_callback_p)
+{
+    return list_rm_opt(1, item, list_p, destroy_callback_p);
+}
+
+int list_rm_noreorder(void *item, ptrToList list_p, callback destroy_callback_p)
+{
+    return list_rm_opt(0, item, list_p, destroy_callback_p);
 }
 
 int list_rm_at(int idx, ptrToList list_p, callback destroy_callback_p)

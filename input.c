@@ -274,7 +274,7 @@ static void *input_thread_work(void *cookie)
                     handle_touch_event(&ev);
                     break;
                 case EV_SYN:
-                    if(ev->code == SYN_REPORT)
+                    if(ev.code == SYN_REPORT)
                         handle_touch_syn(&ev);
                     break;
             }
@@ -416,5 +416,5 @@ void input_pop_context(void)
 
     pthread_mutex_unlock(&touch_mutex);
 
-    list_rm(ctx, &inactive_ctx, &free);
+    list_rm_noreorder(ctx, &inactive_ctx, &free);
 }

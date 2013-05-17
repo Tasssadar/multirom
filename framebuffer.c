@@ -332,7 +332,7 @@ void fb_rm_text(fb_text *t)
         return;
 
     pthread_mutex_lock(&fb_mutex);
-    list_rm(t, &fb_items.texts, &fb_destroy_item);
+    list_rm_noreorder(t, &fb_items.texts, &fb_destroy_item);
     pthread_mutex_unlock(&fb_mutex);
 }
 
@@ -342,7 +342,7 @@ void fb_rm_rect(fb_rect *r)
         return;
 
     pthread_mutex_lock(&fb_mutex);
-    list_rm(r, &fb_items.rects, &fb_destroy_item);
+    list_rm_noreorder(r, &fb_items.rects, &fb_destroy_item);
     pthread_mutex_unlock(&fb_mutex);
 }
 
@@ -411,7 +411,7 @@ void fb_msgbox_rm_text(fb_text *text)
 
     pthread_mutex_lock(&fb_mutex);
     if(fb_items.msgbox)
-        list_rm(text, &fb_items.msgbox->texts, &fb_destroy_item);
+        list_rm_noreorder(text, &fb_items.msgbox->texts, &fb_destroy_item);
     pthread_mutex_unlock(&fb_mutex);
 }
 
@@ -565,7 +565,7 @@ void fb_pop_context(void)
 
     pthread_mutex_unlock(&fb_mutex);
 
-    list_rm(ctx, &inactive_ctx, &free);
+    list_rm_noreorder(ctx, &inactive_ctx, &free);
 
     fb_draw();
 }

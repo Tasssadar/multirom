@@ -57,6 +57,8 @@ typedef void(*callbackPtr)(void*);
 
 void list_add(void *item, ptrToList list_p);
 int list_rm(void *item, ptrToList list_p, callback destroy_callback_p);
+int list_rm_noreorder(void *item, ptrToList list_p, callback destroy_callback_p);
+int list_rm_opt(int reorder, void *item, ptrToList list_p, callback destroy_callback_p);
 int list_rm_at(int idx, ptrToList list_p, callback destroy_callback_p);
 int list_size(listItself list);
 int list_item_count(listItself list);
