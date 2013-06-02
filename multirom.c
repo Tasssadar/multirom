@@ -236,9 +236,9 @@ static int compare_rom_names(const void *a, const void *b)
     struct multirom_rom *rom_a = *((struct multirom_rom **)a);
     struct multirom_rom *rom_b = *((struct multirom_rom **)b);
 
-    if(strcmp(rom_a->name, INTERNAL_ROM_NAME) == 0)
+    if(rom_a->type == ROM_DEFAULT)
         return -1;
-    else if(strcmp(rom_b->name, INTERNAL_ROM_NAME) == 0)
+    else if(rom_b->type == ROM_DEFAULT)
         return 1;
 
     char *itr_a = rom_a->name;
@@ -352,7 +352,7 @@ int multirom_default_status(struct multirom_status *s)
         list_clear(&add_roms, NULL);
     }
 
-    s->current_rom = multirom_get_rom(s, INTERNAL_ROM_NAME, NULL);
+    s->current_rom = multirom_get_internal(s);
     if(!s->current_rom)
     {
         fb_debug("No internal rom found!\n");
@@ -416,6 +416,10 @@ int multirom_load_status(struct multirom_status *s)
             s->brightness = atoi(arg);
         else if(strstr(name, "enable_adb"))
             s->enable_adb = atoi(arg);
+        else if(strstr(name, "hide_internal"))
+            s->hide_internal = atoi(arg);
+        else if(strstr(name, "int_display_name"))
+            s->int_display_name = strdup(arg);
     }
 
     fclose(f);
@@ -446,7 +450,7 @@ int multirom_load_status(struct multirom_status *s)
     if(!s->current_rom)
     {
         fb_debug("Failed to select current rom (%s, part %s), using Internal!\n", current_rom, s->curr_rom_part);
-        s->current_rom = multirom_get_rom(s, INTERNAL_ROM_NAME, NULL);
+        s->current_rom = multirom_get_internal(s);
         if(!s->current_rom)
         {
             fb_debug("No internal rom found!\n");
@@ -457,6 +461,13 @@ int multirom_load_status(struct multirom_status *s)
     s->auto_boot_rom = multirom_get_rom(s, auto_boot_rom, NULL);
     if(!s->auto_boot_rom)
         ERROR("Could not find rom %s to auto-boot", auto_boot_rom);
+
+    if(s->int_display_name)
+    {
+        struct multirom_rom *r = multirom_get_internal(s);
+        r->name = realloc(r->name, strlen(s->int_display_name)+1);
+        strcpy(r->name, s->int_display_name);
+    }
 
     return 0;
 }
@@ -475,13 +486,15 @@ int multirom_save_status(struct multirom_status *s)
         return -1;
     }
 
-    fprintf(f, "current_rom=%s\n", s->current_rom ? s->current_rom->name : INTERNAL_ROM_NAME);
+    fprintf(f, "current_rom=%s\n", s->current_rom ? s->current_rom->name : multirom_get_internal(s)->name);
     fprintf(f, "auto_boot_seconds=%d\n", s->auto_boot_seconds);
     fprintf(f, "auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "");
     fprintf(f, "curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "");
     fprintf(f, "colors=%d\n", s->colors);
     fprintf(f, "brightness=%d\n", s->brightness);
     fprintf(f, "enable_adb=%d\n", s->enable_adb);
+    fprintf(f, "hide_internal=%d\n", s->hide_internal);
+    fprintf(f, "int_display_name=%s\n", s->int_display_name ? s->int_display_name : "");
 
     fclose(f);
     return 0;
@@ -679,6 +692,18 @@ int multirom_dump_boot(const char *dest)
     return res;
 }
 
+struct multirom_rom *multirom_get_internal(struct multirom_status *s)
+{
+    int i;
+    for(i = 0; s->roms && s->roms[i]; ++i)
+    {
+        if(s->roms[i]->type == ROM_DEFAULT)
+            return s->roms[i];
+    }
+    fb_debug("ERROR: Something is wrong, multirom_get_internal returns NULL!\n");
+    return NULL;
+}
+
 struct multirom_rom *multirom_get_rom(struct multirom_status *s, const char *name, const char *part_uuid)
 {
     int i = 0;
@@ -719,19 +744,22 @@ void multirom_dump_status(struct multirom_status *s)
     fb_debug("  colors=%d\n", s->colors);
     fb_debug("  brightness=%d\n", s->brightness);
     fb_debug("  enable_adb=%d\n", s->enable_adb);
+    fb_debug("  hide_internal=%d\n", s->hide_internal);
+    fb_debug("  int_display_name=%s\n", s->int_display_name ? s->int_display_name : "NULL");
     fb_debug("  auto_boot_seconds=%d\n", s->auto_boot_seconds);
     fb_debug("  auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "NULL");
     fb_debug("  curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "NULL");
     fb_debug("\n");
 
-    int i, y;
-    char buff[256];
+    int i;
     for(i = 0; s->roms && s->roms[i]; ++i)
     {
         fb_debug("  ROM: %s\n", s->roms[i]->name);
         fb_debug("    base_path: %s\n", s->roms[i]->base_path);
         fb_debug("    type: %d\n", s->roms[i]->type);
         fb_debug("    has_bootimg: %d\n", s->roms[i]->has_bootimg);
+        if(s->roms[i]->partition)
+            fb_debug("   partition: %s (%s)\n", s->roms[i]->partition->name, s->roms[i]->partition->fs);
     }
 }
 
@@ -783,6 +811,7 @@ void multirom_free_status(struct multirom_status *s)
     list_clear(&s->partitions, &multirom_destroy_partition);
     list_clear(&s->roms, &multirom_free_rom);
     free(s->curr_rom_part);
+    free(s->int_display_name);
 }
 
 void multirom_free_rom(void *rom)

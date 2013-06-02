@@ -337,6 +337,9 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
         if(rom->partition)
             sprintf(part_desc, "%s (%s)", rom->partition->name, rom->partition->fs);
 
+        if(rom->type == ROM_DEFAULT && mrom_status->hide_internal)
+            continue;
+
         data = rom_item_create(rom->name, rom->partition ? part_desc : NULL);
         it = listview_add_item(view, rom->id, data);
 

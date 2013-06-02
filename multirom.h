@@ -74,6 +74,8 @@ struct multirom_status
     int colors;
     int brightness;
     int enable_adb;
+    int hide_internal;
+    char *int_display_name;
     struct multirom_rom *auto_boot_rom;
     struct multirom_rom *current_rom;
     struct multirom_rom **roms;
@@ -90,6 +92,7 @@ void multirom_emergency_reboot(void);
 int multirom_default_status(struct multirom_status *s);
 void multirom_find_usb_roms(struct multirom_status *s);
 int multirom_generate_rom_id(void);
+struct multirom_rom *multirom_get_internal(struct multirom_status *s);
 struct multirom_rom *multirom_get_rom(struct multirom_status *s, const char *name, const char *part_uuid);
 struct multirom_rom *multirom_get_rom_by_id(struct multirom_status *s, int id);
 int multirom_load_status(struct multirom_status *s);
