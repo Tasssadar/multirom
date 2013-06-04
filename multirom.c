@@ -476,19 +476,24 @@ int multirom_save_status(struct multirom_status *s)
 {
     fb_debug("Saving multirom status\n");
 
-    char path[256];
-    sprintf(path, "%s/multirom.ini", multirom_dir);
+    char buff[256];
+    sprintf(buff, "%s/multirom.ini", multirom_dir);
 
-    FILE *f = fopen(path, "w");
+    FILE *f = fopen(buff, "w");
     if(!f)
     {
         fb_debug("Failed to open/create status file!\n");
         return -1;
     }
 
+
+    buff[0] = 0;
+    if(s->auto_boot_rom && s->auto_boot_rom->type == ROM_DEFAULT)
+        strcpy(buff, INTERNAL_ROM_NAME);
+
     fprintf(f, "current_rom=%s\n", s->current_rom ? s->current_rom->name : multirom_get_internal(s)->name);
     fprintf(f, "auto_boot_seconds=%d\n", s->auto_boot_seconds);
-    fprintf(f, "auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "");
+    fprintf(f, "auto_boot_rom=%s\n", buff);
     fprintf(f, "curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "");
     fprintf(f, "colors=%d\n", s->colors);
     fprintf(f, "brightness=%d\n", s->brightness);
