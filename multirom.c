@@ -1365,19 +1365,8 @@ int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *ro
     struct stat st;
     char path[256];
     char *tmp;
-    if((tmp = map_get_val(info->str_vals, "root_dir")))
-    {
-        sprintf(path, "%s/%s", base_path, tmp);
-        if(stat(path, &st) >= 0)
-        {
-            root_type = 0;
-            strcpy(root_path, path);
-        }
-        else
-            ERROR("Path %s not found!\n", path);
-    }
 
-    if(root_type == -1 && (tmp = map_get_val(info->str_vals, "root_img")))
+    if((tmp = map_get_val(info->str_vals, "root_img")))
     {
         sprintf(path, "%s/%s", base_path, tmp);
         if(stat(path, &st) >= 0)
@@ -1393,6 +1382,18 @@ int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *ro
 
             loop_mounted = 1;
             strcpy(root_path, "/mnt/image");
+        }
+        else
+            ERROR("Path %s not found!\n", path);
+    }
+
+    if(root_type == -1 && (tmp = map_get_val(info->str_vals, "root_dir")))
+    {
+        sprintf(path, "%s/%s", base_path, tmp);
+        if(stat(path, &st) >= 0)
+        {
+            root_type = 0;
+            strcpy(root_path, path);
         }
         else
             ERROR("Path %s not found!\n", path);
