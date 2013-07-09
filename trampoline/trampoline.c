@@ -46,7 +46,7 @@ static int find_multirom(void)
     return -1;
 }
 
-static void run_multirom_bin(char *path)
+static int run_multirom_bin(char *path)
 {
     ERROR("Running multirom");
     pid_t pID = fork();
@@ -64,6 +64,7 @@ static void run_multirom_bin(char *path)
         while(waitpid(pID, &status, WNOHANG) == 0)
             usleep(300000);
         ERROR("MultiROM exited with status %d", status);
+        return status;
     }
 }
 
@@ -101,7 +102,8 @@ static void run_multirom(void)
     chmod(path, EXEC_MASK);
 
     do {
-        run_multirom_bin(path);
+        if(run_multirom_bin(path) == 0)
+            break;
     } while(restart);
 }
 
