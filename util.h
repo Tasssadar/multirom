@@ -83,4 +83,7 @@ int map_find(map *m, char *key);
 void *map_get_val(map *m, char *key);
 void *map_get_ref(map *m, char *key);
 
+// alloc and fill with 0s
+inline void *mzalloc(size_t size);
+
 #endif

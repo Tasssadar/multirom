@@ -17,21 +17,16 @@
 #include "version.h"
 #include "pong.h"
 #include "progressdots.h"
+#include "multirom_ui_themes.h"
 
-#define HEADER_HEIGHT 75
-#define TAB_BTN_WIDTH 165
 
-static fb_text *tab_texts[TAB_COUNT] = { 0 };
-static fb_rect *selected_tab_rect = NULL;
-static button *tab_btns[TAB_COUNT] = { NULL };
-static int selected_tab = -1;
-static void *tab_data = NULL;
 static struct multirom_status *mrom_status = NULL;
 static struct multirom_rom *selected_rom = NULL;
 static volatile int exit_ui_code = -1;
 static fb_msgbox *active_msgbox = NULL;
 static volatile int loop_act = 0;
-static button *pong_btn = NULL;
+static multirom_themes_info *themes_info = NULL;
+static multirom_theme *cur_theme = NULL;
 
 static pthread_mutex_t exit_code_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -85,8 +80,23 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     active_msgbox = NULL;
 
     multirom_ui_setup_colors(s->colors, &CLR_PRIMARY, &CLR_SECONDARY);
+    themes_info = multirom_ui_init_themes();
+    if((cur_theme = multirom_ui_select_theme(themes_info, fb_width, fb_height)) == NULL)
+    {
+        fb_freeze(0);
 
-    selected_tab = -1;
+        ERROR("Couldn't find theme for resolution %dx%d!\n", fb_width, fb_height);
+        fb_add_text(0, 0, WHITE, SIZE_SMALL, "Couldn't find theme for resolution %dx%d!\nPress POWER to reboot.", fb_width, fb_height);
+        fb_draw();
+        fb_clear();
+        fb_close();
+
+        start_input_thread();
+        while(wait_for_key() != KEY_POWER);
+        stop_input_thread();
+        return UI_EXIT_REBOOT;
+    }
+
     multirom_ui_init_header();
     multirom_ui_switch(TAB_INTERNAL);
 
@@ -114,8 +124,8 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
         if(loop_act & LOOP_UPDATE_USB)
         {
             multirom_find_usb_roms(mrom_status);
-            if(selected_tab == TAB_USB)
-                multirom_ui_tab_rom_update_usb(tab_data);
+            if(themes_info->data->selected_tab == TAB_USB)
+                multirom_ui_tab_rom_update_usb(themes_info->data->tab_data);
             loop_act &= ~(LOOP_UPDATE_USB);
         }
 
@@ -138,8 +148,8 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
             multirom_ui_setup_colors(s->colors, &CLR_PRIMARY, &CLR_SECONDARY);
 
             // force redraw tab
-            int tab = selected_tab;
-            selected_tab = -1;
+            int tab = themes_info->data->selected_tab;
+            themes_info->data->selected_tab = -1;
 
             multirom_ui_destroy_tab(tab);
             multirom_ui_switch(tab);
@@ -179,22 +189,23 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     fb_draw();
     fb_freeze(1);
 
-    button_destroy(pong_btn);
-    pong_btn = NULL;
+    cur_theme->destroy(cur_theme);
 
     int i;
     for(i = 0; i < TAB_COUNT; ++i)
     {
-        button_destroy(tab_btns[i]);
-        tab_btns[i] = NULL;
+        button_destroy(themes_info->data->tab_btns[i]);
+        themes_info->data->tab_btns[i] = NULL;
     }
 
     stop_input_thread();
 
-    multirom_ui_destroy_tab(selected_tab);
+    multirom_ui_destroy_tab(themes_info->data->selected_tab);
+    multirom_ui_free_themes(themes_info);
+    themes_info = NULL;
+
     fb_clear();
     fb_close();
-
     return exit_ui_code;
 }
 
@@ -220,54 +231,12 @@ void multirom_ui_setup_colors(int clr, uint32_t *primary, uint32_t *secondary)
 
 void multirom_ui_init_header(void)
 {
-    int i, text_x, text_y;
-    int x = fb_width - (TAB_BTN_WIDTH*TAB_COUNT);
-
-    static const char *str[] = { "Internal", "USB", "Misc", "MultiROM" };
-
-    text_x = center_x(0, x, SIZE_EXTRA, str[3]);
-    fb_add_text(text_x, 5, WHITE, SIZE_EXTRA, str[3]);
-
-    pong_btn = malloc(sizeof(button));
-    memset(pong_btn, 0, sizeof(button));
-    pong_btn->w = x;
-    pong_btn->h = HEADER_HEIGHT;
-    pong_btn->clicked = &multirom_ui_start_pong;
-    button_init_ui(pong_btn, NULL, 0);
-
-    for(i = 0; i < TAB_COUNT; ++i)
-    {
-        text_x = center_x(x, TAB_BTN_WIDTH, SIZE_NORMAL, str[i]);
-        text_y = center_y(0, HEADER_HEIGHT, SIZE_NORMAL);
-        tab_texts[i] = fb_add_text(text_x, text_y, WHITE, SIZE_NORMAL, str[i]);
-
-        fb_add_rect(x, 0, 2, HEADER_HEIGHT, WHITE);
-
-        tab_btns[i] = malloc(sizeof(button));
-        memset(tab_btns[i], 0, sizeof(button));
-        tab_btns[i]->x = x;
-        tab_btns[i]->w = TAB_BTN_WIDTH;
-        tab_btns[i]->h = HEADER_HEIGHT;
-        tab_btns[i]->action = i;
-        tab_btns[i]->clicked = &multirom_ui_switch;
-        button_init_ui(tab_btns[i], NULL, 0);
-
-        x += TAB_BTN_WIDTH;
-    }
-
-    fb_add_rect(0, HEADER_HEIGHT, fb_width, 2, WHITE);
+    cur_theme->init_header(cur_theme);
 }
 
 void multirom_ui_header_select(int tab)
 {
-    int i;
-    for(i = 0; i < TAB_COUNT; ++i)
-        tab_texts[i]->color = (i == tab) ? BLACK : WHITE;
-
-    if(!selected_tab_rect)
-        selected_tab_rect = fb_add_rect(0, 0, TAB_BTN_WIDTH, HEADER_HEIGHT, WHITE);
-
-    selected_tab_rect->head.x = fb_width - (TAB_BTN_WIDTH * (TAB_COUNT - tab));
+    cur_theme->header_select(cur_theme, tab);
 }
 
 void multirom_ui_destroy_tab(int tab)
@@ -278,21 +247,21 @@ void multirom_ui_destroy_tab(int tab)
             break;
         case TAB_USB:
         case TAB_INTERNAL:
-            multirom_ui_tab_rom_destroy(tab_data);
+            multirom_ui_tab_rom_destroy(themes_info->data->tab_data);
             break;
         case TAB_MISC:
-            multirom_ui_tab_misc_destroy(tab_data);
+            multirom_ui_tab_misc_destroy(themes_info->data->tab_data);
             break;
         default:
             assert(0);
             break;
     }
-    tab_data = NULL;
+    themes_info->data->tab_data = NULL;
 }
 
 void multirom_ui_switch(int tab)
 {
-    if(tab == selected_tab)
+    if(tab == themes_info->data->selected_tab)
         return;
 
     fb_freeze(1);
@@ -300,21 +269,21 @@ void multirom_ui_switch(int tab)
     multirom_ui_header_select(tab);
 
     // destroy old tab
-    multirom_ui_destroy_tab(selected_tab);
+    multirom_ui_destroy_tab(themes_info->data->selected_tab);
 
     // init new tab
     switch(tab)
     {
         case TAB_USB:
         case TAB_INTERNAL:
-            tab_data = multirom_ui_tab_rom_init(tab);
+            themes_info->data->tab_data = multirom_ui_tab_rom_init(tab);
             break;
         case TAB_MISC:
-            tab_data = multirom_ui_tab_misc_init();
+            themes_info->data->tab_data = multirom_ui_tab_misc_init();
             break;
     }
 
-    selected_tab = tab;
+    themes_info->data->selected_tab = tab;
 
     fb_freeze(0);
     fb_draw();
@@ -446,52 +415,21 @@ void multirom_ui_start_pong(int action)
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-#define ROMS_FOOTER_H 130
-#define ROMS_HEADER_H 90
-
-#define BOOTBTN_W 300
-#define BOOTBTN_H 80
-
-#define REFRESHBTN_W 400
-#define REFRESHBTN_H 60
-
-typedef struct 
-{
-    listview *list;
-    button **buttons;
-    void **ui_elements;
-    fb_text *rom_name;
-    fb_text *title_text;
-    fb_text *usb_text;
-    button *boot_btn;
-    progdots *usb_prog;
-} tab_roms;
-
 void *multirom_ui_tab_rom_init(int tab_type)
 {
-    tab_roms *t = malloc(sizeof(tab_roms));
-    memset(t, 0, sizeof(tab_roms));
+    tab_data_roms *t = mzalloc(sizeof(tab_data_roms));
 
-    int base_y = fb_height-ROMS_FOOTER_H;
-
-    // must be before list
-    tab_data = (void*)t;
-    t->rom_name = fb_add_text(0, center_y(base_y, ROMS_FOOTER_H, SIZE_NORMAL),
-                              WHITE, SIZE_NORMAL, "");
-
-
-    // rom list
-    t->list = malloc(sizeof(listview));
-    memset(t->list, 0, sizeof(listview));
-    t->list->y = HEADER_HEIGHT+ROMS_HEADER_H;
-    t->list->w = fb_width;
-    t->list->h = fb_height - t->list->y - ROMS_FOOTER_H-20;
-
+    t->list = mzalloc(sizeof(listview));
     t->list->item_draw = &rom_item_draw;
     t->list->item_hide = &rom_item_hide;
     t->list->item_height = &rom_item_height;
     t->list->item_destroy = &rom_item_destroy;
     t->list->item_selected = &multirom_ui_tab_rom_selected;
+
+    t->boot_btn = mzalloc(sizeof(button));
+    list_add(t->boot_btn, &t->buttons);
+
+    cur_theme->tab_rom_init(cur_theme, t, tab_type);
 
     listview_init_ui(t->list);
 
@@ -501,29 +439,11 @@ void *multirom_ui_tab_rom_init(int tab_type)
     listview_update_ui(t->list);
 
     int has_roms = (int)(t->list->items == NULL);
-
-    // header
-    int y = center_y(HEADER_HEIGHT, ROMS_HEADER_H, SIZE_BIG);
-    t->title_text = fb_add_text(0, y, CLR_PRIMARY, SIZE_BIG, "");
-    list_add(t->title_text, &t->ui_elements);
-
     multirom_ui_tab_rom_set_empty((void*)t, has_roms);
 
-    // footer
-    fb_rect *sep = fb_add_rect(0, fb_height-ROMS_FOOTER_H, fb_width, 2, CLR_PRIMARY);
-    list_add(sep, &t->ui_elements);
-
-    button *b = malloc(sizeof(button));
-    memset(b, 0, sizeof(button));
-    b->x = fb_width - BOOTBTN_W - 20;
-    b->y = base_y + (ROMS_FOOTER_H-BOOTBTN_H)/2;
-    b->w = BOOTBTN_W;
-    b->h = BOOTBTN_H;
-    b->clicked = &multirom_ui_tab_rom_boot_btn;
-    button_init_ui(b, "Boot", SIZE_BIG);
-    button_enable(b, !has_roms);
-    list_add(b, &t->buttons);
-    t->boot_btn = b;
+    t->boot_btn->clicked = &multirom_ui_tab_rom_boot_btn;
+    button_init_ui(t->boot_btn, "Boot", SIZE_BIG);
+    button_enable(t->boot_btn, !has_roms);
 
     if(tab_type == TAB_USB)
     {
@@ -537,7 +457,7 @@ void multirom_ui_tab_rom_destroy(void *data)
 {
     multirom_set_usb_refresh_thread(mrom_status, 0);
 
-    tab_roms *t = (tab_roms*)data;
+    tab_data_roms *t = (tab_data_roms*)data;
 
     list_clear(&t->buttons, &button_destroy);
     list_clear(&t->ui_elements, &fb_remove_item);
@@ -555,26 +475,26 @@ void multirom_ui_tab_rom_destroy(void *data)
 void multirom_ui_tab_rom_selected(listview_item *prev, listview_item *now)
 {
     struct multirom_rom *rom = multirom_get_rom_by_id(mrom_status, now->id);
-    if(!rom || !tab_data)
+    if(!rom || !themes_info->data->tab_data)
         return;
 
-    tab_roms *t = (tab_roms*)tab_data;
+    tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data;
 
     free(t->rom_name->text);
     t->rom_name->text = malloc(strlen(rom->name)+1);
     strcpy(t->rom_name->text, rom->name);
 
-    t->rom_name->head.x = center_x(0, fb_width-BOOTBTN_W-20, SIZE_NORMAL, rom->name);
+    cur_theme->center_rom_name(t, rom->name);
 
     fb_draw();
 }
 
 void multirom_ui_tab_rom_boot_btn(int action)
 {
-    if(!tab_data)
+    if(!themes_info->data->tab_data)
         return;
 
-    tab_roms *t = (tab_roms*)tab_data;
+    tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data;
     if(!t->list->selected)
         return;
 
@@ -636,7 +556,7 @@ void multirom_ui_tab_rom_boot_btn(int action)
 
 void multirom_ui_tab_rom_update_usb(void *data)
 {
-    tab_roms *t = (tab_roms*)tab_data;
+    tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data;
     listview_clear(t->list);
 
     t->rom_name->text = realloc(t->rom_name->text, 1);
@@ -657,10 +577,12 @@ void multirom_ui_tab_rom_refresh_usb(int action)
 void multirom_ui_tab_rom_set_empty(void *data, int empty)
 {
     assert(empty == 0 || empty == 1);
-    tab_roms *t = (tab_roms*)data;
+
+    tab_data_roms *t = (tab_data_roms*)data;
+    int width = cur_theme->get_tab_width(cur_theme);
 
     static const char *str[] = { "Select ROM to boot:", "No ROMs in this location!" };
-    t->title_text->head.x = center_x(0, fb_width, SIZE_BIG, str[empty]);
+    t->title_text->head.x = center_x(0, width, SIZE_BIG, str[empty]);
     t->title_text->text = realloc(t->title_text->text, strlen(str[empty])+1);
     strcpy(t->title_text->text, str[empty]);
 
@@ -669,13 +591,14 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
 
     if(empty && !t->usb_text)
     {
+        const int line_len = 37;
         static const char *txt = "This list is refreshed automagically,\njust plug in the USB drive and  wait.";
-        int x = (fb_width/2 - (37*ISO_CHAR_WIDTH*SIZE_NORMAL)/2);
-        int y = center_y(HEADER_HEIGHT, t->list->h, SIZE_NORMAL);
+        int x = (width/2 - (line_len*ISO_CHAR_WIDTH*SIZE_NORMAL)/2);
+        int y = center_y(t->list->y, t->list->h, SIZE_NORMAL);
         t->usb_text = fb_add_text(x, y, WHITE, SIZE_NORMAL, txt);
         list_add(t->usb_text, &t->ui_elements);
 
-        x = (fb_width/2) - (PROGDOTS_W/2);
+        x = (width/2) - (PROGDOTS_W/2);
         t->usb_prog = progdots_create(x, y+100);
     }
     else if(!empty && t->usb_text)
@@ -688,117 +611,16 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
     }
 }
 
-#define MISCBTN_W 530
-#define MISCBTN_H 100
-
-#define CLRBTN_W 50
-#define CLRBTN_B 10
-#define CLRBTN_TOTAL (CLRBTN_W+CLRBTN_B)
-#define CLRBTN_Y 1150
-
-typedef struct 
-{
-    button **buttons;
-    void **ui_elements;
-} tab_misc;
-
 void *multirom_ui_tab_misc_init(void)
 {
-    tab_misc *t = malloc(sizeof(tab_misc));
-    memset(t, 0, sizeof(tab_misc));
-
-    int x = fb_width/2 - MISCBTN_W/2;
-    int y = 270;
-
-    button *b = malloc(sizeof(button));
-    memset(b, 0, sizeof(button));
-    b->x = x;
-    b->y = y;
-    b->w = MISCBTN_W;
-    b->h = MISCBTN_H;
-    b->clicked = &multirom_ui_tab_misc_copy_log;
-    button_init_ui(b, "Copy log to /sdcard", SIZE_BIG);
-    list_add(b, &t->buttons);
-
-    y += MISCBTN_H+70;
-
-    static const char *texts[] = 
-    {
-        "Reboot",               // 0
-        "Reboot to recovery",   // 1
-        "Reboot to bootloader", // 2
-        "Shutdown",             // 3
-        NULL
-    };
-
-    static const int exit_codes[] = {
-        UI_EXIT_REBOOT, UI_EXIT_REBOOT_RECOVERY,
-        UI_EXIT_REBOOT_BOOTLOADER, UI_EXIT_SHUTDOWN
-    };
-
-    int i;
-    for(i = 0; texts[i]; ++i)
-    {
-        b = malloc(sizeof(button));
-        memset(b, 0, sizeof(button));
-        b->x = x;
-        b->y = y;
-        b->w = MISCBTN_W;
-        b->h = MISCBTN_H;
-        b->action = exit_codes[i];
-        b->clicked = &multirom_ui_reboot_btn;
-        button_init_ui(b, texts[i], SIZE_BIG);
-        list_add(b, &t->buttons);
-
-        y += MISCBTN_H+20;
-        if(i == 2)
-            y += 50;
-    }
-
-    fb_text *text = fb_add_text(0, fb_height-16, WHITE, SIZE_SMALL, "MultiROM v%d with trampoline v%d.",
-                               VERSION_MULTIROM, multirom_get_trampoline_ver());
-    list_add(text, &t->ui_elements);
-
-    char bat_text[16];
-    sprintf(bat_text, "Battery: %d%%", multirom_get_battery());
-    text = fb_add_text_long(fb_width-strlen(bat_text)*8, fb_height-16, WHITE, SIZE_SMALL, bat_text);
-    list_add(text, &t->ui_elements);
-
-    x = fb_width/2 - (CLRS_MAX*CLRBTN_TOTAL)/2;
-    uint32_t p, s;
-    fb_rect *r;
-    for(i = 0; i < CLRS_MAX; ++i)
-    {
-        multirom_ui_setup_colors(i, &p, &s);
-
-        if(i == mrom_status->colors)
-        {
-            r = fb_add_rect(x, CLRBTN_Y, CLRBTN_TOTAL, CLRBTN_TOTAL, WHITE);
-            list_add(r, &t->ui_elements);
-        }
-
-        r = fb_add_rect(x+CLRBTN_B/2, CLRBTN_Y+CLRBTN_B/2, CLRBTN_W, CLRBTN_W, p);
-        list_add(r, &t->ui_elements);
-
-        b = malloc(sizeof(button));
-        memset(b, 0, sizeof(button));
-        b->x = x;
-        b->y = CLRBTN_Y;
-        b->w = CLRBTN_TOTAL;
-        b->h = CLRBTN_TOTAL;
-        b->action = i;
-        b->clicked = &multirom_ui_tab_misc_change_clr;
-        button_init_ui(b, NULL, 0);
-        list_add(b, &t->buttons);
-
-        x += CLRBTN_TOTAL;
-    }
+    tab_data_misc *t = mzalloc(sizeof(tab_data_misc));
+    cur_theme->tab_misc_init(cur_theme, t, mrom_status->colors);
     return t;
 }
 
 void multirom_ui_tab_misc_destroy(void *data)
 {
-    tab_misc *t = (tab_misc*)data;
+    tab_data_misc *t = (tab_data_misc*)data;
 
     list_clear(&t->ui_elements, &fb_remove_item);
     list_clear(&t->buttons, &button_destroy);

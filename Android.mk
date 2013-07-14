@@ -16,7 +16,17 @@ LOCAL_SRC_FILES:= \
 	button.c \
 	pong.c \
 	progressdots.c \
-	adb.c
+	adb.c \
+	multirom_ui_themes.c
+
+MULTIROM_THEMES :=
+
+include $(multirom_local_path)/device_$(TARGET_DEVICE).mk
+
+$(foreach res,$(MULTIROM_THEMES), \
+    $(eval LOCAL_SRC_FILES += multirom_ui_$(res).c) \
+    $(eval LOCAL_CFLAGS += -DMULTIROM_THEME_$(res)) \
+)
 
 LOCAL_MODULE:= multirom
 LOCAL_MODULE_TAGS := eng

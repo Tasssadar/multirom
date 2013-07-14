@@ -922,3 +922,11 @@ void *map_get_ref(map *m, char *key)
         return NULL;
     return &m->values[idx];
 }
+
+// alloc and fill with 0s
+void *mzalloc(size_t size)
+{
+    void *res = malloc(size);
+    memset(res, 0, size);
+    return res;
+}
