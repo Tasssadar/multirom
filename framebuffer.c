@@ -107,12 +107,12 @@ int fb_open(int rotation)
     fb_frozen = 0;
     active_fb = 0;
 
-    uint32_t *b_store = malloc(vi.xres*vi.yres*4);
-    android_memset32(b_store, BLACK, vi.xres*vi.yres*4);
+    uint32_t *b_store = malloc(vi.xres*vi.yres*PIXEL_SIZE);
+    android_memset32(b_store, BLACK, vi.xres*vi.yres*PIXEL_SIZE);
 
     fb = &framebuffers[0];
     fb->fd = fd;
-    fb->size = vi.xres*vi.yres*4;
+    fb->size = vi.xres*vi.yres*PIXEL_SIZE;
     fb->vi = vi;
     fb->fi = fi;
     fb->bits = b_store;
@@ -121,7 +121,7 @@ int fb_open(int rotation)
     ++fb;
 
     fb->fd = fd;
-    fb->size = vi.xres*vi.yres*4;
+    fb->size = vi.xres*vi.yres*PIXEL_SIZE;
     fb->vi = vi;
     fb->fi = fi;
     fb->bits = b_store;
@@ -155,9 +155,9 @@ void fb_close(void)
 void fb_set_active_framebuffer(unsigned n)
 {
     if (n > 1) return;
-    fb->vi.yres_virtual = fb->vi.yres * 4;
+    fb->vi.yres_virtual = fb->vi.yres * PIXEL_SIZE;
     fb->vi.yoffset = n * fb->vi.yres;
-    fb->vi.bits_per_pixel = 4 * 8;
+    fb->vi.bits_per_pixel = PIXEL_SIZE * 8;
     if (ioctl(fb->fd, FBIOPUT_VSCREENINFO, &fb->vi) < 0) {
         ERROR("active fb swap failed");
     }
@@ -333,7 +333,7 @@ void fb_rotate_180deg_2b(uint16_t *dst, uint16_t *src)
 
 int fb_clone(char **buff)
 {
-    int len = fb_size(fb);
+    int len = fb->size;
     *buff = malloc(len);
 
     pthread_mutex_lock(&fb_mutex);
@@ -384,17 +384,17 @@ void fb_draw_char(int x, int y, char c, uint32_t color, int size)
 {
     int line = 0;
     uint8_t bit = 0;
-    int f;
+    unsigned char *f = (unsigned char*)iso_font + (ISO_CHAR_HEIGHT*c);
 
     for(; line < ISO_CHAR_HEIGHT; ++line)
     {
-        f = iso_font[ISO_CHAR_HEIGHT*c+line];
         for(bit = 0; bit < ISO_CHAR_WIDTH; ++bit)
         {
-            if(f & (1 << bit))
+            if(*f & (1 << bit))
                 fb_draw_square(x+(bit*size), y, color, size);
         }
         y += size;
+        ++f;
     }
 }
 
@@ -404,7 +404,7 @@ void fb_draw_square(int x, int y, uint32_t color, int size)
     int i;
     for(i = 0; i < size; ++i)
     {
-        android_memset32(bits, color, size*4);
+        android_memset32(bits, color, size*PIXEL_SIZE);
         bits += fb_width;
     }
 }
@@ -450,7 +450,7 @@ void fb_draw_rect(fb_rect *r)
     int i;
     for(i = 0; i < r->h; ++i)
     {
-        android_memset32(bits, r->color, r->w*4);
+        android_memset32(bits, r->color, r->w*PIXEL_SIZE);
         bits += fb_width;
     }
 }
@@ -550,8 +550,7 @@ fb_msgbox *fb_create_msgbox(int w, int h, int bgcolor)
     if(fb_items.msgbox)
         return fb_items.msgbox;
 
-    fb_msgbox *box = malloc(sizeof(fb_msgbox));
-    memset(box, 0, sizeof(fb_msgbox));
+    fb_msgbox *box = mzalloc(sizeof(fb_msgbox));
 
     int x = fb_width/2 - w/2;
     int y = fb_height/2 - h/2;
@@ -729,8 +728,7 @@ int center_y(int y, int height, int size)
 
 void fb_push_context(void)
 {
-    fb_items_t *ctx = malloc(sizeof(fb_items_t));
-    memset(ctx, 0, sizeof(fb_items_t));
+    fb_items_t *ctx = mzalloc(sizeof(fb_items_t));
 
     pthread_mutex_lock(&fb_mutex);
 
@@ -767,7 +765,7 @@ void fb_pop_context(void)
     fb_draw();
 }
 
-#define SLEEP_CONST 25
+#define SLEEP_CONST 16
 void *fb_draw_thread_work(void *cookie)
 {
     volatile int req = 0;

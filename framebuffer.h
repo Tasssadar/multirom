@@ -35,7 +35,6 @@ enum
     SIZE_EXTRA     = 4,
 };
 
-#define fb_size(fb) ((fb)->vi.xres * (fb)->vi.yres * 4)
 extern uint32_t fb_width;
 extern uint32_t fb_height;
 extern int fb_rotation;

@@ -870,8 +870,7 @@ char *parse_string(char *src)
 
 map *map_create(void)
 {
-    map *m = malloc(sizeof(map));
-    memset(m, 0, sizeof(map));
+    map *m = mzalloc(sizeof(map));
     return m;
 }
 
