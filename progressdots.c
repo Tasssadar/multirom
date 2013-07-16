@@ -19,7 +19,7 @@ static void *progdots_thread(void *data)
                 p->active_dot = 0;
 
             progdots_set_active(p, p->active_dot); 
-            fb_draw();
+            fb_request_draw();
 
             timer = SWITCH_SPEED;
         }

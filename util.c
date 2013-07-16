@@ -666,6 +666,22 @@ char *run_get_stdout(char **cmd)
     return NULL;
 }
 
+uint32_t timespec_diff(struct timespec *f, struct timespec *s)
+{
+    uint32_t res = 0;
+    if(s->tv_nsec-f->tv_nsec < 0)
+    {
+        res = (s->tv_sec-f->tv_sec-1)*1000;
+        res += 1000 + ((s->tv_nsec-f->tv_nsec)/1000000);
+    }
+    else
+    {
+        res = (s->tv_sec-f->tv_sec)*1000;
+        res += (s->tv_nsec-f->tv_nsec)/1000000;
+    }
+    return res;
+}
+
 int list_item_count(listItself list)
 {
     void **l = (void**)list;

@@ -36,10 +36,11 @@ enum
 };
 
 #define fb_size(fb) ((fb)->vi.xres * (fb)->vi.yres * 4)
-extern int fb_width;
-extern int fb_height;
+extern uint32_t fb_width;
+extern uint32_t fb_height;
+extern int fb_rotation;
 
-int fb_open(void);
+int fb_open(int rotation);
 void fb_close(void);
 void fb_update(void);
 void fb_switch(int n_sig);
@@ -114,6 +115,7 @@ void fb_draw_overlay(void);
 void fb_draw_rect(fb_rect *r);
 void fb_fill(uint32_t color);
 void fb_draw(void);
+void fb_request_draw(void);
 void fb_clear(void);
 void fb_freeze(int freeze);
 int fb_clone(char **buff);

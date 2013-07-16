@@ -18,7 +18,7 @@
 #define MAX_DEVICES 16
 
 // for touch calculation
-static const int screen_res[] = { 800, 1280 };
+static int screen_res[2] = { 0 };
 
 static struct pollfd ev_fds[MAX_DEVICES];
 static unsigned ev_count = 0;
@@ -91,6 +91,8 @@ static int ev_init(void)
     long absbit[BITS_TO_LONGS(ABS_CNT)];
 
     ev_count = 0;
+    screen_res[0] = fb->vi.xres;
+    screen_res[1] = fb->vi.yres;
 
     dir = opendir("/dev/input");
     if(!dir)
@@ -179,6 +181,33 @@ static inline int64_t get_us_diff(struct timeval now, struct timeval prev)
         (now.tv_usec - prev.tv_usec);
 }
 
+static void mt_recalc_pos_rotation(touch_event *ev)
+{
+    switch(fb_rotation)
+    {
+        case 0:
+            ev->x = ev->orig_x;
+            ev->y = ev->orig_y;
+            return;
+        case 90:
+            ev->x = ev->orig_y;
+            ev->y = ev->orig_x;
+
+            ev->y = fb_height - ev->y;
+            break;
+        case 180:
+            ev->x = fb_width - ev->orig_x;
+            ev->y = fb_height - ev->orig_y;
+            break;
+        case 270:
+            ev->x = ev->orig_y;
+            ev->y = ev->orig_x;
+
+            ev->x = fb_width - ev->x;
+            break;
+    }
+}
+
 static void handle_touch_event(struct input_event *ev)
 {
     switch(ev->code)
@@ -203,12 +232,12 @@ static void handle_touch_event(struct input_event *ev)
         {
             if((ev->code == ABS_MT_POSITION_X) ^ (switch_xy != 0))
             {
-                mt_events[mt_slot].x = calc_mt_pos(ev->value, mt_range_x, screen_res[0]);
+                mt_events[mt_slot].orig_x = calc_mt_pos(ev->value, mt_range_x, screen_res[0]);
                 if(switch_xy)
-                    mt_events[mt_slot].x = screen_res[0] - mt_events[mt_slot].x;
+                    mt_events[mt_slot].orig_x = screen_res[0] - mt_events[mt_slot].orig_x;
             }
             else
-                mt_events[mt_slot].y = calc_mt_pos(ev->value, mt_range_y, screen_res[1]);
+                mt_events[mt_slot].orig_y = calc_mt_pos(ev->value, mt_range_y, screen_res[1]);
 
             mt_events[mt_slot].changed |= TCHNG_POS;
             break;
@@ -236,6 +265,9 @@ static void handle_touch_syn(struct input_event *ev)
 
         if(!mt_events[i].changed)
             continue;
+
+        if(mt_events[i].changed & TCHNG_POS)
+            mt_recalc_pos_rotation(&mt_events[i]);
 
         it = mt_handlers;
         while(it)

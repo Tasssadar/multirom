@@ -82,9 +82,6 @@ void button_set_hover(button *b, int hover)
 
 void button_enable(button *b, int enable)
 {
-    if((enable == 1) == ((b->flags & BTN_DISABLED) == 0))
-        return;
-
     if(enable)
         b->flags &= ~(BTN_DISABLED);
     else
@@ -96,7 +93,7 @@ void button_enable(button *b, int enable)
     if(b->text)
     {
         button_update_colors(b);
-        fb_draw();
+        fb_request_draw();
     }
 }
 

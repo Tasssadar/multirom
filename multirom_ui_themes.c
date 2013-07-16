@@ -13,7 +13,9 @@ multirom_themes_info *multirom_ui_init_themes(void)
 #ifdef MULTIROM_THEME_800x1280
     list_add(init_theme_info_800x1280(), &i->themes);
 #endif
-
+#ifdef MULTIROM_THEME_1280x800
+    list_add(init_theme_info_1280x800(), &i->themes);
+#endif
     return i;
 }
 

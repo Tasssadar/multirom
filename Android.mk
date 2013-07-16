@@ -19,14 +19,20 @@ LOCAL_SRC_FILES:= \
 	adb.c \
 	multirom_ui_themes.c
 
+# Init default define values
 MULTIROM_THEMES :=
+MULTIROM_DEFAULT_ROTATION := 0
 
+# include device file
 include $(multirom_local_path)/device_$(TARGET_DEVICE).mk
 
+# Set defines and add theme files
+LOCAL_CFLAGS += -DMULTIROM_DEFAULT_ROTATION=$(MULTIROM_DEFAULT_ROTATION)
 $(foreach res,$(MULTIROM_THEMES), \
     $(eval LOCAL_SRC_FILES += multirom_ui_$(res).c) \
     $(eval LOCAL_CFLAGS += -DMULTIROM_THEME_$(res)) \
 )
+
 
 LOCAL_MODULE:= multirom
 LOCAL_MODULE_TAGS := eng

@@ -20,19 +20,39 @@
 #include "iso_font.h"
 #include "util.h"
 
+#define PIXEL_SIZE 4
+
 static struct FB framebuffers[2];
 static int active_fb = 0;
 static int fb_frozen = 0;
 
 static fb_items_t fb_items = { NULL, NULL, NULL };
 static fb_items_t **inactive_ctx = NULL;
-int fb_width = 0;
-int fb_height = 0;
+uint32_t fb_width = 0;
+uint32_t fb_height = 0;
+int fb_rotation = 0; // in degrees, clockwise
+static uint8_t **fb_rot_helpers = NULL;
 static pthread_mutex_t fb_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t fb_draw_req_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_t fb_draw_thread;
+static volatile int fb_draw_requested = 0;
+static volatile int fb_draw_run = 0;
+static void *fb_draw_thread_work(void*);
 
 struct FB *fb = &framebuffers[0];
 
 void fb_destroy_item(void *item); // private!
+inline void fb_cpy_fb_with_rotation(void *dst, void *src);
+
+#if PIXEL_SIZE == 4
+inline void fb_rotate_90deg_4b(uint32_t *dst, uint32_t *src);
+inline void fb_rotate_270deg_4b(uint32_t *dst, uint32_t *src);
+inline void fb_rotate_180deg_4b(uint32_t *dst, uint32_t *src);
+#elif PIXEL_SIZE == 2
+inline void fb_rotate_90deg_2b(uint16_t *dst, uint16_t *src);
+inline void fb_rotate_270deg_2b(uint16_t *dst, uint16_t *src);
+inline void fb_rotate_180deg_2b(uint16_t *dst, uint16_t *src);
+#endif
 
 int vt_set_mode(int graphics)
 {
@@ -52,8 +72,10 @@ struct FB *get_active_fb()
     return &framebuffers[active_fb];
 }
 
-int fb_open(void)
+int fb_open(int rotation)
 {
+    fb_rotation = rotation;
+
     int fd = open("/dev/graphics/fb0", O_RDWR);
     if (fd < 0)
         return -1;
@@ -71,8 +93,17 @@ int fb_open(void)
     if (bits == MAP_FAILED)
         goto fail;
 
-    fb_width = vi.xres;
-    fb_height = vi.yres;
+    if(fb_rotation%180 == 0)
+    {
+        fb_width = vi.xres;
+        fb_height = vi.yres;
+    }
+    else
+    {
+        fb_width = vi.yres;
+        fb_height = vi.xres;
+    }
+
     fb_frozen = 0;
     active_fb = 0;
 
@@ -100,6 +131,8 @@ int fb_open(void)
 
     fb_update();
 
+    fb_draw_run = 1;
+    pthread_create(&fb_draw_thread, NULL, fb_draw_thread_work, NULL);
     return 0;
 
 fail:
@@ -109,6 +142,11 @@ fail:
 
 void fb_close(void)
 {
+    fb_draw_run = 0;
+    pthread_join(fb_draw_thread, NULL);
+
+    free(fb_rot_helpers);
+
     munmap(fb->mapped, fb->fi.smem_len);
     close(fb->fd);
     free(fb->bits);
@@ -129,10 +167,169 @@ void fb_update(void)
 {
     active_fb = !active_fb;
 
-    memcpy(get_active_fb()->mapped, fb->bits, fb->size);
+    fb_cpy_fb_with_rotation(get_active_fb()->mapped, fb->bits);
 
     fb_set_active_framebuffer(active_fb);
 }
+
+void fb_cpy_fb_with_rotation(void *dst, void *src)
+{
+    switch(fb_rotation)
+    {
+        case 0:
+            memcpy(dst, src, fb->vi.xres_virtual * fb->vi.yres * PIXEL_SIZE);
+            break;
+        case 90:
+        {
+#if PIXEL_SIZE == 4
+            fb_rotate_90deg_4b((uint32_t*)dst, (uint32_t*)src);
+#elif PIXEL_SIZE == 2
+            fb_rotate_90deg_2b((uint16_t*)dst, (uint16_t*)src);
+#endif
+            break;
+        }
+        case 180:
+        {
+#if PIXEL_SIZE == 4
+            fb_rotate_180deg_4b((uint32_t*)dst, (uint32_t*)src);
+#elif PIXEL_SIZE == 2
+            fb_rotate_180deg_2b((uint16_t*)dst, (uint16_t*)src);
+#endif
+            break;
+        }
+        case 270:
+        {
+#if PIXEL_SIZE == 4
+            fb_rotate_270deg_4b((uint32_t*)dst, (uint32_t*)src);
+#elif PIXEL_SIZE == 2
+            fb_rotate_270deg_2b((uint16_t*)dst, (uint16_t*)src);
+#endif
+            break;
+        }
+    }
+}
+
+#if PIXEL_SIZE == 4
+void fb_rotate_90deg_4b(uint32_t *dst, uint32_t *src)
+{
+    uint32_t i;
+    int32_t x;
+
+    if(!fb_rot_helpers)
+        fb_rot_helpers = malloc(fb_height*sizeof(uint32_t*));
+
+    uint32_t **helpers = (uint32_t**)fb_rot_helpers;
+
+    helpers[0] = src;
+    for(i = 1; i < fb_height; ++i)
+        helpers[i] = helpers[i-1] + fb_width;
+
+    const int padding = fb->vi.xres_virtual - fb->vi.xres;
+    for(i = 0; i < fb_width; ++i)
+    {
+        for(x = fb_height-1; x >= 0; --x)
+            *dst++ = *(helpers[x]++);
+        dst += padding;
+    }
+}
+
+void fb_rotate_270deg_4b(uint32_t *dst, uint32_t *src)
+{
+    if(!fb_rot_helpers)
+        fb_rot_helpers = malloc(fb_height*sizeof(uint32_t*));
+
+    uint32_t i, x;
+    uint32_t **helpers = (uint32_t**)fb_rot_helpers;
+
+    helpers[0] = src + fb_width-1;
+    for(i = 1; i < fb_height; ++i)
+        helpers[i] = helpers[i-1] + fb_width;
+
+    const int padding = fb->vi.xres_virtual - fb->vi.xres;
+    for(i = 0; i < fb_width; ++i)
+    {
+        for(x = 0; x < fb_height; ++x)
+            *dst++ = *(helpers[x]--);
+        dst += padding;
+    }
+}
+
+void fb_rotate_180deg_4b(uint32_t *dst, uint32_t *src)
+{
+    uint32_t i, x;
+    int len = fb->vi.xres * fb->vi.yres;
+    src += len;
+
+    const int padding = fb->vi.xres_virtual - fb->vi.xres;
+    for(i = 0; i < fb_height; ++i)
+    {
+        for(x = 0; x < fb_width; ++x)
+            *dst++ = *src--;
+        dst += padding;
+    }
+}
+
+#elif PIXEL_SIZE == 2
+
+void fb_rotate_90deg_2b(uint16_t *dst, uint16_t *src)
+{
+    uint32_t i;
+    int32_t x;
+
+    if(!fb_rot_helpers)
+        fb_rot_helpers = malloc(fb_height*sizeof(uint16_t*));
+
+    uint16_t **helpers = (uint16_t**)fb_rot_helpers;
+
+    helpers[0] = src;
+    for(i = 1; i < fb_height; ++i)
+        helpers[i] = helpers[i-1] + fb_width;
+
+    const int padding = fb->vi.xres_virtual - fb->vi.xres;
+    for(i = 0; i < fb_width; ++i)
+    {
+        for(x = fb_height-1; x >= 0; --x)
+            *dst++ = *(helpers[x]++);
+        dst += padding;
+    }
+}
+
+void fb_rotate_270deg_2b(uint16_t *dst, uint16_t *src)
+{
+    if(!fb_rot_helpers)
+        fb_rot_helpers = malloc(fb_height*sizeof(uint16_t*));
+
+    uint32_t i, x;
+    uint16_t **helpers = (uint16_t**)fb_rot_helpers;
+
+    helpers[0] = src + fb_width-1;
+    for(i = 1; i < fb_height; ++i)
+        helpers[i] = helpers[i-1] + fb_width;
+
+    const int padding = fb->vi.xres_virtual - fb->vi.xres;
+    for(i = 0; i < fb_width; ++i)
+    {
+        for(x = 0; x < fb_height; ++x)
+            *dst++ = *(helpers[x]--);
+        dst += padding;
+    }
+}
+
+void fb_rotate_180deg_2b(uint16_t *dst, uint16_t *src)
+{
+    uint32_t i, x;
+    int len = fb->vi.xres * fb->vi.yres;
+    src += len;
+
+    const int padding = fb->vi.xres_virtual - fb->vi.xres;
+    for(i = 0; i < fb_height; ++i)
+    {
+        for(x = 0; x < fb_width; ++x)
+            *dst++ = *src--;
+        dst += padding;
+    }
+}
+#endif // PIXEL_SIZE == 2
 
 int fb_clone(char **buff)
 {
@@ -507,9 +704,9 @@ void fb_draw(void)
             fb_draw_text(box->texts[i]);
     }
 
-    pthread_mutex_unlock(&fb_mutex);
-
     fb_update();
+
+    pthread_mutex_unlock(&fb_mutex);
 }
 
 void fb_freeze(int freeze)
@@ -568,4 +765,45 @@ void fb_pop_context(void)
     list_rm_noreorder(ctx, &inactive_ctx, &free);
 
     fb_draw();
+}
+
+#define SLEEP_CONST 25
+void *fb_draw_thread_work(void *cookie)
+{
+    volatile int req = 0;
+
+    struct timespec last, curr;
+    uint32_t diff = 0, prevSleepTime = 0;
+    clock_gettime(CLOCK_MONOTONIC, &last);
+
+    while(fb_draw_run)
+    {
+        clock_gettime(CLOCK_MONOTONIC, &curr);
+        diff = timespec_diff(&last, &curr);
+
+        pthread_mutex_lock(&fb_draw_req_mutex);
+        req = fb_draw_requested;
+        fb_draw_requested = 0;
+        pthread_mutex_unlock(&fb_draw_req_mutex);
+
+        if(req)
+            fb_draw();
+
+        last = curr;
+        if(diff <= SLEEP_CONST+prevSleepTime)
+        {
+            prevSleepTime = SLEEP_CONST+prevSleepTime-diff;
+            usleep(prevSleepTime*1000);
+        }
+        else
+            prevSleepTime = 0;
+    }
+    return NULL;
+}
+
+void fb_request_draw(void)
+{
+    pthread_mutex_lock(&fb_draw_req_mutex);
+    fb_draw_requested = 1;
+    pthread_mutex_unlock(&fb_draw_req_mutex);
 }

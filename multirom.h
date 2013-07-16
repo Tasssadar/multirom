@@ -76,6 +76,7 @@ struct multirom_status
     int enable_adb;
     int hide_internal;
     char *int_display_name;
+    int rotation;
     struct multirom_rom *auto_boot_rom;
     struct multirom_rom *current_rom;
     struct multirom_rom **roms;
@@ -103,7 +104,7 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
 int multirom_dump_boot(const char *dest);
 void multirom_free_status(struct multirom_status *s);
 void multirom_free_rom(void *rom);
-int multirom_init_fb(void);
+int multirom_init_fb(int rotation);
 int multirom_prep_android_mounts(struct multirom_rom *rom);
 int multirom_create_media_link(void);
 int multirom_get_api_level(const char *path);

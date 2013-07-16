@@ -68,7 +68,7 @@ static void list_block(char *path, int rec)
 
 int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 {
-    if(multirom_init_fb() < 0)
+    if(multirom_init_fb(s->rotation) < 0)
         return UI_EXIT_BOOT_ROM;
 
     fb_freeze(1);
@@ -418,6 +418,7 @@ void multirom_ui_start_pong(int action)
 void *multirom_ui_tab_rom_init(int tab_type)
 {
     tab_data_roms *t = mzalloc(sizeof(tab_data_roms));
+    themes_info->data->tab_data = t;
 
     t->list = mzalloc(sizeof(listview));
     t->list->item_draw = &rom_item_draw;
@@ -582,7 +583,7 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
     int width = cur_theme->get_tab_width(cur_theme);
 
     static const char *str[] = { "Select ROM to boot:", "No ROMs in this location!" };
-    t->title_text->head.x = center_x(0, width, SIZE_BIG, str[empty]);
+    t->title_text->head.x = center_x(t->list->x, width, SIZE_BIG, str[empty]);
     t->title_text->text = realloc(t->title_text->text, strlen(str[empty])+1);
     strcpy(t->title_text->text, str[empty]);
 
@@ -593,12 +594,12 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
     {
         const int line_len = 37;
         static const char *txt = "This list is refreshed automagically,\njust plug in the USB drive and  wait.";
-        int x = (width/2 - (line_len*ISO_CHAR_WIDTH*SIZE_NORMAL)/2);
+        int x = t->list->x + (width/2 - (line_len*ISO_CHAR_WIDTH*SIZE_NORMAL)/2);
         int y = center_y(t->list->y, t->list->h, SIZE_NORMAL);
         t->usb_text = fb_add_text(x, y, WHITE, SIZE_NORMAL, txt);
         list_add(t->usb_text, &t->ui_elements);
 
-        x = (width/2) - (PROGDOTS_W/2);
+        x = t->list->x + ((width/2) - (PROGDOTS_W/2));
         t->usb_prog = progdots_create(x, y+100);
     }
     else if(!empty && t->usb_text)

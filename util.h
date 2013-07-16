@@ -19,6 +19,8 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/time.h>
+#include <time.h>
 
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 
@@ -47,6 +49,7 @@ int run_cmd(char **cmd);
 char *run_get_stdout(char **cmd);
 
 char *parse_string(char *src);
+uint32_t timespec_diff(struct timespec *f, struct timespec *s);
 
 // auto-conversion of pointer type occurs only for
 // void*, not for void** nor void***

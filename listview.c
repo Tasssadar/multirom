@@ -87,7 +87,7 @@ void listview_update_ui(listview *view)
     if(y > view->h)
         listview_update_scroll_mark(view);
 
-    fb_draw();
+    fb_request_draw();
 }
 
 void listview_enable_scroll(listview *view, int enable)
@@ -157,7 +157,7 @@ int listview_touch_handler(touch_event *ev, void *data)
 
             if(!view->touch.hover)
             {
-                if(ev->x > view->x + view->w - PADDING*2 && ev->x < view->x + view->w)
+                if(ev->x > view->x + view->w - PADDING*3 && ev->x < view->x + view->w)
                     listview_scroll_to(view, ((ev->y-view->y)*100)/(view->h));
                 else
                     listview_scroll_by(view, view->touch.last_y - ev->y);

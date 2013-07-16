@@ -7,7 +7,7 @@
 #define KEY_VOLUMEDOWN 114
 #define KEY_POWER 116
 
-enum 
+enum
 {
     TCHNG_POS       = 0x01,
     //TCHNG_PRESSURE  = 0x02, // unused
@@ -24,8 +24,8 @@ enum
 typedef struct
 {
     int id;
-    int x;
-    int y;
+    int x, orig_x;
+    int y, orig_y;
     int changed;
 
     struct timeval time;

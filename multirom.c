@@ -161,11 +161,11 @@ int multirom(void)
     return exit;
 }
 
-int multirom_init_fb(void)
+int multirom_init_fb(int rotation)
 {
     vt_set_mode(1);
 
-    if(fb_open() < 0)
+    if(fb_open(rotation) < 0)
     {
         ERROR("Failed to open framebuffer!");
         return -1;
@@ -177,7 +177,7 @@ int multirom_init_fb(void)
 
 void multirom_emergency_reboot(void)
 {
-    if(multirom_init_fb() < 0)
+    if(multirom_init_fb(0) < 0)
     {
         ERROR("Failed to init framebuffer in emergency reboot");
         return;
@@ -228,7 +228,7 @@ static int find_idx(int c)
     else if((p = strchr(normal, c)))
         return p - normal;
 
-    return -c;
+    return -128 + c;
 }
 
 static int compare_rom_names(const void *a, const void *b)
@@ -281,6 +281,7 @@ int multirom_default_status(struct multirom_status *s)
     s->colors = 0;
     s->brightness = 40;
     s->enable_adb = 0;
+    s->rotation = MULTIROM_DEFAULT_ROTATION;
 
     char roms_path[256];
     sprintf(roms_path, "%s/roms/"INTERNAL_ROM_NAME, multirom_dir);
@@ -420,6 +421,8 @@ int multirom_load_status(struct multirom_status *s)
             s->hide_internal = atoi(arg);
         else if(strstr(name, "int_display_name"))
             s->int_display_name = strdup(arg);
+        else if(strstr(name, "rotation"))
+            s->rotation = atoi(arg);
     }
 
     fclose(f);
@@ -500,6 +503,7 @@ int multirom_save_status(struct multirom_status *s)
     fprintf(f, "enable_adb=%d\n", s->enable_adb);
     fprintf(f, "hide_internal=%d\n", s->hide_internal);
     fprintf(f, "int_display_name=%s\n", s->int_display_name ? s->int_display_name : "");
+    fprintf(f, "rotation=%d\n", s->rotation);
 
     fclose(f);
     return 0;
