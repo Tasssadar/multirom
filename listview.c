@@ -131,6 +131,7 @@ int listview_touch_handler(touch_event *ev, void *data)
         view->touch.start_y = ev->y;
         view->touch.us_diff = 0;
         view->touch.hover = listview_item_at(view, ev->y);
+        view->touch.fast_scroll = (ev->x > view->x + view->w - PADDING*2 && ev->x <= view->x + view->w);
 
         if(view->touch.hover)
         {
@@ -157,7 +158,7 @@ int listview_touch_handler(touch_event *ev, void *data)
 
             if(!view->touch.hover)
             {
-                if(ev->x > view->x + view->w - PADDING*2 && ev->x <= view->x + view->w)
+                if(view->touch.fast_scroll)
                     listview_scroll_to(view, ((ev->y-view->y)*100)/(view->h));
                 else
                     listview_scroll_by(view, view->touch.last_y - ev->y);

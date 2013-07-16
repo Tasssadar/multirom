@@ -25,6 +25,7 @@ typedef struct
     int last_y;
     int64_t us_diff;
     listview_item *hover;
+    int fast_scroll;
 } listview_touch_data;
 
 typedef struct
