@@ -490,13 +490,20 @@ int multirom_save_status(struct multirom_status *s)
     }
 
 
-    buff[0] = 0;
-    if(s->auto_boot_rom && s->auto_boot_rom->type == ROM_DEFAULT)
-        strcpy(buff, INTERNAL_ROM_NAME);
+    char *auto_boot_name = buff;
+    if(s->auto_boot_rom)
+    {
+        if(s->auto_boot_rom->type == ROM_DEFAULT)
+            strcpy(buff, INTERNAL_ROM_NAME);
+        else
+            auto_boot_name = s->auto_boot_rom->name;
+    }
+    else
+        buff[0] = 0;
 
     fprintf(f, "current_rom=%s\n", s->current_rom ? s->current_rom->name : multirom_get_internal(s)->name);
     fprintf(f, "auto_boot_seconds=%d\n", s->auto_boot_seconds);
-    fprintf(f, "auto_boot_rom=%s\n", buff);
+    fprintf(f, "auto_boot_rom=%s\n", auto_boot_name);
     fprintf(f, "curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "");
     fprintf(f, "colors=%d\n", s->colors);
     fprintf(f, "brightness=%d\n", s->brightness);
