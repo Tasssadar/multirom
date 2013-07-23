@@ -11,4 +11,8 @@ Clone repo to some folder inside Android 4.1.x source tree, I use `/system/extra
 
     . build/envsetup.h
     lunch full_grouper-userdebug
-    make multirom trampoline -j4
+    make -j4 multirom trampoline
+
+To build installation ZIP file, use `multirom_zip` target:
+
+    make -j4 multirom_zip

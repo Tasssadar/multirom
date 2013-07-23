@@ -1,0 +1,357 @@
+#!/bin/sh
+
+[ -d /dev ] || mkdir -m 0755 /dev
+[ -d /root ] || mkdir -m 0700 /root
+[ -d /sys ] || mkdir /sys
+[ -d /proc ] || mkdir /proc
+[ -d /tmp ] || mkdir /tmp
+mkdir -p /var/lock
+mount -t sysfs -o nodev,noexec,nosuid sysfs /sys
+mount -t proc -o nodev,noexec,nosuid proc /proc
+# Some things don't work properly without /etc/mtab.
+ln -sf /proc/mounts /etc/mtab
+
+grep -q '\<quiet\>' /proc/cmdline || echo "Loading, please wait..."
+
+# Note that this only becomes /dev on the real filesystem if udev's scripts
+# are used; which they will be, but it's worth pointing out
+if ! mount -t devtmpfs -o mode=0755 udev /dev; then
+	echo "W: devtmpfs not available, falling back to tmpfs for /dev"
+	mount -t tmpfs -o mode=0755 udev /dev
+	[ -e /dev/console ] || mknod -m 0600 /dev/console c 5 1
+	[ -e /dev/null ] || mknod /dev/null c 1 3
+fi
+mkdir /dev/pts
+mount -t devpts -o noexec,nosuid,gid=5,mode=0620 devpts /dev/pts || true
+mount -t tmpfs -o "noexec,nosuid,size=10%,mode=0755" tmpfs /run
+mkdir /run/initramfs
+# compatibility symlink for the pre-oneiric locations
+ln -s /run/initramfs /dev/.initramfs
+
+# Export the dpkg architecture
+export DPKG_ARCH=
+. /conf/arch.conf
+
+# Set modprobe env
+export MODPROBE_OPTIONS="-qb"
+
+# Export relevant variables
+export ROOT=
+export ROOTDELAY=
+export ROOTFLAGS=
+export ROOTFSTYPE=
+export IP=
+export BOOT=
+export BOOTIF=
+export UBIMTD=
+export break=
+export init=/sbin/init
+export quiet=n
+export readonly=y
+export rootmnt=/root
+export debug=
+export panic=
+export blacklist=
+export resume=
+export resume_offset=
+export recovery=
+export FLASH_KERNEL_SKIP=1
+
+# mdadm needs hostname to be set. This has to be done before the udev rules are called!
+if [ -f "/etc/hostname" ]; then
+        /bin/hostname -b -F /etc/hostname 2>&1 1>/dev/null
+fi
+
+# Bring in the main config
+. /conf/initramfs.conf
+for conf in conf/conf.d/*; do
+	[ -f ${conf} ] && . ${conf}
+done
+. /scripts/functions
+
+# Parse command line options
+for x in $(cat /proc/cmdline); do
+	case $x in
+	init=*)
+		init=${x#init=}
+		;;
+	root=*)
+		ROOT=${x#root=}
+		case $ROOT in
+		LABEL=*)
+			ROOT="${ROOT#LABEL=}"
+
+			# support any / in LABEL= path (escape to \x2f)
+			case "${ROOT}" in
+			*/*)
+			if command -v sed >/dev/null 2>&1; then
+				ROOT="$(echo ${ROOT} | sed 's,/,\\x2f,g')"
+			else
+				if [ "${ROOT}" != "${ROOT#/}" ]; then
+					ROOT="\x2f${ROOT#/}"
+				fi
+				if [ "${ROOT}" != "${ROOT%/}" ]; then
+					ROOT="${ROOT%/}\x2f"
+				fi
+				IFS='/'
+				newroot=
+				for s in $ROOT; do
+					newroot="${newroot:+${newroot}\\x2f}${s}"
+				done
+				unset IFS
+				ROOT="${newroot}"
+			fi
+			esac
+			ROOT="/dev/disk/by-label/${ROOT}"
+			;;
+		UUID=*)
+			ROOT="/dev/disk/by-uuid/${ROOT#UUID=}"
+			;;
+		/dev/nfs)
+			[ -z "${BOOT}" ] && BOOT=nfs
+			;;
+		esac
+		;;
+	rootflags=*)
+		ROOTFLAGS="-o ${x#rootflags=}"
+		;;
+	rootfstype=*)
+		ROOTFSTYPE="${x#rootfstype=}"
+		;;
+	rootdelay=*)
+		ROOTDELAY="${x#rootdelay=}"
+		case ${ROOTDELAY} in
+		*[![:digit:].]*)
+			ROOTDELAY=
+			;;
+		esac
+		;;
+	resumedelay=*)
+		RESUMEDELAY="${x#resumedelay=}"
+		;;
+	loop=*)
+		LOOP="${x#loop=}"
+		;;
+	loopflags=*)
+		LOOPFLAGS="-o ${x#loopflags=}"
+		;;
+	loopfstype=*)
+		LOOPFSTYPE="${x#loopfstype=}"
+		;;
+	rootsubdir=*)
+		ROOTSUBDIR="${x#rootsubdir=}"
+		;;
+	cryptopts=*)
+		cryptopts="${x#cryptopts=}"
+		;;
+	nfsroot=*)
+		NFSROOT="${x#nfsroot=}"
+		;;
+	netboot=*)
+		NETBOOT="${x#netboot=}"
+		;;
+	ip=*)
+		IP="${x#ip=}"
+		;;
+	boot=*)
+		BOOT=${x#boot=}
+		;;
+	ubi.mtd=*)
+		UBIMTD=${x#ubi.mtd=}
+		;;
+	resume=*)
+		RESUME="${x#resume=}"
+		;;
+	resume_offset=*)
+		resume_offset="${x#resume_offset=}"
+		;;
+	noresume)
+		noresume=y
+		;;
+	panic=*)
+		panic="${x#panic=}"
+		case ${panic} in
+		*[![:digit:].]*)
+			panic=
+			;;
+		esac
+		;;
+	quiet)
+		quiet=y
+		;;
+	ro)
+		readonly=y
+		;;
+	rw)
+		readonly=n
+		;;
+	debug)
+		debug=y
+		quiet=n
+		exec >/run/initramfs/initramfs.debug 2>&1
+		set -x
+		;;
+	debug=*)
+		debug=y
+		quiet=n
+		set -x
+		;;
+	break=*)
+		break=${x#break=}
+		;;
+	break)
+		break=premount
+		;;
+	blacklist=*)
+		blacklist=${x#blacklist=}
+		;;
+	netconsole=*)
+		netconsole=${x#netconsole=}
+		;;
+	BOOTIF=*)
+		BOOTIF=${x#BOOTIF=}
+		;;
+	hwaddr=*)
+		BOOTIF=${x#BOOTIF=}
+		;;
+	recovery)
+		recovery=y
+		;;
+	esac
+done
+
+if [ -n "${noresume}" ]; then
+	export noresume
+	unset resume
+else
+	resume=${RESUME:-}
+fi
+
+maybe_break top
+
+# export BOOT variable value for compcache,
+# so we know if we run from casper
+export BOOT
+
+# Don't do log messages here to avoid confusing graphical boots
+run_scripts /scripts/init-top
+
+maybe_break modules
+[ "$quiet" != "y" ] && log_begin_msg "Loading essential drivers"
+load_modules
+[ "$quiet" != "y" ] && log_end_msg
+
+[ -n "${netconsole}" ] && modprobe netconsole netconsole="${netconsole}"
+
+maybe_break premount
+[ "$quiet" != "y" ] && log_begin_msg "Running /scripts/init-premount"
+run_scripts /scripts/init-premount
+[ "$quiet" != "y" ] && log_end_msg
+
+maybe_break mount
+log_begin_msg "Mounting root file system"
+. /scripts/${BOOT}
+parse_numeric ${ROOT}
+maybe_break mountroot
+mountroot
+log_end_msg
+
+maybe_break bottom
+[ "$quiet" != "y" ] && log_begin_msg "Running /scripts/init-bottom"
+run_scripts /scripts/init-bottom
+[ "$quiet" != "y" ] && log_end_msg
+
+# Preserve information on old systems without /run on the rootfs
+if [ -d ${rootmnt}/run ]; then
+	mount -n -o move /run ${rootmnt}/run
+else
+	# The initramfs udev database must be migrated:
+	if [ -d /run/udev ] && [ ! -d /dev/.udev ]; then
+		mv /run/udev /dev/.udev
+	fi
+	# The initramfs debug info must be migrated:
+	if [ -d /run/initramfs ] && [ ! -d /dev/.initramfs ]; then
+		mv /run/initramfs /dev/.initramfs
+	fi
+	umount /run
+fi
+
+# Move virtual filesystems over to the real filesystem
+mount -n -o move /sys ${rootmnt}/sys
+mount -n -o move /proc ${rootmnt}/proc
+
+validate_init() {
+	checktarget="${1}"
+
+	# Work around absolute symlinks
+	if [ -d "${rootmnt}" ] && [ -h "${rootmnt}${checktarget}" ]; then
+		case $(readlink "${rootmnt}${checktarget}") in /*)
+			checktarget="$(chroot ${rootmnt} readlink ${checktarget})"
+			;;
+		esac
+	fi
+
+	# Make sure the specified init can be executed
+	if [ ! -x "${rootmnt}${checktarget}" ]; then
+		return 1
+	fi
+
+	# Upstart uses /etc/init as configuration directory :-/
+	if [ -d "${rootmnt}${checktarget}" ]; then
+		return 1
+	fi
+}
+
+# Check init bootarg
+if [ -n "${init}" ]; then
+	if ! validate_init "$init"; then
+		echo "Target filesystem doesn't have requested ${init}."
+		init=
+	fi
+fi
+
+# Common case: /sbin/init is present
+if [ ! -x "${rootmnt}/sbin/init" ]; then
+	# ... if it's not available search for valid init
+	if [ -z "${init}" ] ; then
+		for inittest in /sbin/init /etc/init /bin/init /bin/sh; do
+			if validate_init "${inittest}"; then
+				init="$inittest"
+				break
+			fi
+		done
+	fi
+
+	# No init on rootmount
+	if ! validate_init "${init}" ; then
+		panic "No init found. Try passing init= bootarg."
+	fi
+fi
+
+maybe_break init
+
+# don't leak too much of env - some init(8) don't clear it
+# (keep init, rootmnt)
+unset debug
+unset MODPROBE_OPTIONS
+unset DPKG_ARCH
+unset ROOTFLAGS
+unset ROOTFSTYPE
+unset ROOTDELAY
+unset ROOT
+unset IP
+unset BOOT
+unset BOOTIF
+unset UBIMTD
+unset blacklist
+unset break
+unset noresume
+unset panic
+unset quiet
+unset readonly
+unset resume
+unset resume_offset
+
+# Chain to real filesystem
+exec run-init ${rootmnt} ${init} "$@" ${recovery:+--startup-event=recovery} <${rootmnt}/dev/console >${rootmnt}/dev/console 2>&1
+panic "Could not execute run-init."

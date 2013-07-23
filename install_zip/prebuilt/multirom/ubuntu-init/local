@@ -1,0 +1,170 @@
+# Local filesystem mounting			-*- shell-script -*-
+
+pre_mountroot()
+{
+	[ "$quiet" != "y" ] && log_begin_msg "Running /scripts/local-top"
+	run_scripts /scripts/local-top
+	[ "$quiet" != "y" ] && log_end_msg
+
+	# Don't wait for a root device that doesn't have a corresponding
+	# device in /dev (ie, mtd0)
+	if [ "${ROOT#/dev}" = "${ROOT}" ]; then
+		return
+	fi
+
+	while [ -z "${FSTYPE}" ]; do
+		FSTYPE=$(wait-for-root "${ROOT}" ${ROOTDELAY:-30})
+
+		# Load ubi with the correct MTD partition and return since
+		# fstype doesn't work with a char device like ubi.
+		if [ -n "$UBIMTD" ]; then
+			modprobe ubi mtd=$UBIMTD
+			return
+		fi
+
+		# Run failure hooks, hoping one of them can fix up the system
+		# and we can restart the wait loop.  If they all fail, abort
+		# and move on to the panic handler and shell.
+		if [ -z "${FSTYPE}" ] && ! try_failure_hooks; then
+			break
+		fi
+	done
+
+	# We've given up, but we'll let the user fix matters if they can
+	while [ -z "${FSTYPE}" -a ! -e "${ROOT}" ]; do
+		# give hint about renamed root
+		case "${ROOT}" in
+		/dev/hd*)
+			suffix="${ROOT#/dev/hd}"
+			major="${suffix%[[:digit:]]}"
+			major="${major%[[:digit:]]}"
+			if [ -d "/sys/block/sd${major}" ]; then
+				echo "WARNING bootdevice may be renamed. Try root=/dev/sd${suffix}"
+			fi
+			;;
+		/dev/sd*)
+			suffix="${ROOT#/dev/sd}"
+			major="${suffix%[[:digit:]]}"
+			major="${major%[[:digit:]]}"
+			if [ -d "/sys/block/hd${major}" ]; then
+				echo "WARNING bootdevice may be renamed. Try root=/dev/hd${suffix}"
+			fi
+			;;
+		esac
+		echo "Gave up waiting for root device.  Common problems:"
+		echo " - Boot args (cat /proc/cmdline)"
+		echo "   - Check rootdelay= (did the system wait long enough?)"
+		echo "   - Check root= (did the system wait for the right device?)"
+		echo " - Missing modules (cat /proc/modules; ls /dev)"
+		panic "ALERT!  ${ROOT} does not exist.  Dropping to a shell!"
+	done
+}
+
+mountroot()
+{
+	pre_mountroot
+
+	# Get the root filesystem type if not set
+	if [ -z "${ROOTFSTYPE}" ]; then
+		[ -n "${FSTYPE}" ] || FSTYPE=$(blkid -s TYPE -o value "${ROOT}")
+		ROOTFSTYPE="${FSTYPE}"
+	else
+		FSTYPE=${ROOTFSTYPE}
+	fi
+
+	[ "$quiet" != "y" ] && log_begin_msg "Running /scripts/local-premount"
+	run_scripts /scripts/local-premount
+	[ "$quiet" != "y" ] && log_end_msg
+
+	if [ "${readonly}" = "y" ] && \
+	   [ -z "$LOOP" ]; then
+		roflag=-r
+	else
+		roflag=-w
+	fi
+
+	# FIXME This has no error checking
+	[ -n "${FSTYPE}" ] && modprobe ${FSTYPE}
+
+	# FIXME This has no error checking
+	# Mount root
+	mount ${roflag} ${FSTYPE:+-t ${FSTYPE} }${ROOTFLAGS} ${ROOT} ${rootmnt}
+	mountroot_status="$?"
+	if [ "$LOOP" ]; then
+		if [ "$mountroot_status" != 0 ]; then
+			if [ ${FSTYPE} = ntfs ] || [ ${FSTYPE} = vfat ]; then
+				panic "
+Could not mount the partition ${ROOT}.
+This could also happen if the file system is not clean because of an operating
+system crash, an interrupted boot process, an improper shutdown, or unplugging
+of a removable device without first unmounting or ejecting it.  To fix this,
+simply reboot into Windows, let it fully start, log in, run 'chkdsk /r', then
+gracefully shut down and reboot back into Windows. After this you should be
+able to reboot again and resume the installation.
+(filesystem = ${FSTYPE}, error code = $mountroot_status)
+"
+			fi
+		fi
+	
+		mkdir -p /host
+		mount -o move ${rootmnt} /host
+
+		while [ ! -e "/host/${LOOP#/}" ]; do
+			panic "ALERT!  /host/${LOOP#/} does not exist.  Dropping to a shell!"
+		done
+
+		# Get the loop filesystem type if not set
+		if [ -z "${LOOPFSTYPE}" ]; then
+			eval $(fstype < "/host/${LOOP#/}")
+		else
+			FSTYPE="${LOOPFSTYPE}"
+		fi
+		if [ "$FSTYPE" = "unknown" ] && [ -x /sbin/blkid ]; then
+			FSTYPE=$(/sbin/blkid -s TYPE -o value "/host/${LOOP#/}")
+			[ -z "$FSTYPE" ] && FSTYPE="unknown"
+		fi
+
+		if [ ${readonly} = y ]; then
+			roflag=-r
+		else
+			roflag=-w
+		fi
+
+		# FIXME This has no error checking
+		modprobe loop
+		modprobe ${FSTYPE}
+
+		# FIXME This has no error checking
+		mount ${roflag} -o loop -t ${FSTYPE} ${LOOPFLAGS} "/host/${LOOP#/}" ${rootmnt}
+
+		if [ -d ${rootmnt}/host ]; then
+			mount -o move /host ${rootmnt}/host
+		fi
+	elif [ "$ROOTSUBDIR" ]; then
+		if [ "$mountroot_status" != 0 ]; then
+			panic "
+Could not mount the partition ${ROOT}.
+This could also happen if the file system is not clean because of an operating
+system crash, an interrupted boot process, an improper shutdown, or unplugging
+of a removable device without first unmounting or ejecting it.
+(filesystem = ${FSTYPE}, error code = $mountroot_status)
+"
+		fi
+
+		mkdir -p /host
+		mount -o move ${rootmnt} /host
+		
+		if [ ! -d "/host/$ROOTSUBDIR" ]; then
+		    panic "Failed to bind folder ${ROOTSUBDIR} as root: folder does not exist."
+		fi
+		
+		mount -o bind /host/$ROOTSUBDIR ${rootmnt}
+		if [ -d ${rootmnt}/host ]; then
+			mount -o move /host ${rootmnt}/host
+		fi
+	fi
+
+	[ "$quiet" != "y" ] && log_begin_msg "Running /scripts/local-bottom"
+	run_scripts /scripts/local-bottom
+	[ "$quiet" != "y" ] && log_end_msg
+}

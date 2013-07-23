@@ -1,0 +1,44 @@
+# This file contains info about ROMs capabilites and boot process.
+# It should be placed in ROM's folder (eg. /media/multirom/roms/*rom_name*)
+# and must be named "rom_info.txt".
+# Make sure you got the syntax correct, as the parser is probably pretty
+# dumb. Lines with comments must start with #. Beware the whitespaces.
+# If you need to use " character in string, just use it, no need to escape it
+# MultiROM searches for first and last " on the line.
+# These comments should not be deleted.
+
+# So far, the only supported ROM type for these files is kexec-based linux
+type="kexec"
+
+# Paths to root of the ROM.
+# Both image and folder can be specified at one time, MultiROM will use 
+# the one which it can find. If both are present, folder is used.
+# Must _not_ contain spaces.
+# Path is from root of the root partition, but you will usually want
+# to use following alias:
+# - %m - ROM's folder (eg. /media/multirom/roms/*rom_name*)
+root_dir="%m/root"
+root_img="%m/root.img"
+root_img_fs="ext4"
+
+# Path to kernel and initrd. Kernel path _must_ be specified.
+# Paths are relative to the folder in which is this file
+# Those can be outside the root folder/image, or use %r if it is in there:
+# kernel_path="%r/boot/vmlinuz"
+# If ROM is in images, it will mount the image and load it from there.
+# You can use  * _at the end of the filename_ as wildcard character.
+kernel_path="%r/boot/vmlinuz"
+initrd_path="%r/boot/initrd.img"
+
+# Set up the cmdline
+# img_cmdline and dir_cmdline are appended to base_cmdline.
+# Several aliases are used:
+#  - %b - base command line from bootloader. You want this as first thing in cmdline.
+#  - %d - root device. is either "UUID=..." (USB drive) or "/dev/mmcblk0p9" or "/dev/mmcblk0p10"
+#  - %r - root fs type
+#  - %s - root directory, from root of the root device
+#  - %i - root image, from root of the root device
+#  - %f - fs of the root image
+base_cmdline="%b root=%d rootfstype=%r rw console=tty0 access=m2 quiet splash rootflags=defaults,noatime,nodiratime"
+img_cmdline="loop=%i loopfstype=%f"
+dir_cmdline="rootsubdir=%s"

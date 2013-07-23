@@ -53,3 +53,6 @@ include $(BUILD_EXECUTABLE)
 
 # Trampoline
 include $(multirom_local_path)/trampoline/Android.mk
+
+# ZIP installer
+include $(multirom_local_path)/install_zip/Android.mk

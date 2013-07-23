@@ -1,8 +1,6 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
-multirom_local_path := $(LOCAL_PATH)
-
 LOCAL_SRC_FILES:= \
 	trampoline.c \
 	devices.c \
