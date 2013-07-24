@@ -24,7 +24,7 @@ MULTIROM_THEMES :=
 MULTIROM_DEFAULT_ROTATION := 0
 
 # include device file
-include $(multirom_local_path)/device_$(TARGET_DEVICE).mk
+-include $(multirom_local_path)/device_$(TARGET_DEVICE).mk
 
 # Set defines and add theme files
 LOCAL_CFLAGS += -DMULTIROM_DEFAULT_ROTATION=$(MULTIROM_DEFAULT_ROTATION)

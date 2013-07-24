@@ -9,7 +9,7 @@ multirom_binary := $(TARGET_ROOT_OUT)/multirom
 trampoline_binary := $(TARGET_ROOT_OUT)/trampoline
 
 # include device file
-include $(multirom_local_path)/device_$(TARGET_DEVICE).mk
+-include $(multirom_local_path)/device_$(TARGET_DEVICE).mk
 
 $(MULTIROM_ZIP_TARGET): multirom trampoline signapk
 	@echo ----- Making MultiROM ZIP installer ------
