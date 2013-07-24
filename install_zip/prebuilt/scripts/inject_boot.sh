@@ -50,9 +50,12 @@ fi
 cp /tmp/multirom/trampoline /tmp/boot/init
 chmod 750 /tmp/boot/init
 
-# crete ueventd symlink
+# crete ueventd and watchdogd symlink
 if [ -L /tmp/boot/sbin/ueventd ] ; then
     ln -sf ../main_init /tmp/boot/sbin/ueventd
+fi
+if [ -L /tmp/boot/sbin/watchdogd ] ; then
+    ln -sf ../main_init /tmp/boot/sbin/watchdogd
 fi
 
 # pack the image again
