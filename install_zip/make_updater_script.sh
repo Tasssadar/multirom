@@ -34,6 +34,6 @@ done
 
 assert_str="${assert_str% || \\n *});\n"
 
-echo -e "$assert_str" > ${SCRIPT_PATH}/updater-script || fail "Failed to write assert line into updater-script!"
+printf "$assert_str" > ${SCRIPT_PATH}/updater-script || fail "Failed to write assert line into updater-script!"
 cat ${SCRIPT_PATH}/updater-script-base >> ${SCRIPT_PATH}/updater-script || fail "Failed to add base updater-script file!"
 rm ${SCRIPT_PATH}/updater-script-base
