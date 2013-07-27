@@ -1,10 +1,11 @@
 #!/bin/sh
 DEVICES=$1
 SCRIPT_PATH=$2
+TITLE=$3
 CHECK_PROPS="ro.product.device ro.build.product"
 
-if [ "$#" -ne "2" ]; then
-    echo "Usage: $0 [device] [path to folder with updater-script]"
+if [ "$#" -ne "3" ]; then
+    echo "Usage: $0 [device] [path to folder with updater-script] [ZIP title]"
     exit 1
 fi
 
@@ -35,5 +36,10 @@ done
 assert_str="${assert_str% || \\n *});\n"
 
 printf "$assert_str" > ${SCRIPT_PATH}/updater-script || fail "Failed to write assert line into updater-script!"
+
+echo "" >> ${SCRIPT_PATH}/updater-script
+echo "ui_print(\"$TITLE $DEVICES\");" >> ${SCRIPT_PATH}/updater-script
+echo "" >> ${SCRIPT_PATH}/updater-script
+
 cat ${SCRIPT_PATH}/updater-script-base >> ${SCRIPT_PATH}/updater-script || fail "Failed to add base updater-script file!"
 rm ${SCRIPT_PATH}/updater-script-base

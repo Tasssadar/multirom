@@ -1,0 +1,39 @@
+# Assert check for appropriate device is added during build,
+# see ../make_updater_script.sh and ../Android.mk
+
+show_progress(1.00000, 10);
+
+ui_print("Extracting binaries...");
+run_program("/sbin/busybox", "mount", "/data");
+
+delete_recursive("/tmp/multirom");
+run_program("/sbin/busybox", "mkdir", "/tmp/multirom");
+package_extract_dir("multirom", "/tmp/multirom/");
+package_extract_dir("scripts", "/tmp/");
+
+set_perm(0, 0, 0777, "/tmp/multirom/busybox");
+set_perm(0, 0, 0777, "/tmp/mkbootimg");
+set_perm(0, 0, 0777, "/tmp/unpackbootimg");
+set_perm(0, 0, 0777, "/tmp/lz4");
+set_perm(0, 0, 0777, "/tmp/extract_multirom.sh");
+set_perm(0, 0, 0777, "/tmp/inject_boot.sh");
+
+assert(run_program("/tmp/extract_multirom.sh") == 0);
+ui_print("Injecting boot image...");
+assert(run_program("/tmp/inject_boot.sh") == 0);
+
+ui_print("Cleaning up...");
+delete_recursive("/tmp/boot");
+delete_recursive("/tmp/multirom");
+delete("/tmp/mkbootimg");
+delete("/tmp/lz4");
+delete("/tmp/boot.img-cmdline");
+delete("/tmp/boot.img-ramdisk.gz");
+delete("/tmp/boot.img-zImage");
+delete("/tmp/unpackbootimg");
+delete("/tmp/boot.img");
+delete("/tmp/newboot.img");
+delete("/tmp/extract_multirom.sh");
+delete("/tmp/inject_boot.sh");
+
+ui_print("Installation complete!");

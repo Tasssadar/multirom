@@ -44,13 +44,13 @@ if [ rd_cmpr == -1 ] || [ ! -f /tmp/boot/init ] ; then
 fi
 
 # copy trampoline
-if [ ! -e /tmp/boot/main_init ] ; then 
+if [ ! -e /tmp/boot/main_init ] ; then
     mv /tmp/boot/init /tmp/boot/main_init
 fi
 cp /tmp/multirom/trampoline /tmp/boot/init
 chmod 750 /tmp/boot/init
 
-# crete ueventd and watchdogd symlink
+# create ueventd and watchdogd symlink
 if [ -L /tmp/boot/sbin/ueventd ] ; then
     ln -sf ../main_init /tmp/boot/sbin/ueventd
 fi
