@@ -376,6 +376,10 @@ int multirom_default_status(struct multirom_status *s)
         fb_debug("No internal rom found!\n");
         return -1;
     }
+
+    s->auto_boot_rom = s->current_rom;
+    s->auto_boot_seconds = 5;
+
     return 0;
 }
 
