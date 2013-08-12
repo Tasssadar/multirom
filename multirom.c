@@ -876,68 +876,24 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
 
     struct dirent *dp = NULL;
 
-    char line[1024];
-    FILE *f_in = NULL;
-    FILE *f_out = NULL;
-    int add_dummy = 0;
-
     while((dp = readdir(d)))
     {
+        if(dp->d_name[0] == '.' && (dp->d_name[1] == '.' || dp->d_name[1] == 0))
+            continue;
+
         sprintf(in, "%s/%s", folder, dp->d_name);
         sprintf(out, "/%s", dp->d_name);
 
-        // just copy the file if not rc
-        if(!strstr(dp->d_name, ".rc"))
-        {
-            copy_file(in, out);
-            continue;
-        }
+        copy_file(in, out);
 
-        f_in = fopen(in, "r");
-        if(!f_in)
-            continue;
-
-        f_out = fopen(out, "w");
-        if(!f_out)
-        {
-            fclose(f_in);
-            continue;
-        }
-
-        while((fgets(line, sizeof(line), f_in)))
-        {
-            if (strstr(line, "on "))
-                add_dummy = 1;
-            // Remove mounts from RCs
-            else if (strstr(line, "mount_all") || 
-               (strstr(line, "mount ") && (strstr(line, "/data") || strstr(line, "/system"))))
-            {
-                if(add_dummy == 1)
-                {
-                    add_dummy = 0;
-                    fputs("    export DUMMY_LINE_INGORE_IT 1\n", f_out);
-                }
-
-                // This is needed to start sdcard and gps daemon
-                // (class late_start). Calling "on unencrypted"
-                // is in mount_all cmd, which is just not cool.
-                if(strstr(line, "mount_all"))
-                {
-                    fputs("    setprop ro.crypto.state unencrypted\n", f_out);
-                    fputs("    trigger nonencrypted\n", f_out);
-                }
-
-                fputc((int)'#', f_out);
-            }
-            fputs(line, f_out);
-        }
-
-        fclose(f_out);
-        fclose(f_in);
-
-        chmod(out, EXEC_MASK);
+        // set permissions for .rc files
+        if(strstr(dp->d_name, ".rc"))
+            chmod(out, EXEC_MASK);
     }
     closedir(d);
+
+    if(multirom_process_android_fstab() != 0)
+        return -1;
 
     mkdir_with_perms("/system", 0755, NULL, NULL);
     mkdir_with_perms("/data", 0771, "system", "system");
@@ -978,6 +934,94 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
         }
     }
     return 0;
+}
+
+int multirom_process_android_fstab(void)
+{
+    DIR *d = opendir("/");
+    if(!d)
+    {
+        ERROR("Failed to open root folder!\n");
+        return -1;
+    }
+
+    char *fstab_name = NULL;
+    struct dirent *dp = NULL;
+    while((dp = readdir(d)))
+    {
+        if(strstr(dp->d_name, "fstab."))
+        {
+            fstab_name = strdup(dp->d_name);
+            break;
+        }
+    }
+    closedir(d);
+
+    if(!fstab_name)
+    {
+        ERROR("Failed to find fstab file in root!\n");
+        return -1;
+    }
+
+    ERROR("Modifying fstab: %s\n", fstab_name);
+
+    FILE *fstab = NULL;
+    long len = 0;
+    char *line = NULL;
+    char *out = NULL;
+    int res = -1;
+    int counter = 0;
+
+    fstab = fopen(fstab_name, "r");
+    if(!fstab)
+    {
+        ERROR("Failed to open %s\n", fstab_name);
+        goto exit;
+    }
+
+    fseek(fstab, 0, SEEK_END);
+    len = ftell(fstab);
+    fseek(fstab, 0, SEEK_SET);
+
+#define FSTAB_LINE_LEN 2048
+    line = malloc(FSTAB_LINE_LEN);
+    out = malloc(len + 32);
+    out[0] = 0;
+
+    while((fgets(line, FSTAB_LINE_LEN, fstab)))
+    {
+        if (line[0] != '#' &&
+            (strstr(line, "/system") || strstr(line, "/cache") || strstr(line, "/data")))
+        {
+            strcat(out, "#");
+            if(++counter > 3)
+            {
+                ERROR("Commented %u lines instead of 3 in fstab, stopping boot!\n", counter);
+                fclose(fstab);
+                goto exit;
+            }
+        }
+
+        strcat(out, line);
+    }
+    fclose(fstab);
+
+    fstab = fopen(fstab_name, "w");
+    if(!fstab)
+    {
+        ERROR("Failed to open %s for writing!", fstab_name);
+        goto exit;
+    }
+
+    fputs(out, fstab);
+    fclose(fstab);
+
+    res = 0;
+exit:
+    free(line);
+    free(out);
+    free(fstab_name);
+    return res;
 }
 
 int multirom_create_media_link(void)

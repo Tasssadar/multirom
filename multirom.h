@@ -124,6 +124,7 @@ void multirom_free_rom(void *rom);
 int multirom_init_fb(int rotation);
 int multirom_prep_android_mounts(struct multirom_rom *rom);
 int multirom_create_media_link(void);
+int multirom_process_android_fstab(void);
 int multirom_get_api_level(const char *path);
 int multirom_get_rom_type(struct multirom_rom *rom);
 void multirom_take_screenshot(void);
