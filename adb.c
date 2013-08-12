@@ -127,7 +127,7 @@ void adb_init_usb(void)
             start += strlen(tag);
             char *end = strchr(start, ' ');
             if(end && end-start < (int)sizeof(serial))
-                strncpy(serial, start, end-serial);
+                strncpy(serial, start, end-start);
         }
     }
 
