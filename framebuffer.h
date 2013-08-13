@@ -62,6 +62,7 @@ void fb_update(void);
 void fb_switch(int n_sig);
 inline struct FB *get_active_fb();
 void fb_set_active_framebuffer(unsigned n);
+void fb_dump_info(void);
 
 enum 
 {

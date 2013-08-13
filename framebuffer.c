@@ -39,7 +39,12 @@
 
 #define PIXEL_SIZE 4
 
-static struct FB framebuffers[2];
+// only double-buffering is implemented, this define is just
+// for the code to know how many buffers we use
+#define NUM_BUFFERS 2
+
+
+static struct FB framebuffers[NUM_BUFFERS];
 static int active_fb = 0;
 static int fb_frozen = 0;
 
@@ -93,6 +98,7 @@ int fb_open(int rotation)
 {
     fb_rotation = rotation;
 
+    int i;
     int fd = open("/dev/graphics/fb0", O_RDWR);
     if (fd < 0)
         return -1;
@@ -127,24 +133,23 @@ int fb_open(int rotation)
     uint32_t *b_store = malloc(vi.xres*vi.yres*PIXEL_SIZE);
     android_memset32(b_store, BLACK, vi.xres*vi.yres*PIXEL_SIZE);
 
+    for(i = 0; i < NUM_BUFFERS; ++i)
+    {
+        fb = &framebuffers[i];
+        fb->fd = fd;
+        fb->size = vi.xres*vi.yres*PIXEL_SIZE;
+        fb->vi = vi;
+        fb->fi = fi;
+        fb->bits = b_store;
+        fb->mapped = ((void*)(bits)) + (vi.yres * fi.line_length * i);
+    }
+
+    // fb always points to the first framebuffer
     fb = &framebuffers[0];
-    fb->fd = fd;
-    fb->size = vi.xres*vi.yres*PIXEL_SIZE;
-    fb->vi = vi;
-    fb->fi = fi;
-    fb->bits = b_store;
-    fb->mapped = bits;
 
-    ++fb;
-
-    fb->fd = fd;
-    fb->size = vi.xres*vi.yres*PIXEL_SIZE;
-    fb->vi = vi;
-    fb->fi = fi;
-    fb->bits = b_store;
-    fb->mapped = (void*) (((unsigned) bits) + vi.yres * fi.line_length);
-
-    --fb;
+#if 0
+    fb_dump_info();
+#endif
 
     fb_update();
 
@@ -169,15 +174,49 @@ void fb_close(void)
     free(fb->bits);
 }
 
+void fb_dump_info(void)
+{
+    ERROR("Framebuffer:\n");
+    ERROR("fi.smem_len: %u\n", fb->fi.smem_len);
+    ERROR("fi.type: %u\n", fb->fi.type);
+    ERROR("fi.type_aux: %u\n", fb->fi.type_aux);
+    ERROR("fi.visual: %u\n", fb->fi.visual);
+    ERROR("fi.xpanstep: %u\n", fb->fi.xpanstep);
+    ERROR("fi.ypanstep: %u\n", fb->fi.ypanstep);
+    ERROR("fi.ywrapstep: %u\n", fb->fi.ywrapstep);
+    ERROR("fi.line_length: %u\n", fb->fi.line_length);
+    ERROR("fi.mmio_start: %p\n", fb->fi.mmio_start);
+    ERROR("fi.mmio_len: %u\n", fb->fi.mmio_len);
+    ERROR("fi.accel: %u\n", fb->fi.accel);
+    ERROR("vi.xres: %u\n", fb->vi.xres);
+    ERROR("vi.yres: %u\n", fb->vi.yres);
+    ERROR("vi.xres_virtual: %u\n", fb->vi.xres_virtual);
+    ERROR("vi.yres_virtual: %u\n", fb->vi.yres_virtual);
+    ERROR("vi.xoffset: %u\n", fb->vi.xoffset);
+    ERROR("vi.yoffset: %u\n", fb->vi.yoffset);
+    ERROR("vi.bits_per_pixel: %u\n", fb->vi.bits_per_pixel);
+    ERROR("vi.grayscale: %u\n", fb->vi.grayscale);
+    ERROR("vi.red: offset: %u len: %u msb_right: %u\n", fb->vi.red.offset, fb->vi.red.length, fb->vi.red.msb_right);
+    ERROR("vi.green: offset: %u len: %u msb_right: %u\n", fb->vi.green.offset, fb->vi.green.length, fb->vi.green.msb_right);
+    ERROR("vi.blue: offset: %u len: %u msb_right: %u\n", fb->vi.blue.offset, fb->vi.blue.length, fb->vi.blue.msb_right);
+    ERROR("vi.transp: offset: %u len: %u msb_right: %u\n", fb->vi.transp.offset, fb->vi.transp.length, fb->vi.transp.msb_right);
+    ERROR("vi.nonstd: %u\n", fb->vi.nonstd);
+    ERROR("vi.activate: %u\n", fb->vi.activate);
+    ERROR("vi.height: %u\n", fb->vi.height);
+    ERROR("vi.width: %u\n", fb->vi.width);
+    ERROR("vi.accel_flags: %u\n", fb->vi.accel_flags);
+}
+
 void fb_set_active_framebuffer(unsigned n)
 {
-    if (n > 1) return;
-    fb->vi.yres_virtual = fb->vi.yres * PIXEL_SIZE;
+    if (n > 1)
+        return;
+
+    fb->vi.yres_virtual = fb->vi.yres * NUM_BUFFERS;
     fb->vi.yoffset = n * fb->vi.yres;
-    fb->vi.bits_per_pixel = PIXEL_SIZE * 8;
-    if (ioctl(fb->fd, FBIOPUT_VSCREENINFO, &fb->vi) < 0) {
+
+    if (ioctl(fb->fd, FBIOPUT_VSCREENINFO, &fb->vi) < 0)
         ERROR("active fb swap failed");
-    }
 }
 
 void fb_update(void)
