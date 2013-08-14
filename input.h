@@ -50,11 +50,6 @@ typedef struct
 } touch_event;
 
 typedef int (*touch_callback)(touch_event*, void*); // event, data
-typedef struct
-{
-    void *data;
-    touch_callback callback;
-} touch_handler;
 
 void start_input_thread(void);
 void stop_input_thread(void);

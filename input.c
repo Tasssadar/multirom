@@ -28,14 +28,18 @@
 #include <dirent.h>
 
 #include "input.h"
+#include "input_priv.h"
 #include "framebuffer.h"
 #include "util.h"
 #include "log.h"
 
-#define MAX_DEVICES 16
-
 // for touch calculation
-static int screen_res[2] = { 0 };
+int mt_screen_res[2] = { 0 };
+touch_event mt_events[MAX_FINGERS];
+int mt_slot = 0;
+int mt_switch_xy = 0;
+int mt_range_x[2] = { 0 };
+int mt_range_y[2] = { 0 };
 
 static struct pollfd ev_fds[MAX_DEVICES];
 static unsigned ev_count = 0;
@@ -46,28 +50,6 @@ static int8_t key_itr = 10;
 static pthread_mutex_t key_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t touch_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t input_thread;
-
-static touch_event mt_events[10];
-static int mt_slot = 0;
-static int switch_xy = 0;
-static int mt_range_x[2] = { 0 };
-static int mt_range_y[2] = { 0 };
-
-struct handler_list_it
-{
-    touch_handler *handler;
-
-    struct handler_list_it *prev;
-    struct handler_list_it *next;
-};
-
-typedef struct handler_list_it handler_list_it;
-
-typedef struct
-{
-    int handlers_mode;
-    handler_list_it *handlers;
-} handlers_ctx;
 
 static handler_list_it *mt_handlers = NULL;
 static handlers_ctx **inactive_ctx = NULL;
@@ -91,8 +73,8 @@ static void get_abs_min_max(int fd)
         memcpy(mt_range_y, abs+1, 2*sizeof(int));
 
 
-    switch_xy = (mt_range_x[1] > mt_range_y[1]);
-    if(switch_xy)
+    mt_switch_xy = (mt_range_x[1] > mt_range_y[1]);
+    if(mt_switch_xy)
     {
         memcpy(abs, mt_range_x, 2*sizeof(int));
         memcpy(mt_range_x, mt_range_y, 2*sizeof(int));
@@ -108,8 +90,10 @@ static int ev_init(void)
     long absbit[BITS_TO_LONGS(ABS_CNT)];
 
     ev_count = 0;
-    screen_res[0] = fb->vi.xres;
-    screen_res[1] = fb->vi.yres;
+    mt_screen_res[0] = fb->vi.xres;
+    mt_screen_res[1] = fb->vi.yres;
+
+    init_touch_specifics();
 
     dir = opendir("/dev/input");
     if(!dir)
@@ -146,6 +130,8 @@ static int ev_init(void)
 
 static void ev_exit(void)
 {
+    destroy_touch_specifics();
+
     while (ev_count > 0) {
         close(ev_fds[--ev_count].fd);
     }
@@ -185,7 +171,7 @@ static void handle_key_event(struct input_event *ev)
     pthread_mutex_unlock(&key_mutex);
 }
 
-static int calc_mt_pos(int val, int *range, int d_max)
+int calc_mt_pos(int val, int *range, int d_max)
 {
     int res = ((val-range[0])*100);
     res /= (range[1]-range[0]);
@@ -225,44 +211,7 @@ static void mt_recalc_pos_rotation(touch_event *ev)
     }
 }
 
-static void handle_touch_event(struct input_event *ev)
-{
-    switch(ev->code)
-    {
-        case ABS_MT_SLOT:
-            if(ev->value < (int)ARRAY_SIZE(mt_events))
-                mt_slot = ev->value;
-            break;
-        case ABS_MT_TRACKING_ID:
-        {
-            if(ev->value != -1)
-            {
-                mt_events[mt_slot].id = ev->value;
-                mt_events[mt_slot].changed |= TCHNG_ADDED;
-            }
-            else
-                mt_events[mt_slot].changed |= TCHNG_REMOVED;
-            break;
-        }
-        case ABS_MT_POSITION_X:
-        case ABS_MT_POSITION_Y:
-        {
-            if((ev->code == ABS_MT_POSITION_X) ^ (switch_xy != 0))
-            {
-                mt_events[mt_slot].orig_x = calc_mt_pos(ev->value, mt_range_x, screen_res[0]);
-                if(switch_xy)
-                    mt_events[mt_slot].orig_x = screen_res[0] - mt_events[mt_slot].orig_x;
-            }
-            else
-                mt_events[mt_slot].orig_y = calc_mt_pos(ev->value, mt_range_y, screen_res[1]);
-
-            mt_events[mt_slot].changed |= TCHNG_POS;
-            break;
-        }
-    }
-}
-
-static void handle_touch_syn(struct input_event *ev)
+void touch_commit_events(struct timeval ev_time)
 {
     pthread_mutex_lock(&touch_mutex);
     int has_handlers = (mt_handlers != NULL);
@@ -277,8 +226,8 @@ static void handle_touch_syn(struct input_event *ev)
 
     for(i = 0; i < ARRAY_SIZE(mt_events); ++i)
     {
-        mt_events[i].us_diff = get_us_diff(ev->time, mt_events[i].time);
-        mt_events[i].time = ev->time;
+        mt_events[i].us_diff = get_us_diff(ev_time, mt_events[i].time);
+        mt_events[i].time = ev_time;
 
         if(!mt_events[i].changed)
             continue;
@@ -320,11 +269,10 @@ static void *input_thread_work(void *cookie)
                     handle_key_event(&ev);
                     break;
                 case EV_ABS:
-                    handle_touch_event(&ev);
+                    handle_abs_event(&ev);
                     break;
                 case EV_SYN:
-                    if(ev.code == SYN_REPORT)
-                        handle_touch_syn(&ev);
+                    handle_syn_event(&ev);
                     break;
             }
         }

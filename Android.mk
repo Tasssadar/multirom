@@ -19,6 +19,12 @@ LOCAL_SRC_FILES:= \
 	adb.c \
 	multirom_ui_themes.c
 
+
+# Touch event client implementation:
+# TODO: Move this into device files once the rest is ready
+#LOCAL_SRC_FILES += input_type_a.c
+LOCAL_SRC_FILES += input_type_b.c
+
 # Init default define values
 MULTIROM_THEMES :=
 MULTIROM_DEFAULT_ROTATION := 0
