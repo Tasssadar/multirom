@@ -1167,37 +1167,46 @@ int multirom_has_kexec(void)
     if(has_kexec != -2)
         return has_kexec;
 
-    struct stat info;
-    if(stat("/proc/config.gz", &info) < 0)
+    if(access("/proc/config.gz", F_OK) >= 0)
     {
-        ERROR("Failed to open /proc/config.gz!\n");
-        has_kexec = -1;
-        return has_kexec;
-    }
+        char *cmd_cp[] = { busybox_path, "cp", "/proc/config.gz", "/config.gz", NULL };
+        run_cmd(cmd_cp);
 
-    char *cmd_cp[] = { busybox_path, "cp", "/proc/config.gz", "/config.gz", NULL };
-    run_cmd(cmd_cp);
+        char *cmd_gzip[] = { busybox_path, "gzip", "-d", "/config.gz", NULL };
+        run_cmd(cmd_gzip);
 
-    char *cmd_gzip[] = { busybox_path, "gzip", "-d", "/config.gz", NULL };
-    run_cmd(cmd_gzip);
+        has_kexec = 0;
 
-    has_kexec = 0;
-
-    uint32_t i;
-    static const char *checks[] = { "CONFIG_KEXEC_HARDBOOT=y", "CONFIG_ATAGS_PROC=y" };
-    //                   0             1       2     3
-    char *cmd_grep[] = { busybox_path, "grep", NULL, "/config", NULL };
-    for(i = 0; i < ARRAY_SIZE(checks); ++i)
-    {
-        cmd_grep[2] = (char*)checks[i];
-        if(run_cmd(cmd_grep) != 0)
+        uint32_t i;
+        static const char *checks[] = { "CONFIG_KEXEC_HARDBOOT=y", "CONFIG_ATAGS_PROC=y" };
+        //                   0             1       2     3
+        char *cmd_grep[] = { busybox_path, "grep", NULL, "/config", NULL };
+        for(i = 0; i < ARRAY_SIZE(checks); ++i)
         {
-            has_kexec = -1;
-            ERROR("%s not found in /proc/config.gz!\n", checks[i]);
+            cmd_grep[2] = (char*)checks[i];
+            if(run_cmd(cmd_grep) != 0)
+            {
+                has_kexec = -1;
+                ERROR("%s not found in /proc/config.gz!\n", checks[i]);
+            }
         }
+
+        remove("/config");
+    }
+    else
+    {
+        // Kernel without /proc/config.gz enabled - check for /proc/atags file,
+        // if it is present, there is good change kexec-hardboot is enabled too.
+        ERROR("/proc/config.gz is not available!\n");
+        if(access("/proc/atags", R_OK) < 0)
+        {
+            ERROR("/proc/atags was not found!\n");
+            has_kexec = -1;
+        }
+        else
+            has_kexec = 0;
     }
 
-    remove("/config");
     return has_kexec;
 }
 
