@@ -168,6 +168,7 @@ void fb_close(void)
     pthread_join(fb_draw_thread, NULL);
 
     free(fb_rot_helpers);
+    fb_rot_helpers = NULL;
 
     munmap(fb->mapped, fb->fi.smem_len);
     close(fb->fd);
