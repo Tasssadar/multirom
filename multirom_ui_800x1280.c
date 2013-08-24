@@ -234,20 +234,16 @@ static void center_rom_name(tab_data_roms *d, const char *name)
     d->rom_name->head.x = center_x(0, fb_width-BOOTBTN_W-20, SIZE_NORMAL, name);
 }
 
-multirom_theme *init_theme_info_800x1280(void)
-{
-    multirom_theme *t = mzalloc(sizeof(multirom_theme));
-    t->width = 800;
-    t->height = 1280;
+const struct multirom_theme theme_info_800x1280 = {
+    .width = 800,
+    .height = 1280,
 
-    t->destroy = &destroy;
-    t->init_header = &init_header;
-    t->header_select = &header_select;
-    t->tab_rom_init = &tab_rom_init;
-    t->tab_misc_init = &tab_misc_init;
-    t->get_tab_width = &get_tab_width;
-    t->get_tab_height = &get_tab_height;
-    t->center_rom_name = &center_rom_name;
-
-    return t;
-}
+    .destroy = &destroy,
+    .init_header = &init_header,
+    .header_select = &header_select,
+    .tab_rom_init = &tab_rom_init,
+    .tab_misc_init = &tab_misc_init,
+    .get_tab_width = &get_tab_width,
+    .get_tab_height = &get_tab_height,
+    .center_rom_name = &center_rom_name
+};

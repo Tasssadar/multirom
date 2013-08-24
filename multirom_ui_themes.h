@@ -77,12 +77,4 @@ multirom_themes_info *multirom_ui_init_themes(void);
 void multirom_ui_free_themes(multirom_themes_info *info);
 multirom_theme *multirom_ui_select_theme(multirom_themes_info *i, int w, int h);
 
-#ifdef MULTIROM_THEME_800x1280
-multirom_theme *init_theme_info_800x1280(void);
-#endif
-
-#ifdef MULTIROM_THEME_1280x800
-multirom_theme *init_theme_info_1280x800(void);
-#endif
-
 #endif

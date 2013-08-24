@@ -27,18 +27,22 @@ multirom_themes_info *multirom_ui_init_themes(void)
     i->data = mzalloc(sizeof(multirom_theme_data));
     i->data->selected_tab = -1;
 
+#define ADD_THEME(RES) \
+    extern struct multirom_theme theme_info_ ## RES; \
+    list_add(&theme_info_ ## RES, &i->themes);
+
 #ifdef MULTIROM_THEME_800x1280
-    list_add(init_theme_info_800x1280(), &i->themes);
+    ADD_THEME(800x1280);
 #endif
 #ifdef MULTIROM_THEME_1280x800
-    list_add(init_theme_info_1280x800(), &i->themes);
+    ADD_THEME(1280x800);
 #endif
     return i;
 }
 
 void multirom_ui_free_themes(multirom_themes_info *i)
 {
-    list_clear(&i->themes, &free);
+    list_clear(&i->themes, NULL);
     free(i->data);
     free(i);
 }
