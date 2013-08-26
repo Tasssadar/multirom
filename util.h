@@ -26,21 +26,13 @@
 
 static const char *coldboot_done = "/dev/.coldboot_done";
 
-int mtd_name_to_number(const char *name);
-int create_socket(const char *name, int type, mode_t perm,
-                  uid_t uid, gid_t gid);
-void *read_file(const char *fn, unsigned *_sz);
 time_t gettime(void);
 unsigned int decode_uid(const char *s);
-
 int mkdir_recursive(const char *pathname, mode_t mode);
 void sanitize(char *p);
 int make_link(const char *oldpath, const char *newpath);
 void remove_link(const char *oldpath, const char *newpath);
 int wait_for_file(const char *filename, int timeout);
-void open_devnull_stdio(void);
-void get_hardware_name(char *hardware, unsigned int *revision);
-void import_kernel_cmdline(int in_qemu, void (*import_kernel_nv)(char *name, int in_qemu));
 int copy_file(const char *from, const char *to);
 int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const char *group);
 int write_file(const char *path, const char *value);

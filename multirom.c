@@ -35,13 +35,11 @@
 #include "log.h"
 #include "util.h"
 #include "version.h"
-#include "adb.h"
 
 #define REALDATA "/realdata"
 #define BUSYBOX_BIN "busybox"
 #define KEXEC_BIN "kexec"
 #define NTFS_BIN "ntfs-3g"
-#define ADBD_BIN "adbd"
 #define INTERNAL_ROM_NAME "Internal"
 #define BOOT_BLK "/dev/block/mmcblk0p2"
 #define MAX_ROM_NAME_LEN 26
@@ -53,8 +51,7 @@
 
 #define T_FOLDER 4
 
-char busybox_path[64] = { 0 };
-char adbd_path[64] = { 0 };
+static char busybox_path[64] = { 0 };
 static char multirom_dir[64] = { 0 };
 static char kexec_path[64] = { 0 };
 static char ntfs_path[64] = { 0 };
@@ -84,11 +81,9 @@ int multirom_find_base_dir(void)
         sprintf(busybox_path, "%s/%s", paths[i], BUSYBOX_BIN);
         sprintf(kexec_path, "%s/%s", paths[i], KEXEC_BIN);
         sprintf(ntfs_path, "%s/%s", paths[i], NTFS_BIN);
-        sprintf(adbd_path, "%s/%s", paths[i], ADBD_BIN);
 
         chmod(kexec_path, 0755);
         chmod(ntfs_path, 0755);
-        chmod(adbd_path, 0755);
         return 0;
     }
     return -1;
@@ -107,9 +102,6 @@ int multirom(void)
 
     multirom_load_status(&s);
     multirom_dump_status(&s);
-
-    if(s.enable_adb)
-        adb_init();
 
     struct multirom_rom *to_boot = NULL;
     int exit = (EXIT_REBOOT | EXIT_UMOUNT);
@@ -169,8 +161,6 @@ int multirom(void)
         else
             s.is_second_boot = 0;
     }
-
-    adb_quit();
 
     multirom_save_status(&s);
     multirom_free_status(&s);

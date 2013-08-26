@@ -29,13 +29,15 @@
 #include <linux/loop.h>
 
 #include "adb.h"
-#include "util.h"
-#include "multirom.h"
+#include "../util.h"
 #include "log.h"
 
 static pthread_t adb_thread;
 static volatile int run_thread = 0;
 static pid_t adb_pid = -1;
+
+static char busybox_path[64] = { 0 };
+static char adbd_path[64] = { 0 };
 
 static char * const ENV[] = {
     "PATH=/sbin:/bin:/usr/bin:/usr/sbin:/mrom_bin",
@@ -48,14 +50,22 @@ static char * const ENV[] = {
     NULL
 };
 
-static void *adb_thread_work(void *c)
+static void *adb_thread_work(void *mrom_path)
 {
+    int enabled = adb_is_enabled((char*)mrom_path);
+    free(mrom_path);
+
+    if(enabled != 0)
+        return NULL;
+
     adb_init_usb();
 
     if(adb_init_busybox() < 0)
         return NULL;
 
     adb_init_fs();
+
+    chmod(adbd_path, 0755);
 
     while(run_thread)
     {
@@ -84,14 +94,17 @@ static void *adb_thread_work(void *c)
     return NULL;
 }
 
-void adb_init(void)
+void adb_init(char *mrom_path)
 {
-    INFO("Starting adbd\n");
     if(run_thread)
         return;
 
+    sprintf(busybox_path, "%s/busybox", mrom_path);
+    sprintf(adbd_path, "%s/adbd", mrom_path);
+
+    INFO("Starting adbd\n");
     run_thread = 1;
-    pthread_create(&adb_thread, NULL, adb_thread_work, NULL);
+    pthread_create(&adb_thread, NULL, adb_thread_work, strdup(mrom_path));
 }
 
 void adb_quit(void)
@@ -116,20 +129,8 @@ void adb_init_usb(void)
 {
     write_file("/sys/class/android_usb/android0/enable", "0");
 
-    char cmdline[1024];
     char serial[64] = { 0 };
-    static const char *tag = "androidboot.serialno=";
-    if(multirom_get_cmdline(cmdline, sizeof(cmdline)) >= 0)
-    {
-        char *start = strstr(cmdline, tag);
-        if(start)
-        {
-            start += strlen(tag);
-            char *end = strchr(start, ' ');
-            if(end && end-start < (int)sizeof(serial))
-                strncpy(serial, start, end-start);
-        }
-    }
+    adb_get_serial(serial, sizeof(serial));
 
     write_file("/sys/class/android_usb/android0/idVendor", "18d1");
     write_file("/sys/class/android_usb/android0/idProduct", "4e42");
@@ -186,4 +187,41 @@ void adb_cleanup(void)
 
     umount("/dev/pts");
     rmdir("/dev/pts");
+}
+
+int adb_get_serial(char *serial, int maxlen)
+{
+    FILE *f = fopen("/proc/cmdline", "r");
+    if(!f)
+        return -1;
+
+    int res = -1;
+
+    char cmdline[1024];
+    static const char *tag = "androidboot.serialno=";
+    if(fgets(cmdline, sizeof(cmdline), f))
+    {
+        char *start = strstr(cmdline, tag);
+        if(start)
+        {
+            start += strlen(tag);
+            char *end = strchr(start, ' ');
+            if(end && end-start < maxlen)
+            {
+                strncpy(serial, start, end-start);
+                res = 0;
+            }
+        }
+    }
+    fclose(f);
+    return res;
+}
+
+int adb_is_enabled(char *mrom_path)
+{
+    char cfg[64];
+    char *cmd[] = { busybox_path, "grep", "^enable_adb=1$", cfg, NULL };
+    sprintf(cfg, "%s/multirom.ini", mrom_path);
+
+    return run_cmd(cmd) == 0 ? 0 : -1;
 }

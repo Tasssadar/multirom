@@ -26,8 +26,9 @@
 
 #include "devices.h"
 #include "log.h"
-#include "util.h"
+#include "../util.h"
 #include "../version.h"
+#include "adb.h"
 
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 #define REALDATA "/realdata"
@@ -86,12 +87,6 @@ static int run_multirom_bin(char *path)
 
 static void run_multirom(void)
 {
-    if(find_multirom() == -1)
-    {
-        ERROR("Could not find multirom folder!");
-        return;
-    }
-
     char path[256];
     struct stat info;
 
@@ -206,6 +201,41 @@ exit:
     return res;
 }
 
+static void mount_and_run(void)
+{
+    char data_dev[128];
+
+    if(find_data_dev(data_dev) != 0)
+    {
+        ERROR("Failed to find data dev!\n");
+        return;
+    }
+
+    if(wait_for_file(data_dev, 5) < 0)
+    {
+        ERROR("Waiting too long for dev %s", data_dev);
+        return;
+    }
+
+    mkdir(REALDATA, 0755);
+    if (mount(data_dev, REALDATA, "ext4", MS_RELATIME | MS_NOATIME,
+        "user_xattr,acl,barrier=1,data=ordered,nomblk_io_submit") < 0)
+    {
+        ERROR("Failed to mount /realdata %d\n", errno);
+        return;
+    }
+
+    if(find_multirom() == -1)
+    {
+        ERROR("Could not find multirom folder!");
+        return;
+    }
+
+    adb_init(path_multirom);
+    run_multirom();
+    adb_quit();
+}
+
 int main(int argc, char *argv[])
 {
     int i;
@@ -257,30 +287,7 @@ int main(int argc, char *argv[])
 
     // mount and run multirom from sdcard
     if(ok)
-    {
-        char data_dev[128];
-        mkdir(REALDATA, 0755);
-        if(find_data_dev(data_dev) != 0)
-        {
-            ERROR("Failed to find data dev!\n");
-        }
-        else
-        {
-            if(wait_for_file(data_dev, 5) < 0)
-            {
-                ERROR("Waiting too long for dev %s", data_dev);
-            }
-            else if(mount(data_dev, REALDATA, "ext4", MS_RELATIME | MS_NOATIME,
-                "user_xattr,acl,barrier=1,data=ordered,discard,nomblk_io_submit") < 0)
-            {
-                ERROR("Failed to mount /realdata %d\n", errno);
-            }
-            else
-            {
-                run_multirom();
-            }
-        }
-    }
+        mount_and_run();
 
     // close and destroy everything
     devices_close();

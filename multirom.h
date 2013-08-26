@@ -101,9 +101,6 @@ struct multirom_status
     char *curr_rom_part;
 };
 
-extern char busybox_path[64];
-extern char adbd_path[64];
-
 int multirom(void);
 int multirom_find_base_dir(void);
 void multirom_emergency_reboot(void);

@@ -16,7 +16,6 @@ LOCAL_SRC_FILES:= \
 	button.c \
 	pong.c \
 	progressdots.c \
-	adb.c \
 	multirom_ui_themes.c
 
 

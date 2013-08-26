@@ -46,7 +46,7 @@
 #include <cutils/uevent.h>
 
 #include "devices.h"
-#include "util.h"
+#include "../util.h"
 #include "log.h"
 
 #define SYSFS_PREFIX    "/sys"
