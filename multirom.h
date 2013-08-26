@@ -156,5 +156,6 @@ int multirom_replace_aliases_root_path(char **s, struct multirom_rom *rom);
 char *multirom_get_klog(void);
 int multirom_get_battery(void);
 void multirom_set_brightness(int val);
+int multirom_run_scripts(const char *type, struct multirom_rom *rom);
 
 #endif

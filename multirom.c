@@ -145,6 +145,8 @@ int multirom(void)
 
     if(to_boot)
     {
+        multirom_run_scripts("run-on-boot", to_boot);
+
         exit = multirom_prepare_for_boot(&s, to_boot);
 
         // Something went wrong, reboot
@@ -2124,4 +2126,28 @@ void multirom_set_brightness(int val)
     }
     fprintf(f, "%d", val);
     fclose(f);
+}
+
+int multirom_run_scripts(const char *type, struct multirom_rom *rom)
+{
+    char buff[512];
+    sprintf(buff, "%s/%s", rom->base_path, type);
+    if(access(buff, (R_OK | X_OK)) < 0)
+    {
+        ERROR("No %s scripts for ROM %s\n", type, rom->name);
+        return 0;
+    }
+
+    ERROR("Running %s scripts for ROM %s...\n", type, rom->name);
+
+    char *cmd[] = { busybox_path, "sh", "-c", buff, NULL };
+    sprintf(buff, "B=\"%s\"; P=\"%s\"; for x in $(\"$B\" ls \"$P/%s/\"*.sh); do echo Running script $x; \"$B\" sh $x \"$B\" \"$P\" || exit 1; done", busybox_path, rom->base_path, type);
+
+    int res = run_cmd(cmd);
+    if(res != 0)
+    {
+        ERROR("Error running scripts (%d)!\n", res);
+        return res;
+    }
+    return 0;
 }
