@@ -31,7 +31,6 @@
 
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 #define REALDATA "/realdata"
-#define BOOT_DEV "/dev/block/mmcblk0p2"
 #define MULTIROM_BIN "multirom"
 #define BUSYBOX_BIN "busybox"
 #define KEEP_REALDATA "/dev/.keep_realdata"
@@ -242,9 +241,11 @@ int main(int argc, char *argv[])
     ERROR("Done initializing");
 
     int ok = 1;
-    if(wait_for_file(BOOT_DEV, 5) < 0)
+    // FIXME: this won't work on all devices,
+    // is it even necessary to wait?
+    if(wait_for_file("/proc/partitions", 5) < 0)
     {
-        ERROR("Waing too long for data block dev");
+        ERROR("Waing too long for /proc/partitions");
         ok = 0;
     }
 
@@ -259,14 +260,26 @@ int main(int argc, char *argv[])
     {
         char data_dev[128];
         mkdir(REALDATA, 0755);
-        if (find_data_dev(data_dev) == 0 &&
-            mount(data_dev, REALDATA, "ext4", MS_RELATIME | MS_NOATIME,
-            "user_xattr,acl,barrier=1,data=ordered,discard,nomblk_io_submit") >= 0)
+        if(find_data_dev(data_dev) != 0)
         {
-            run_multirom();
+            ERROR("Failed to find data dev!\n");
         }
         else
-            ERROR("Failed to mount /realdata %d\n", errno);
+        {
+            if(wait_for_file(data_dev, 5) < 0)
+            {
+                ERROR("Waiting too long for dev %s", data_dev);
+            }
+            else if(mount(data_dev, REALDATA, "ext4", MS_RELATIME | MS_NOATIME,
+                "user_xattr,acl,barrier=1,data=ordered,discard,nomblk_io_submit") < 0)
+            {
+                ERROR("Failed to mount /realdata %d\n", errno);
+            }
+            else
+            {
+                run_multirom();
+            }
+        }
     }
 
     // close and destroy everything
