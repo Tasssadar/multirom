@@ -272,8 +272,7 @@ int main(int argc, char *argv[])
     // close and destroy everything
     devices_close();
 
-    struct stat info;
-    if(stat(KEEP_REALDATA, &info) < 0)
+    if(access(KEEP_REALDATA, F_OK) < 0)
     {
         umount(REALDATA);
         umount("/dev/pts");
@@ -281,6 +280,7 @@ int main(int argc, char *argv[])
         rmdir("/dev/pts");
         rmdir("/dev/socket");
         rmdir("/dev");
+        rmdir(REALDATA);
     }
 
     umount("/proc");
@@ -291,8 +291,8 @@ int main(int argc, char *argv[])
     chmod("/main_init", EXEC_MASK);
 
     // run the main init
-    char *cmd[] = { "/main_init", (char *)0 };
-    int res = execve("/main_init", cmd, NULL);
+    char *cmd[] = { "/main_init", NULL };
+    int res = execve(cmd[0], cmd, NULL);
     ERROR("execve returned %d %d %s\n", res, errno, strerror(errno));
     return 0;
 }
