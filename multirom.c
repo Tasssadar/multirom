@@ -963,6 +963,11 @@ int multirom_process_android_fstab(void)
     char *out = NULL;
     int res = -1;
     int counter = 0;
+    int has_fstab_line = 0;
+
+    static const char *dummy_fstab_line =
+        "# Android considers empty fstab invalid, so MultiROM has to add _something_ to process triggers\n"
+        "tmpfs\t/dummy_tmpfs\ttmpfs\tro,nosuid,nodev\tdefaults\n";
 
     fstab = fopen(fstab_name, "r");
     if(!fstab)
@@ -977,26 +982,38 @@ int multirom_process_android_fstab(void)
 
 #define FSTAB_LINE_LEN 2048
     line = malloc(FSTAB_LINE_LEN);
-    out = malloc(len + 32);
+    out = malloc(len + 5 + sizeof(dummy_fstab_line));
     out[0] = 0;
 
     while((fgets(line, FSTAB_LINE_LEN, fstab)))
     {
-        if (line[0] != '#' &&
-            (strstr(line, "/system") || strstr(line, "/cache") || strstr(line, "/data")))
+        if(line[0] != '#')
         {
-            strcat(out, "#");
-            if(++counter > 3)
+            if(strstr(line, "/system") || strstr(line, "/cache") || strstr(line, "/data"))
             {
-                ERROR("Commented %u lines instead of 3 in fstab, stopping boot!\n", counter);
-                fclose(fstab);
-                goto exit;
+                strcat(out, "#");
+                if(++counter > 3)
+                {
+                    ERROR("Commented %u lines instead of 3 in fstab, stopping boot!\n", counter);
+                    fclose(fstab);
+                    goto exit;
+                }
             }
+            else if(line[0] != '\n' && line[0] != ' ')
+                has_fstab_line = 1;
         }
 
         strcat(out, line);
     }
     fclose(fstab);
+
+    // Android considers empty fstab invalid
+    if(has_fstab_line == 0)
+    {
+        INFO("fstab would be empty, adding dummy line\n");
+        strcat(out, dummy_fstab_line);
+        mkdir("/dummy_tmpfs", 0644);
+    }
 
     fstab = fopen(fstab_name, "w");
     if(!fstab)
