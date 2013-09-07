@@ -199,7 +199,7 @@ int fb_open(int rotation)
     // fb always points to the first framebuffer
     fb = &framebuffers[0];
 
-#if 1
+#if 0
     fb_dump_info();
 #endif
 
