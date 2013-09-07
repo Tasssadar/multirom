@@ -18,6 +18,11 @@ LOCAL_SRC_FILES:= \
     progressdots.c \
     multirom_ui_themes.c
 
+ifeq ($(ARCH_ARM_HAVE_NEON),true)
+    LOCAL_SRC_FILES += col32cb16blend_neon.S
+    LOCAL_CFLAGS += -DHAS_NEON_BLEND
+endif
+
 LOCAL_MODULE:= multirom
 LOCAL_MODULE_TAGS := eng
 
@@ -66,6 +71,15 @@ endif
 ifeq ($(TARGET_RECOVERY_PIXEL_FORMAT),"RGB_565")
     LOCAL_CFLAGS += -DRECOVERY_RGB_565
 endif
+
+ifeq ($(MR_DPI),)
+    $(error MR_DPI not defined in device files)
+else ifeq ($(MR_DPI),hdpi)
+    LOCAL_CFLAGS += -DDPI_MUL=1
+else ifeq ($(MR_DPI),xhdpi)
+    LOCAL_CFLAGS += -DDPI_MUL=1.5
+endif
+LOCAL_CFLAGS += -DMR_DPI=$(MR_DPI)
 
 include $(BUILD_EXECUTABLE)
 

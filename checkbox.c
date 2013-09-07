@@ -22,12 +22,12 @@
 #include "util.h"
 #include "multirom_ui.h"
 
-#define BORDER_SIZE 2
-#define BORDER_PADDING 2
+#define BORDER_SIZE (2*DPI_MUL)
+#define BORDER_PADDING (2*DPI_MUL)
 
 #define SELECTED_SIZE (CHECKBOX_SIZE-(BORDER_SIZE+BORDER_PADDING)*2)
 #define SELECTED_PADDING (BORDER_SIZE + BORDER_PADDING)
-#define TOUCH 15
+#define TOUCH (15*DPI_MUL)
 
 checkbox *checkbox_create(int x, int y, void (*clicked)(int))
 {

@@ -124,7 +124,7 @@ struct part_info
     char *name;
 };
 
-#define PARTS_SIZE 24
+#define PARTS_SIZE 48
 
 int find_data_dev(char *data_dev)
 {

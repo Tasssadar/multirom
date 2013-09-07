@@ -21,7 +21,7 @@
 #include "framebuffer.h"
 #include "input.h"
 
-#define CHECKBOX_SIZE 30
+#define CHECKBOX_SIZE (30*DPI_MUL)
 
 enum
 {

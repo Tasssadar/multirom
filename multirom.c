@@ -551,6 +551,8 @@ void multirom_find_usb_roms(struct multirom_status *s)
         if(!strstr(s->partitions[i]->name, "mmcblk"))
             multirom_scan_partition_for_roms(s, s->partitions[i]);
     pthread_mutex_unlock(&parts_mutex);
+
+    multirom_dump_status(s);
 }
 
 int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_partition *p)
@@ -1878,8 +1880,6 @@ int multirom_update_partitions(struct multirom_status *s)
     }
     pthread_mutex_unlock(&parts_mutex);
     free(res);
-
-    multirom_dump_status(s);
 
     return 0;
 }

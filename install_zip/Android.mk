@@ -8,8 +8,7 @@ MULTIROM_INST_DIR := $(PRODUCT_OUT)/multirom_installer
 multirom_binary := $(TARGET_ROOT_OUT)/multirom
 trampoline_binary := $(TARGET_ROOT_OUT)/trampoline
 
-# include device file
--include $(multirom_local_path)/device_$(TARGET_DEVICE).mk
+BOOT_DEV := /dev/block/platform/msm_sdcc.1/by-name/boot
 
 $(MULTIROM_ZIP_TARGET): multirom trampoline signapk
 	@echo ----- Making MultiROM ZIP installer ------
@@ -19,6 +18,7 @@ $(MULTIROM_ZIP_TARGET): multirom trampoline signapk
 	cp -a $(TARGET_ROOT_OUT)/multirom $(MULTIROM_INST_DIR)/multirom/
 	cp -a $(TARGET_ROOT_OUT)/trampoline $(MULTIROM_INST_DIR)/multirom/
 	echo $(BOOT_DEV) > $(MULTIROM_INST_DIR)/scripts/bootdev
+	echo $(MR_RD_ADDR) > $(MULTIROM_INST_DIR)/scripts/rd_addr
 	$(install_zip_path)/make_updater_script.sh $(TARGET_DEVICE) $(MULTIROM_INST_DIR)/META-INF/com/google/android "Installing MultiROM for"
 	rm -f $(MULTIROM_ZIP_TARGET).zip $(MULTIROM_ZIP_TARGET)-unsigned.zip
 	cd $(MULTIROM_INST_DIR) && zip -qr ../$(notdir $@)-unsigned.zip *

@@ -21,8 +21,8 @@
 #include <pthread.h>
 #include "framebuffer.h"
 
-#define PROGDOTS_W 300
-#define PROGDOTS_H 10
+#define PROGDOTS_W (300*DPI_MUL)
+#define PROGDOTS_H (10*DPI_MUL)
 #define PROGDOTS_CNT 8
 
 typedef struct

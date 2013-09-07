@@ -68,17 +68,10 @@ static void *fb_draw_thread_work(void*);
 struct FB *fb = &framebuffers[0];
 
 void fb_destroy_item(void *item); // private!
-inline void fb_cpy_fb_with_rotation(void *dst, void *src);
-
-#if PIXEL_SIZE == 4
-inline void fb_rotate_90deg_4b(uint32_t *dst, uint32_t *src);
-inline void fb_rotate_270deg_4b(uint32_t *dst, uint32_t *src);
-inline void fb_rotate_180deg_4b(uint32_t *dst, uint32_t *src);
-#elif PIXEL_SIZE == 2
-inline void fb_rotate_90deg_2b(uint16_t *dst, uint16_t *src);
-inline void fb_rotate_270deg_2b(uint16_t *dst, uint16_t *src);
-inline void fb_rotate_180deg_2b(uint16_t *dst, uint16_t *src);
-#endif
+inline void fb_cpy_fb_with_rotation(px_type *dst, px_type *src);
+inline void fb_rotate_90deg(px_type *dst, px_type *src);
+inline void fb_rotate_270deg(px_type *dst, px_type *src);
+inline void fb_rotate_180deg(px_type *dst, px_type *src);
 
 int vt_set_mode(int graphics)
 {
@@ -113,9 +106,9 @@ int fb_open(int rotation)
     if (ioctl(fd, FBIOGET_VSCREENINFO, &vi) < 0)
         goto fail;
 
+    vi.bits_per_pixel = PIXEL_SIZE * 8;
     INFO("Pixel format: %dx%d @ %dbpp\n", vi.xres, vi.yres, vi.bits_per_pixel);
 
-    vi.bits_per_pixel = PIXEL_SIZE * 8;
 #ifdef RECOVERY_BGRA
     INFO("Pixel format: BGRA_8888\n");
     vi.red.offset     = 8;
@@ -188,16 +181,17 @@ int fb_open(int rotation)
     fb_frozen = 0;
     active_fb = 0;
 
-    px_type *b_store = malloc(vi.xres*vi.yres*PIXEL_SIZE);
-    fb_memset(b_store, fb_convert_color(BLACK), vi.xres*vi.yres*PIXEL_SIZE);
+    px_type *b_store = malloc(vi.xres_virtual*vi.yres*PIXEL_SIZE);
+    fb_memset(b_store, fb_convert_color(BLACK), vi.xres_virtual*vi.yres*PIXEL_SIZE);
 
     for(i = 0; i < NUM_BUFFERS; ++i)
     {
         fb = &framebuffers[i];
         fb->fd = fd;
-        fb->size = vi.xres*vi.yres*PIXEL_SIZE;
+        fb->size = vi.xres_virtual*vi.yres*PIXEL_SIZE;
         fb->vi = vi;
         fb->fi = fi;
+        fb->stride = (fb_rotation%180 == 0) ? vi.xres_virtual : vi.yres;
         fb->bits = b_store;
         fb->mapped = (px_type*)(((uint8_t*)(bits)) + (vi.yres * fi.line_length * i));
     }
@@ -205,7 +199,7 @@ int fb_open(int rotation)
     // fb always points to the first framebuffer
     fb = &framebuffers[0];
 
-#if 0
+#if 1
     fb_dump_info();
 #endif
 
@@ -287,7 +281,7 @@ void fb_update(void)
     fb_set_active_framebuffer(active_fb);
 }
 
-void fb_cpy_fb_with_rotation(void *dst, void *src)
+void fb_cpy_fb_with_rotation(px_type *dst, px_type *src)
 {
     switch(fb_rotation)
     {
@@ -295,49 +289,30 @@ void fb_cpy_fb_with_rotation(void *dst, void *src)
             memcpy(dst, src, fb->vi.xres_virtual * fb->vi.yres * PIXEL_SIZE);
             break;
         case 90:
-        {
-#if PIXEL_SIZE == 4
-            fb_rotate_90deg_4b((uint32_t*)dst, (uint32_t*)src);
-#elif PIXEL_SIZE == 2
-            fb_rotate_90deg_2b((uint16_t*)dst, (uint16_t*)src);
-#endif
+            fb_rotate_90deg(dst, src);
             break;
-        }
         case 180:
-        {
-#if PIXEL_SIZE == 4
-            fb_rotate_180deg_4b((uint32_t*)dst, (uint32_t*)src);
-#elif PIXEL_SIZE == 2
-            fb_rotate_180deg_2b((uint16_t*)dst, (uint16_t*)src);
-#endif
+            fb_rotate_180deg(dst, src);
             break;
-        }
         case 270:
-        {
-#if PIXEL_SIZE == 4
-            fb_rotate_270deg_4b((uint32_t*)dst, (uint32_t*)src);
-#elif PIXEL_SIZE == 2
-            fb_rotate_270deg_2b((uint16_t*)dst, (uint16_t*)src);
-#endif
+            fb_rotate_270deg(dst, src);
             break;
-        }
     }
 }
 
-#if PIXEL_SIZE == 4
-void fb_rotate_90deg_4b(uint32_t *dst, uint32_t *src)
+void fb_rotate_90deg(px_type *dst, px_type *src)
 {
     uint32_t i;
     int32_t x;
 
     if(!fb_rot_helpers)
-        fb_rot_helpers = malloc(fb_height*sizeof(uint32_t*));
+        fb_rot_helpers = malloc(fb_height*sizeof(px_type*));
 
-    uint32_t **helpers = (uint32_t**)fb_rot_helpers;
+    px_type **helpers = (px_type**)fb_rot_helpers;
 
     helpers[0] = src;
     for(i = 1; i < fb_height; ++i)
-        helpers[i] = helpers[i-1] + fb_width;
+        helpers[i] = helpers[i-1] + fb->stride;
 
     const int padding = fb->vi.xres_virtual - fb->vi.xres;
     for(i = 0; i < fb_width; ++i)
@@ -348,17 +323,17 @@ void fb_rotate_90deg_4b(uint32_t *dst, uint32_t *src)
     }
 }
 
-void fb_rotate_270deg_4b(uint32_t *dst, uint32_t *src)
+void fb_rotate_270deg(px_type *dst, px_type *src)
 {
     if(!fb_rot_helpers)
-        fb_rot_helpers = malloc(fb_height*sizeof(uint32_t*));
+        fb_rot_helpers = malloc(fb_height*sizeof(px_type*));
 
     uint32_t i, x;
-    uint32_t **helpers = (uint32_t**)fb_rot_helpers;
+    px_type **helpers = (px_type**)fb_rot_helpers;
 
     helpers[0] = src + fb_width-1;
     for(i = 1; i < fb_height; ++i)
-        helpers[i] = helpers[i-1] + fb_width;
+        helpers[i] = helpers[i-1] + fb->stride;
 
     const int padding = fb->vi.xres_virtual - fb->vi.xres;
     for(i = 0; i < fb_width; ++i)
@@ -369,82 +344,21 @@ void fb_rotate_270deg_4b(uint32_t *dst, uint32_t *src)
     }
 }
 
-void fb_rotate_180deg_4b(uint32_t *dst, uint32_t *src)
+void fb_rotate_180deg(px_type *dst, px_type *src)
 {
     uint32_t i, x;
-    int len = fb->vi.xres * fb->vi.yres;
+    int len = fb->vi.xres_virtual * fb->vi.yres;
     src += len;
 
     const int padding = fb->vi.xres_virtual - fb->vi.xres;
     for(i = 0; i < fb_height; ++i)
     {
+        src -= padding;
         for(x = 0; x < fb_width; ++x)
             *dst++ = *src--;
         dst += padding;
     }
 }
-
-#elif PIXEL_SIZE == 2
-
-void fb_rotate_90deg_2b(uint16_t *dst, uint16_t *src)
-{
-    uint32_t i;
-    int32_t x;
-
-    if(!fb_rot_helpers)
-        fb_rot_helpers = malloc(fb_height*sizeof(uint16_t*));
-
-    uint16_t **helpers = (uint16_t**)fb_rot_helpers;
-
-    helpers[0] = src;
-    for(i = 1; i < fb_height; ++i)
-        helpers[i] = helpers[i-1] + fb_width;
-
-    const int padding = fb->vi.xres_virtual - fb->vi.xres;
-    for(i = 0; i < fb_width; ++i)
-    {
-        for(x = fb_height-1; x >= 0; --x)
-            *dst++ = *(helpers[x]++);
-        dst += padding;
-    }
-}
-
-void fb_rotate_270deg_2b(uint16_t *dst, uint16_t *src)
-{
-    if(!fb_rot_helpers)
-        fb_rot_helpers = malloc(fb_height*sizeof(uint16_t*));
-
-    uint32_t i, x;
-    uint16_t **helpers = (uint16_t**)fb_rot_helpers;
-
-    helpers[0] = src + fb_width-1;
-    for(i = 1; i < fb_height; ++i)
-        helpers[i] = helpers[i-1] + fb_width;
-
-    const int padding = fb->vi.xres_virtual - fb->vi.xres;
-    for(i = 0; i < fb_width; ++i)
-    {
-        for(x = 0; x < fb_height; ++x)
-            *dst++ = *(helpers[x]--);
-        dst += padding;
-    }
-}
-
-void fb_rotate_180deg_2b(uint16_t *dst, uint16_t *src)
-{
-    uint32_t i, x;
-    int len = fb->vi.xres * fb->vi.yres;
-    src += len;
-
-    const int padding = fb->vi.xres_virtual - fb->vi.xres;
-    for(i = 0; i < fb_height; ++i)
-    {
-        for(x = 0; x < fb_width; ++x)
-            *dst++ = *src--;
-        dst += padding;
-    }
-}
-#endif // PIXEL_SIZE == 2
 
 int fb_clone(char **buff)
 {
@@ -468,7 +382,7 @@ px_type fb_convert_color(uint32_t c)
 #ifdef RECOVERY_BGRA
     //             A              R                    G                  B
     return (c & 0xFF000000) | ((c & 0xFF) << 16) | (c & 0xFF00) | ((c & 0xFF0000) >> 16);
-#elif  defined(RECOVERY_RGBX)
+#elif defined(RECOVERY_RGBX)
     return c;
 #elif defined(RECOVERY_RGB_565)
     //            R                                G                              B
@@ -532,12 +446,12 @@ void fb_draw_char(int x, int y, char c, px_type color, int size)
 
 void fb_draw_square(int x, int y, px_type color, int size)
 {
-    px_type *bits = fb->bits + (fb_width*y) + x;
+    px_type *bits = fb->bits + (fb->stride*y) + x;
     int i;
     for(i = 0; i < size; ++i)
     {
         fb_memset(bits, color, size*PIXEL_SIZE);
-        bits += fb_width;
+        bits += fb->stride;
     }
 }
 
@@ -577,7 +491,7 @@ void fb_destroy_item(void *item)
 
 void fb_draw_rect(fb_rect *r)
 {
-    px_type *bits = fb->bits + (fb_width*r->head.y) + r->head.x;
+    px_type *bits = fb->bits + (fb->stride*r->head.y) + r->head.x;
     px_type color = fb_convert_color(r->color);
     int w = r->w*PIXEL_SIZE;
 
@@ -585,7 +499,7 @@ void fb_draw_rect(fb_rect *r)
     for(i = 0; i < r->h; ++i)
     {
         fb_memset(bits, color, w);
-        bits += fb_width;
+        bits += fb->stride;
     }
 }
 
@@ -787,16 +701,21 @@ static inline int blend(int value1, int value2) {
     return (r+1 + (r >> 8)) >> 8; // divide by 255
 }
 #else
+#ifdef HAS_NEON_BLEND
+extern void scanline_col32cb16blend_neon(uint16_t *dst, uint32_t *col, size_t ct);
+#else
 #define ALPHA5 0x04
 #define ALPHA6 0x08
 #define BLEND_CLR5 0x03
 #define BLEND_CLR6 0x06
 #endif
+#endif
 
 void fb_draw_overlay(void)
 {
-    const int size = fb_width*fb_height;
+    const int size = fb->size;
     int i;
+
 #if PIXEL_SIZE == 4
     uint8_t *bits = (uint8_t*)fb->bits;
     for(i = 0; i < size; ++i)
@@ -809,6 +728,10 @@ void fb_draw_overlay(void)
         bits += 2;
     }
 #else
+  #ifdef HAS_NEON_BLEND
+    uint32_t blend_clr = 0xDC1B1B1B;
+    scanline_col32cb16blend_neon((uint16_t*)fb->bits, &blend_clr, size);
+  #else
     uint16_t *bits = fb->bits;
     for(i = 0; i < size; ++i)
     {
@@ -817,6 +740,7 @@ void fb_draw_overlay(void)
             (((ALPHA5*((*bits & 0xF800) >> 11) + (ALPHA5*BLEND_CLR5)) / 31) << 11);
         ++bits;
     }
+  #endif
 #endif
 }
 

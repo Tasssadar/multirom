@@ -2,7 +2,7 @@
 BUSYBOX="/tmp/multirom/busybox"
 LZ4="/tmp/lz4"
 BOOT_DEV="$(cat /tmp/bootdev)"
-
+RD_ADDR="$(cat /tmp/rd_addr)"
 CMPR_GZIP=0
 CMPR_LZ4=1
 
@@ -10,6 +10,12 @@ if [ ! -e "$BOOT_DEV" ]; then
     echo "BOOT_DEV \"$BOOT_DEV\" does not exist!"
     return 1
 fi
+
+if [ -n "$RD_ADDR" ]; then
+    echo "Using ramdisk addr $RD_ADDR"
+    RD_ADDR="--ramdiskaddr $RD_ADDR"
+fi
+
 
 dd if=$BOOT_DEV of=/tmp/boot.img
 /tmp/unpackbootimg -i /tmp/boot.img -o /tmp/
@@ -71,7 +77,7 @@ case $rd_cmpr in
 esac
 
 cd /tmp
-/tmp/mkbootimg --kernel boot.img-zImage --ramdisk boot.img-ramdisk.gz --cmdline "$(cat boot.img-cmdline)" --base $(cat boot.img-base) --output /tmp/newboot.img
+/tmp/mkbootimg --kernel boot.img-zImage --ramdisk boot.img-ramdisk.gz --cmdline "$(cat boot.img-cmdline)" --base $(cat boot.img-base) --output /tmp/newboot.img $RD_ADDR
 
 if [ ! -e "/tmp/newboot.img" ] ; then
     echo "Failed to inject boot.img!"

@@ -36,6 +36,7 @@ struct FB {
     px_type *bits;
     px_type *mapped;
     uint32_t size;
+    int stride;
     int fd;
     struct fb_fix_screeninfo fi;
     struct fb_var_screeninfo vi;
@@ -55,6 +56,15 @@ extern struct FB *fb;
 #define GRAY      0xFF7F7F7F
 #define DRED      0xFF0000CC
 
+#if MR_DPI == xhdpi
+enum
+{
+    SIZE_SMALL     = 2,
+    SIZE_NORMAL    = 3,
+    SIZE_BIG       = 4,
+    SIZE_EXTRA     = 6,
+};
+#else // hdpi
 enum
 {
     SIZE_SMALL     = 1,
@@ -62,6 +72,7 @@ enum
     SIZE_BIG       = 3,
     SIZE_EXTRA     = 4,
 };
+#endif
 
 extern uint32_t fb_width;
 extern uint32_t fb_height;

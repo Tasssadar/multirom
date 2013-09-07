@@ -24,11 +24,11 @@
 #include "checkbox.h"
 #include "multirom_ui.h"
 
-#define MARK_W 10
-#define MARK_H 50
-#define PADDING 20
-#define LINE_W 2
-#define SCROLL_DIST 20
+#define MARK_W (10*DPI_MUL)
+#define MARK_H (50*DPI_MUL)
+#define PADDING (20*DPI_MUL)
+#define LINE_W (2*DPI_MUL)
+#define SCROLL_DIST (20*DPI_MUL)
 
 void listview_init_ui(listview *view)
 {
@@ -261,8 +261,8 @@ listview_item *listview_item_at(listview *view, int y_pos)
     return NULL;
 }
 
-#define ROM_ITEM_H 100
-
+#define ROM_ITEM_H (100*DPI_MUL)
+#define ROM_TEXT_PADDING (100*DPI_MUL)
 typedef struct
 {
     char *text;
@@ -290,12 +290,12 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
     rom_item_data *d = (rom_item_data*)it->data;
     if(!d->text_it)
     {
-        d->text_it = fb_add_text(x+100, 0, WHITE, SIZE_BIG, d->text);
+        d->text_it = fb_add_text(x+ROM_TEXT_PADDING, 0, WHITE, SIZE_BIG, d->text);
         d->bottom_line = fb_add_rect(x, 0, w, 1, 0xFF1B1B1B);
         d->box = checkbox_create(0, 0, NULL);
 
         if(d->partition)
-            d->part_it = fb_add_text(x+100, 0, GRAY, SIZE_SMALL, d->partition);
+            d->part_it = fb_add_text(x+ROM_TEXT_PADDING, 0, GRAY, SIZE_SMALL, d->partition);
     }
 
     d->text_it->head.y = center_y(y, ROM_ITEM_H, SIZE_BIG);
@@ -316,7 +316,7 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
         d->hover_rect = NULL;
     }
 
-    checkbox_set_pos(d->box, x+30, y + (ROM_ITEM_H/2 - 30/2));
+    checkbox_set_pos(d->box, x+CHECKBOX_SIZE, y + (ROM_ITEM_H/2 - CHECKBOX_SIZE/2));
     checkbox_select(d->box, (it->flags & IT_SELECTED));
 }
 
