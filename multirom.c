@@ -194,12 +194,12 @@ void multirom_emergency_reboot(void)
 
     char *klog = multirom_get_klog();
 
-    fb_add_text(0, 120, WHITE, SIZE_NORMAL, 
+    fb_add_text(0, 120, WHITE, 2,
                 "An error occured.\nShutting down MultiROM to avoid data corruption.\n"
                 "Report this error to the developer!\nDebug info: /sdcard/multirom/error.txt\n\n"
                 "Press POWER button to reboot.");
 
-    fb_add_text(0, 370, GRAYISH, SIZE_SMALL, "Last lines from klog:");
+    fb_add_text(0, 370, GRAYISH, 1, "Last lines from klog:");
     fb_add_rect(0, 390, fb_width, 1, GRAYISH);
 
     char *tail = klog+strlen(klog);
@@ -211,7 +211,7 @@ void multirom_emergency_reboot(void)
             ++count;
     }
 
-    fb_add_text_long(0, 395, GRAYISH, SIZE_SMALL, ++tail);
+    fb_add_text_long(0, 395, GRAYISH, 1, ++tail);
 
     fb_draw();
     fb_clear();
