@@ -713,11 +713,10 @@ extern void scanline_col32cb16blend_neon(uint16_t *dst, uint32_t *col, size_t ct
 
 void fb_draw_overlay(void)
 {
-    const int size = fb->size;
-    int i;
-
 #if PIXEL_SIZE == 4
+    int i;
     uint8_t *bits = (uint8_t*)fb->bits;
+    const int size = fb->vi.xres_virtual*fb->vi.yres;
     for(i = 0; i < size; ++i)
     {
         *bits = blend(*bits, BLEND_CLR);
@@ -730,9 +729,11 @@ void fb_draw_overlay(void)
 #else
   #ifdef HAS_NEON_BLEND
     uint32_t blend_clr = 0xDC1B1B1B;
-    scanline_col32cb16blend_neon((uint16_t*)fb->bits, &blend_clr, size);
+    scanline_col32cb16blend_neon((uint16_t*)fb->bits, &blend_clr, fb->size);
   #else
+    const int size = fb->size;
     uint16_t *bits = fb->bits;
+    int i;
     for(i = 0; i < size; ++i)
     {
         *bits = ((ALPHA5*(*bits & 0x1F) + (ALPHA5*BLEND_CLR5)) / 31) |

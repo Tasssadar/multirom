@@ -75,11 +75,10 @@ endif
 ifeq ($(MR_DPI),)
     $(error MR_DPI not defined in device files)
 else ifeq ($(MR_DPI),hdpi)
-    LOCAL_CFLAGS += -DDPI_MUL=1
+    LOCAL_CFLAGS += -DDPI_MUL=1 -DMR_HDPI
 else ifeq ($(MR_DPI),xhdpi)
-    LOCAL_CFLAGS += -DDPI_MUL=1.5
+    LOCAL_CFLAGS += -DDPI_MUL=1.5 -DMR_XHDPI
 endif
-LOCAL_CFLAGS += -DMR_DPI=$(MR_DPI)
 
 include $(BUILD_EXECUTABLE)
 
