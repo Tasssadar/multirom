@@ -27,19 +27,13 @@ LOCAL_UNSTRIPPED_PATH := $(TARGET_ROOT_OUT_UNSTRIPPED)
 
 LOCAL_STATIC_LIBRARIES := libfs_mgr libcutils libc libm
 
-ifeq ($(HAVE_SELINUX),true)
-LOCAL_STATIC_LIBRARIES += libselinux
-LOCAL_C_INCLUDES += external/libselinux/include
-LOCAL_CFLAGS += -DHAVE_SELINUX
-endif
-
 
 # Defines from device files
 # Init default define values
 MULTIROM_DEFAULT_ROTATION := 0
 
 ifeq ($(MR_INPUT_TYPE),)
-    MR_INPUT_TYPE := "type_b"
+    MR_INPUT_TYPE := type_b
 endif
 LOCAL_SRC_FILES += input_$(MR_INPUT_TYPE).c
 

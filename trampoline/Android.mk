@@ -16,10 +16,9 @@ LOCAL_UNSTRIPPED_PATH := $(TARGET_ROOT_OUT_UNSTRIPPED)
 
 LOCAL_STATIC_LIBRARIES := libfs_mgr libcutils libc
 
-ifeq ($(HAVE_SELINUX),true)
-LOCAL_STATIC_LIBRARIES += libselinux
-LOCAL_C_INCLUDES += external/libselinux/include
-LOCAL_CFLAGS += -DHAVE_SELINUX
+ifeq ($(MR_INIT_DEVICES),)
+    $(error MR_INIT_DEVICES was not defined in device files!)
 endif
+LOCAL_SRC_FILES += ../../../../$(MR_INIT_DEVICES)
 
 include $(BUILD_EXECUTABLE)

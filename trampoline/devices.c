@@ -57,46 +57,7 @@
 static struct selabel_handle *sehandle;
 #endif
 
-static const char *uevent_paths[] =
-{
-    "/sys/devices/tegradc.0/graphics/fb0",
-
-    "/sys/block/mmcblk0",
-    "/sys/devices/platform/sdhci-tegra.3/mmc_host",
-    "/sys/devices/platform/sdhci-tegra.3/mmc_host/mmc0",
-    "/sys/devices/platform/sdhci-tegra.3/mmc_host/mmc0/mmc0:0001",
-    "/sys/devices/platform/sdhci-tegra.3/mmc_host/mmc0/mmc0:0001/block/mmcblk0",
-    "/sys/devices/platform/sdhci-tegra.3/mmc_host/mmc0/mmc0:0001/block/mmcblk0/mmcblk0p9",
-    "/sys/devices/platform/sdhci-tegra.3/mmc_host/mmc0/mmc0:0001/block/mmcblk0/mmcblk0p10",
-    "/sys/devices/platform/sdhci-tegra.3/mmc_host/mmc0/mmc0:0001/block/mmcblk0/mmcblk0p2",
-    "/sys/bus/mmc",
-    "/sys/bus/mmc/drivers/mmcblk",
-    "/sys/bus/mmc/drivers/mmc_test",
-    "/sys/bus/sdio/drivers/bcmsdh_sdmmc",
-    "/sys/module/mmc_core",
-    "/sys/module/mmcblk",
-
-    "/sys/devices/platform/gpio-keys.0/input/input2",
-    "/sys/devices/platform/gpio-keys.0/input/input2/event2",
-    "/sys/devices/virtual/misc/uinput",
-    "/sys/devices/virtual/input/input0",
-    "/sys/devices/virtual/input/input0/event0",
-    "/sys/devices/virtual/input/input1",
-    "/sys/devices/virtual/input/input1/event1",
-
-    // for adb
-    "/sys/devices/virtual/tty/ptmx",
-    "/sys/devices/platform/sdhci-tegra.3/mmc_host/mmc0/mmc0:0001/block/mmcblk0/mmcblk0p3", // /system
-    "/sys/devices/platform/sdhci-tegra.3/mmc_host/mmc0/mmc0:0001/block/mmcblk0/mmcblk0p4", // /cache
-    "/sys/devices/virtual/misc/android_adb",
-    "/sys/devices/virtual/android_usb/android0/f_adb",
-    "/sys/bus/usb",
-
-    // USB drive is in here
-    "/sys/devices/platform/tegra-ehci.0*",
-
-    NULL
-};
+extern const char *mr_init_devices[];
 
 static int device_fd = -1;
 static volatile int run_event_thread = 1;
@@ -191,14 +152,14 @@ void devices_init(void)
     fcntl(device_fd, F_SETFL, O_NONBLOCK);
 
     int i, len;
-    for(i = 0; uevent_paths[i]; ++i)
+    for(i = 0; mr_init_devices[i]; ++i)
     {
-        len = strlen(uevent_paths[i]);
-        if(uevent_paths[i][len-1] != '*')
-            init_single_path(uevent_paths[i]);
+        len = strlen(mr_init_devices[i]);
+        if(mr_init_devices[i][len-1] != '*')
+            init_single_path(mr_init_devices[i]);
         else
         {
-            char *path = strndup(uevent_paths[i], len-1);
+            char *path = strndup(mr_init_devices[i], len-1);
             init_folder(path);
             free(path);
         }
