@@ -21,9 +21,20 @@
 #include <linux/fb.h>
 #include <stdarg.h>
 
+#if defined(RECOVERY_BGRA) || defined(RECOVERY_RGBX)
+#define PIXEL_SIZE 4
+typedef uint32_t px_type;
+#else
+#define PIXEL_SIZE 2
+#ifndef RECOVERY_RGB_565
+  #define RECOVERY_RGB_565
+#endif
+typedef uint16_t px_type;
+#endif
+
 struct FB {
-    uint32_t *bits;
-    uint32_t *mapped;
+    px_type *bits;
+    px_type *mapped;
     uint32_t size;
     int fd;
     struct fb_fix_screeninfo fi;
@@ -124,10 +135,11 @@ void fb_msgbox_rm_text(fb_text *text);
 void fb_destroy_msgbox(void);
 void fb_rm_text(fb_text *t);
 void fb_rm_rect(fb_rect *r);
+px_type fb_convert_color(uint32_t c);
 
 void fb_draw_text(fb_text *t);
-void fb_draw_char(int x, int y, char c, uint32_t color, int size);
-void fb_draw_square(int x, int y, uint32_t color, int size);
+void fb_draw_char(int x, int y, char c, px_type color, int size);
+void fb_draw_square(int x, int y, px_type color, int size);
 void fb_draw_overlay(void);
 void fb_draw_rect(fb_rect *r);
 void fb_fill(uint32_t color);

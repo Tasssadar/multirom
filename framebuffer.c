@@ -37,11 +37,15 @@
 #include "iso_font.h"
 #include "util.h"
 
-#define PIXEL_SIZE 4
-
 // only double-buffering is implemented, this define is just
 // for the code to know how many buffers we use
 #define NUM_BUFFERS 2
+
+#if PIXEL_SIZE == 4
+#define fb_memset(dst, what, len) android_memset32(dst, what, len)
+#else
+#define fb_memset(dst, what, len) android_memset16(dst, what, len)
+#endif
 
 
 static struct FB framebuffers[NUM_BUFFERS];
@@ -106,15 +110,69 @@ int fb_open(int rotation)
     struct fb_fix_screeninfo fi;
     struct fb_var_screeninfo vi;
 
-    if (ioctl(fd, FBIOGET_FSCREENINFO, &fi) < 0)
-        goto fail;
     if (ioctl(fd, FBIOGET_VSCREENINFO, &vi) < 0)
         goto fail;
 
-    uint32_t *bits = mmap(0, fi.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    INFO("Pixel format: %dx%d @ %dbpp\n", vi.xres, vi.yres, vi.bits_per_pixel);
+
+    vi.bits_per_pixel = PIXEL_SIZE * 8;
+#ifdef RECOVERY_BGRA
+    INFO("Pixel format: BGRA_8888\n");
+    vi.red.offset     = 8;
+    vi.red.length     = 8;
+    vi.green.offset   = 16;
+    vi.green.length   = 8;
+    vi.blue.offset    = 24;
+    vi.blue.length    = 8;
+    vi.transp.offset  = 0;
+    vi.transp.length  = 8;
+#elif  defined(RECOVERY_RGBX)
+    INFO("Pixel format: RGBX_8888\n");
+    vi.red.offset     = 24;
+    vi.red.length     = 8;
+    vi.green.offset   = 16;
+    vi.green.length   = 8;
+    vi.blue.offset    = 8;
+    vi.blue.length    = 8;
+    vi.transp.offset  = 0;
+    vi.transp.length  = 8;
+#elif defined(RECOVERY_RGB_565)
+    INFO("Pixel format: RGB_565\n");
+    vi.blue.offset    = 0;
+    vi.green.offset   = 5;
+    vi.red.offset     = 11;
+    vi.blue.length    = 5;
+    vi.green.length   = 6;
+    vi.red.length     = 5;
+    vi.blue.msb_right = 0;
+    vi.green.msb_right = 0;
+    vi.red.msb_right = 0;
+    vi.transp.offset  = 0;
+    vi.transp.length  = 0;
+#else
+#error "Unknown pixel format"
+#endif
+
+    vi.vmode = FB_VMODE_NONINTERLACED;
+    vi.activate = FB_ACTIVATE_NOW | FB_ACTIVATE_FORCE;
+
+    if (ioctl(fd, FBIOPUT_VSCREENINFO, &vi) < 0)
+    {
+        ERROR("failed to set fb0 vi info");
+        goto fail;
+    }
+
+    if (ioctl(fd, FBIOGET_FSCREENINFO, &fi) < 0)
+        goto fail;
+
+    px_type *bits = mmap(0, fi.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 
     if (bits == MAP_FAILED)
         goto fail;
+
+#ifdef RECOVERY_GRAPHICS_USE_LINELENGTH
+    vi.xres_virtual = fi.line_length / PIXEL_SIZE;
+#endif
 
     if(fb_rotation%180 == 0)
     {
@@ -130,8 +188,8 @@ int fb_open(int rotation)
     fb_frozen = 0;
     active_fb = 0;
 
-    uint32_t *b_store = malloc(vi.xres*vi.yres*PIXEL_SIZE);
-    android_memset32(b_store, BLACK, vi.xres*vi.yres*PIXEL_SIZE);
+    px_type *b_store = malloc(vi.xres*vi.yres*PIXEL_SIZE);
+    fb_memset(b_store, fb_convert_color(BLACK), vi.xres*vi.yres*PIXEL_SIZE);
 
     for(i = 0; i < NUM_BUFFERS; ++i)
     {
@@ -141,7 +199,7 @@ int fb_open(int rotation)
         fb->vi = vi;
         fb->fi = fi;
         fb->bits = b_store;
-        fb->mapped = ((void*)(bits)) + (vi.yres * fi.line_length * i);
+        fb->mapped = (px_type*)(((uint8_t*)(bits)) + (vi.yres * fi.line_length * i));
     }
 
     // fb always points to the first framebuffer
@@ -186,7 +244,7 @@ void fb_dump_info(void)
     ERROR("fi.ypanstep: %u\n", fb->fi.ypanstep);
     ERROR("fi.ywrapstep: %u\n", fb->fi.ywrapstep);
     ERROR("fi.line_length: %u\n", fb->fi.line_length);
-    ERROR("fi.mmio_start: %p\n", fb->fi.mmio_start);
+    ERROR("fi.mmio_start: %p\n", (void*)fb->fi.mmio_start);
     ERROR("fi.mmio_len: %u\n", fb->fi.mmio_len);
     ERROR("fi.accel: %u\n", fb->fi.accel);
     ERROR("vi.xres: %u\n", fb->vi.xres);
@@ -402,7 +460,22 @@ int fb_clone(char **buff)
 
 void fb_fill(uint32_t color)
 {
-    android_memset32(fb->bits, color, fb->size);
+    fb_memset(fb->bits, fb_convert_color(color), fb->size);
+}
+
+px_type fb_convert_color(uint32_t c)
+{
+#ifdef RECOVERY_BGRA
+    //             A              R                    G                  B
+    return (c & 0xFF000000) | ((c & 0xFF) << 16) | (c & 0xFF00) | ((c & 0xFF0000) >> 16);
+#elif  defined(RECOVERY_RGBX)
+    return c;
+#elif defined(RECOVERY_RGB_565)
+    //            R                                G                              B
+    return (((c & 0xFF) >> 3) << 11) | (((c & 0xFF00) >> 10) << 5) | ((c & 0xFF0000) >> 19);
+#else
+#error "Unknown pixel format"
+#endif
 }
 
 void fb_draw_text(fb_text *t)
@@ -413,6 +486,8 @@ void fb_draw_text(fb_text *t)
     int linelen = fb_width/(c_width);
     int x = t->head.x;
     int y = t->head.y;
+
+    px_type color = fb_convert_color(t->color);
 
     int i;
     for(i = 0; t->text[i] != 0; ++i)
@@ -431,13 +506,13 @@ void fb_draw_text(fb_text *t)
                 y = t->head.y;
                 continue;
         }
-        if(x < fb_width)
-            fb_draw_char(x, y, t->text[i], t->color, t->size);
+        if(x < (int)fb_width)
+            fb_draw_char(x, y, t->text[i], color, t->size);
         x += c_width;
     }
 }
 
-void fb_draw_char(int x, int y, char c, uint32_t color, int size)
+void fb_draw_char(int x, int y, char c, px_type color, int size)
 {
     int line = 0;
     uint8_t bit = 0;
@@ -455,13 +530,13 @@ void fb_draw_char(int x, int y, char c, uint32_t color, int size)
     }
 }
 
-void fb_draw_square(int x, int y, uint32_t color, int size)
+void fb_draw_square(int x, int y, px_type color, int size)
 {
-    uint32_t *bits = fb->bits + (fb_width*y) + x;
+    px_type *bits = fb->bits + (fb_width*y) + x;
     int i;
     for(i = 0; i < size; ++i)
     {
-        android_memset32(bits, color, size*PIXEL_SIZE);
+        fb_memset(bits, color, size*PIXEL_SIZE);
         bits += fb_width;
     }
 }
@@ -502,12 +577,14 @@ void fb_destroy_item(void *item)
 
 void fb_draw_rect(fb_rect *r)
 {
-    uint32_t *bits = fb->bits + (fb_width*r->head.y) + r->head.x;
+    px_type *bits = fb->bits + (fb_width*r->head.y) + r->head.x;
+    px_type color = fb_convert_color(r->color);
+    int w = r->w*PIXEL_SIZE;
 
     int i;
     for(i = 0; i < r->h; ++i)
     {
-        android_memset32(bits, r->color, r->w*PIXEL_SIZE);
+        fb_memset(bits, color, w);
         bits += fb_width;
     }
 }
@@ -700,32 +777,47 @@ void fb_clear(void)
     fb_destroy_msgbox();
 }
 
+
+
+#if PIXEL_SIZE == 4
 #define ALPHA 220
 #define BLEND_CLR 0x1B
-
 static inline int blend(int value1, int value2) {
     int r = (0xFF-ALPHA)*value1 + ALPHA*value2;
     return (r+1 + (r >> 8)) >> 8; // divide by 255
 }
+#else
+#define ALPHA5 0x04
+#define ALPHA6 0x08
+#define BLEND_CLR5 0x03
+#define BLEND_CLR6 0x06
+#endif
 
 void fb_draw_overlay(void)
 {
-    union clr_t
-    {
-        int i;
-        uint8_t c[4];
-    };
-
-    int i;
-    union clr_t *unions = (union clr_t *)fb->bits;
     const int size = fb_width*fb_height;
+    int i;
+#if PIXEL_SIZE == 4
+    uint8_t *bits = (uint8_t*)fb->bits;
     for(i = 0; i < size; ++i)
     {
-        unions->c[0] = blend(unions->c[0], BLEND_CLR);
-        unions->c[1] = blend(unions->c[1], BLEND_CLR);
-        unions->c[2] = blend(unions->c[2], BLEND_CLR);
-        ++unions;
+        *bits = blend(*bits, BLEND_CLR);
+        ++bits;
+        *bits = blend(*bits, BLEND_CLR);
+        ++bits;
+        *bits = blend(*bits, BLEND_CLR);
+        bits += 2;
     }
+#else
+    uint16_t *bits = fb->bits;
+    for(i = 0; i < size; ++i)
+    {
+        *bits = ((ALPHA5*(*bits & 0x1F) + (ALPHA5*BLEND_CLR5)) / 31) |
+            (((ALPHA6*((*bits & 0x7E0) >> 5) + (ALPHA6*BLEND_CLR6)) / 63) << 5) |
+            (((ALPHA5*((*bits & 0xF800) >> 11) + (ALPHA5*BLEND_CLR5)) / 31) << 11);
+        ++bits;
+    }
+#endif
 }
 
 void fb_draw(void)

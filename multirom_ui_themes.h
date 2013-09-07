@@ -54,15 +54,14 @@ struct multirom_theme
 {
     uint16_t width;
     uint16_t height;
-    multirom_theme_data *data;
 
-    void (*destroy)(struct multirom_theme *t);
-    void (*init_header)(struct multirom_theme *t);
-    void (*header_select)(struct multirom_theme *t, int tab);
-    void (*tab_rom_init)(struct multirom_theme *t, tab_data_roms *d, int tab_type);
-    void (*tab_misc_init)(struct multirom_theme *t, tab_data_misc *d, int color_scheme);
-    int (*get_tab_width)(struct multirom_theme *t);
-    int (*get_tab_height)(struct multirom_theme *t);
+    void (*destroy)(multirom_theme_data *t);
+    void (*init_header)(multirom_theme_data *t);
+    void (*header_select)(multirom_theme_data *t, int tab);
+    void (*tab_rom_init)(multirom_theme_data *t, tab_data_roms *d, int tab_type);
+    void (*tab_misc_init)(multirom_theme_data *t, tab_data_misc *d, int color_scheme);
+    int (*get_tab_width)(multirom_theme_data *t);
+    int (*get_tab_height)(multirom_theme_data *t);
     void (*center_rom_name)(tab_data_roms *d, const char *rom_name);
 };
 typedef struct multirom_theme multirom_theme;

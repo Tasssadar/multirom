@@ -54,12 +54,8 @@ multirom_theme *multirom_ui_select_theme(multirom_themes_info *i, int w, int h)
 
     multirom_theme **itr;
     for(itr = i->themes; *itr; ++itr)
-    {
         if((*itr)->width == w && (*itr)->height == h)
-        {
-            (*itr)->data = i->data;
             return *itr;
-        }
-    }
+
     return NULL;
 }

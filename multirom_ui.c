@@ -206,7 +206,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     fb_draw();
     fb_freeze(1);
 
-    cur_theme->destroy(cur_theme);
+    cur_theme->destroy(themes_info->data);
 
     int i;
     for(i = 0; i < TAB_COUNT; ++i)
@@ -248,12 +248,12 @@ void multirom_ui_setup_colors(int clr, uint32_t *primary, uint32_t *secondary)
 
 void multirom_ui_init_header(void)
 {
-    cur_theme->init_header(cur_theme);
+    cur_theme->init_header(themes_info->data);
 }
 
 void multirom_ui_header_select(int tab)
 {
-    cur_theme->header_select(cur_theme, tab);
+    cur_theme->header_select(themes_info->data, tab);
 }
 
 void multirom_ui_destroy_tab(int tab)
@@ -447,7 +447,7 @@ void *multirom_ui_tab_rom_init(int tab_type)
     t->boot_btn = mzalloc(sizeof(button));
     list_add(t->boot_btn, &t->buttons);
 
-    cur_theme->tab_rom_init(cur_theme, t, tab_type);
+    cur_theme->tab_rom_init(themes_info->data, t, tab_type);
 
     listview_init_ui(t->list);
 
@@ -597,7 +597,7 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
     assert(empty == 0 || empty == 1);
 
     tab_data_roms *t = (tab_data_roms*)data;
-    int width = cur_theme->get_tab_width(cur_theme);
+    int width = cur_theme->get_tab_width(themes_info->data);
 
     static const char *str[] = { "Select ROM to boot:", "No ROMs in this location!" };
     t->title_text->head.x = center_x(t->list->x, width, SIZE_BIG, str[empty]);
@@ -632,7 +632,7 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
 void *multirom_ui_tab_misc_init(void)
 {
     tab_data_misc *t = mzalloc(sizeof(tab_data_misc));
-    cur_theme->tab_misc_init(cur_theme, t, mrom_status->colors);
+    cur_theme->tab_misc_init(themes_info->data, t, mrom_status->colors);
     return t;
 }
 

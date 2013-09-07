@@ -45,16 +45,16 @@
 
 static button *pong_btn = NULL;
 
-static void destroy(multirom_theme *t)
+static void destroy(multirom_theme_data *t)
 {
     button_destroy(pong_btn);
     pong_btn = NULL;
 }
 
-static void init_header(multirom_theme *t)
+static void init_header(multirom_theme_data *t)
 {
-    button **tab_btns = t->data->tab_btns;
-    fb_text **tab_texts = t->data->tab_texts;
+    button **tab_btns = t->tab_btns;
+    fb_text **tab_texts = t->tab_texts;
 
     int i, text_x, text_y;
     int x = fb_width - (TAB_BTN_WIDTH*TAB_COUNT);
@@ -93,19 +93,19 @@ static void init_header(multirom_theme *t)
     fb_add_rect(0, HEADER_HEIGHT, fb_width, 2, WHITE);
 }
 
-static void header_select(multirom_theme *t, int tab)
+static void header_select(multirom_theme_data *t, int tab)
 {
     int i;
     for(i = 0; i < TAB_COUNT; ++i)
-        t->data->tab_texts[i]->color = (i == tab) ? BLACK : WHITE;
+        t->tab_texts[i]->color = (i == tab) ? BLACK : WHITE;
 
-    if(!t->data->selected_tab_rect)
-        t->data->selected_tab_rect = fb_add_rect(0, 0, TAB_BTN_WIDTH, HEADER_HEIGHT, WHITE);
+    if(!t->selected_tab_rect)
+        t->selected_tab_rect = fb_add_rect(0, 0, TAB_BTN_WIDTH, HEADER_HEIGHT, WHITE);
 
-    t->data->selected_tab_rect->head.x = fb_width - (TAB_BTN_WIDTH * (TAB_COUNT - tab));
+    t->selected_tab_rect->head.x = fb_width - (TAB_BTN_WIDTH * (TAB_COUNT - tab));
 }
 
-static void tab_rom_init(multirom_theme *t, tab_data_roms *d, int tab_type)
+static void tab_rom_init(multirom_theme_data *t, tab_data_roms *d, int tab_type)
 {
     int base_y = fb_height-ROMS_FOOTER_H;
 
@@ -132,7 +132,7 @@ static void tab_rom_init(multirom_theme *t, tab_data_roms *d, int tab_type)
     d->boot_btn->h = BOOTBTN_H;
 }
 
-static void tab_misc_init(multirom_theme *t, tab_data_misc *d, int color_scheme)
+static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_scheme)
 {
     int x = fb_width/2 - MISCBTN_W/2;
     int y = 270;
@@ -219,12 +219,12 @@ static void tab_misc_init(multirom_theme *t, tab_data_misc *d, int color_scheme)
     }
 }
 
-static int get_tab_width(multirom_theme *t)
+static int get_tab_width(multirom_theme_data *t)
 {
     return fb_width;
 }
 
-static int get_tab_height(multirom_theme *t)
+static int get_tab_height(multirom_theme_data *t)
 {
     return fb_height - HEADER_HEIGHT;
 }
