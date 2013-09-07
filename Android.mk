@@ -5,24 +5,18 @@ include $(CLEAR_VARS)
 multirom_local_path := $(LOCAL_PATH)
 
 LOCAL_SRC_FILES:= \
-	main.c \
-	util.c \
-	framebuffer.c \
-	multirom.c \
-	input.c \
-	multirom_ui.c \
-	listview.c \
-	checkbox.c \
-	button.c \
-	pong.c \
-	progressdots.c \
-	multirom_ui_themes.c
-
-
-# Touch event client implementation:
-# TODO: Move this into device files once the rest is ready
-#LOCAL_SRC_FILES += input_type_a.c
-LOCAL_SRC_FILES += input_type_b.c
+    main.c \
+    util.c \
+    framebuffer.c \
+    multirom.c \
+    input.c \
+    multirom_ui.c \
+    listview.c \
+    checkbox.c \
+    button.c \
+    pong.c \
+    progressdots.c \
+    multirom_ui_themes.c
 
 # Init default define values
 MULTIROM_THEMES :=
@@ -53,6 +47,14 @@ LOCAL_STATIC_LIBRARIES += libselinux
 LOCAL_C_INCLUDES += external/libselinux/include
 LOCAL_CFLAGS += -DHAVE_SELINUX
 endif
+
+# Defines from device files
+ifeq ($(MR_INPUT_TYPE),)
+    MR_INPUT_TYPE := "type_b"
+endif
+LOCAL_SRC_FILES += input_$(MR_INPUT_TYPE).c
+
+
 
 include $(BUILD_EXECUTABLE)
 
