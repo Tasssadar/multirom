@@ -691,8 +691,6 @@ void fb_clear(void)
     fb_destroy_msgbox();
 }
 
-
-
 #if PIXEL_SIZE == 4
 #define ALPHA 220
 #define BLEND_CLR 0x1B
@@ -713,7 +711,10 @@ extern void scanline_col32cb16blend_neon(uint16_t *dst, uint32_t *col, size_t ct
 
 void fb_draw_overlay(void)
 {
-#if PIXEL_SIZE == 4
+#ifdef MR_DISABLE_ALPHA
+    fb_fill(0xFF1B1B1B);
+#else
+ #if PIXEL_SIZE == 4
     int i;
     uint8_t *bits = (uint8_t*)fb->bits;
     const int size = fb->vi.xres_virtual*fb->vi.yres;
@@ -726,7 +727,7 @@ void fb_draw_overlay(void)
         *bits = blend(*bits, BLEND_CLR);
         bits += 2;
     }
-#else
+ #else
   #ifdef HAS_NEON_BLEND
     uint32_t blend_clr = 0xDC1B1B1B;
     scanline_col32cb16blend_neon((uint16_t*)fb->bits, &blend_clr, fb->size);
@@ -742,7 +743,8 @@ void fb_draw_overlay(void)
         ++bits;
     }
   #endif
-#endif
+ #endif // PIXEL_SIZE
+#endif // MR_DISABLE_ALPHA
 }
 
 void fb_draw(void)

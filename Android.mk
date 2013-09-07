@@ -80,6 +80,10 @@ else ifeq ($(MR_DPI),xhdpi)
     LOCAL_CFLAGS += -DDPI_MUL=1.5 -DMR_XHDPI
 endif
 
+ifeq ($(MR_DISABLE_ALPHA),true)
+    LOCAL_CFLAGS += -DMR_DISABLE_ALPHA
+endif
+
 include $(BUILD_EXECUTABLE)
 
 # Trampoline
