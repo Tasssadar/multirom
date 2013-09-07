@@ -84,6 +84,10 @@ ifeq ($(MR_DISABLE_ALPHA),true)
     LOCAL_CFLAGS += -DMR_DISABLE_ALPHA
 endif
 
+ifneq ($(TW_BRIGHTNESS_PATH),)
+    LOCAL_CFLAGS += -DTW_BRIGHTNESS_PATH=\"$(TW_BRIGHTNESS_PATH)\"
+endif
+
 include $(BUILD_EXECUTABLE)
 
 # Trampoline

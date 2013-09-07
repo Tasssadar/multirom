@@ -47,7 +47,6 @@
 #define SECOND_BOOT_KMESG "MultiromSaysNextBootShouldBeSecondMagic108"
 
 #define BATTERY_CAP "/sys/class/power_supply/battery/capacity"
-#define BRIGHTNESS_FILE "/sys/devices/platform/pwm-backlight/backlight/pwm-backlight/brightness"
 
 #define T_FOLDER 4
 
@@ -2125,7 +2124,8 @@ int multirom_get_battery(void)
 
 void multirom_set_brightness(int val)
 {
-    FILE *f = fopen(BRIGHTNESS_FILE, "w");
+#ifdef TW_BRIGHTNESS_PATH
+    FILE *f = fopen(TW_BRIGHTNESS_PATH, "w");
     if(!f)
     {
         ERROR("Failed to set brightness: %s!\n", strerror(errno));
@@ -2133,6 +2133,7 @@ void multirom_set_brightness(int val)
     }
     fprintf(f, "%d", val);
     fclose(f);
+#endif
 }
 
 int multirom_run_scripts(const char *type, struct multirom_rom *rom)
