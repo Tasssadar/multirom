@@ -23,12 +23,14 @@
 #include <sys/wait.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <dirent.h>
 
 #include "devices.h"
 #include "log.h"
 #include "../util.h"
 #include "../version.h"
 #include "adb.h"
+#include "../fstab.h"
 
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 #define REALDATA "/realdata"
@@ -118,108 +120,65 @@ static void run_multirom(void)
     } while(restart);
 }
 
-struct part_info
+static struct fstab *find_load_fstab(void)
 {
-    uint64_t size;
-    char *name;
-};
+    char path[64];
+    path[0] = 0;
 
-#define PARTS_SIZE 48
-
-int find_data_dev(char *data_dev)
-{
-    FILE *f = fopen("/proc/partitions", "r");
-    if(!f)
-        return -1;
-
-    int res = -1;
-
-    struct part_info parts[PARTS_SIZE];
-    memset(parts, 0, sizeof(parts));
-    int i = 0;
-    int y, part_ok;
-
-    char *p;
-    char line[1024];
-    // skip the first line
-    fgets(line, sizeof(line), f);
-    while(fgets(line, sizeof(line), f))
+    if(access("/mrom.fstab", F_OK) >= 0)
+        strcpy(path, "/mrom.fstab");
+    else
     {
-        p = strtok(line, " \t\n");
-        part_ok = 0;
-        for(y = 0; p != NULL; ++y)
+        DIR *d = opendir("/");
+        if(!d)
         {
-            switch(y)
+            ERROR("Failed to open /\n");
+            return NULL;
+        }
+
+        struct dirent *dt;
+        while((dt = readdir(d)))
+        {
+            if(dt->d_type != DT_REG)
+                continue;
+
+            if(strncmp(dt->d_name, "fstab.", sizeof("fstab.")-1) == 0)
             {
-                case 2:
-                    parts[i].size = atol(p);
-                    break;
-                case 3:
-                {
-                    free(parts[i].name);
-                    parts[i].name = malloc(strlen(p)+1);
-                    strcpy(parts[i].name, p);
-                    part_ok = 1;
-                    break;
-                }
+                strcpy(path, "/");
+                strcat(path, dt->d_name);
+                break;
             }
-            p = strtok(NULL, " \t\n");
         }
-
-        if(part_ok)
-        {
-            if(++i >= PARTS_SIZE)
-                return -1;
-        }
+        closedir(d);
     }
-    fclose(f);
 
-    uint64_t max = 0;
-    int idx = -1;
-    for(y = 0; y < i; ++y)
+    if(path[0] == 0)
     {
-        if(strstr(parts[y].name, "mmcblk0p") != parts[y].name)
-            continue;
-        ERROR("got part %s, size %d", parts[y].name, (int)parts[y].size);
-        if(parts[y].size > max)
-        {
-            idx = y;
-            max = parts[y].size;
-        }
+        ERROR("Failed to find fstab!\n");
+        return NULL;
     }
 
-    if(idx == -1)
-        goto exit;
-
-    sprintf(data_dev, "/dev/block/%s", parts[idx].name);
-    res = 0;
-    ERROR("booting %s, size %d", parts[idx].name, (int)parts[idx].size);
-
-exit:
-    for(y = 0; y < i; ++y)
-        free(parts[y].name);
-    return res;
+    ERROR("Loading fstab \"%s\"...\n", path);
+    return fstab_load(path);
 }
 
-static void mount_and_run(void)
+static void mount_and_run(struct fstab *fstab)
 {
-    char data_dev[128];
-
-    if(find_data_dev(data_dev) != 0)
+    struct fstab_part *p = fstab_find_by_path(fstab, "/data");
+    if(!p)
     {
-        ERROR("Failed to find data dev!\n");
+        ERROR("Failed to find /data partition in fstab\n");
         return;
     }
 
-    if(wait_for_file(data_dev, 5) < 0)
+    if(wait_for_file(p->device, 5) < 0)
     {
-        ERROR("Waiting too long for dev %s", data_dev);
+        ERROR("Waiting too long for dev %s", p->device);
         return;
     }
 
     mkdir(REALDATA, 0755);
-    if (mount(data_dev, REALDATA, "ext4", MS_RELATIME | MS_NOATIME,
-        "user_xattr,acl,barrier=1,data=ordered,nomblk_io_submit") < 0)
+    if (mount(p->device, REALDATA, p->type, p->mountflags, p->options) < 0)
     {
         ERROR("Failed to mount /realdata %d\n", errno);
         return;
@@ -238,7 +197,10 @@ static void mount_and_run(void)
 
 int main(int argc, char *argv[])
 {
-    int i;
+    int i, res;
+    static char *const cmd[] = { "/main_init", NULL };
+    struct fstab *fstab = NULL;;
+
     for(i = 1; i < argc; ++i)
     {
         if(strcmp(argv[i], "-v") == 0)
@@ -270,24 +232,26 @@ int main(int argc, char *argv[])
     devices_init();
     ERROR("Done initializing");
 
-    int ok = 1;
-    // FIXME: this won't work on all devices,
-    // is it even necessary to wait?
-    if(wait_for_file("/proc/partitions", 5) < 0)
-    {
-        ERROR("Waing too long for /proc/partitions");
-        ok = 0;
-    }
-
     if(wait_for_file("/dev/graphics/fb0", 5) < 0)
     {
         ERROR("Waiting too long for fb0");
-        ok = 0;
+        goto exit;
     }
 
+    fstab = find_load_fstab();
+    if(!fstab)
+        goto exit;
+
+#if 0 
+    fstab_dump(fstab); //debug
+#endif
+
     // mount and run multirom from sdcard
-    if(ok)
-        mount_and_run();
+    mount_and_run(fstab);
+
+exit:
+    if(fstab)
+        fstab_destroy(fstab);
 
     // close and destroy everything
     devices_close();
@@ -311,8 +275,7 @@ int main(int argc, char *argv[])
     chmod("/main_init", EXEC_MASK);
 
     // run the main init
-    char *cmd[] = { "/main_init", NULL };
-    int res = execve(cmd[0], cmd, NULL);
+    res = execve(cmd[0], cmd, NULL);
     ERROR("execve returned %d %d %s\n", res, errno, strerror(errno));
     return 0;
 }

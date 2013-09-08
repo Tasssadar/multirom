@@ -2,10 +2,11 @@ LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES:= \
-	trampoline.c \
-	devices.c \
-	../util.c \
-	adb.c
+    trampoline.c \
+    devices.c \
+    ../util.c \
+    adb.c \
+    ../fstab.c
 
 LOCAL_MODULE:= trampoline
 LOCAL_MODULE_TAGS := eng
