@@ -41,7 +41,6 @@
 #define KEXEC_BIN "kexec"
 #define NTFS_BIN "ntfs-3g"
 #define INTERNAL_ROM_NAME "Internal"
-#define BOOT_BLK "/dev/block/mmcblk0p2"
 #define MAX_ROM_NAME_LEN 26
 #define LAYOUT_VERSION "/data/.layout_version"
 #define SECOND_BOOT_KMESG "MultiromSaysNextBootShouldBeSecondMagic108"
@@ -297,8 +296,7 @@ int multirom_default_status(struct multirom_status *s)
     if(!d)
     {
         ERROR("Failed to open Internal ROM's folder, creating one with ROM from internal memory...\n");
-        if(multirom_import_internal() == -1)
-            return -1;
+        multirom_import_internal();
     }
     else
         closedir(d);
@@ -686,7 +684,7 @@ int multirom_get_rom_type(struct multirom_rom *rom)
     return ROM_UNKNOWN;
 }
 
-int multirom_import_internal(void)
+void multirom_import_internal(void)
 {
     char path[256];
 
@@ -700,26 +698,6 @@ int multirom_import_internal(void)
     // internal rom
     sprintf(path, "%s/roms/%s", multirom_dir, INTERNAL_ROM_NAME);
     mkdir(path, 0777);
-
-    // boot image
-    sprintf(path, "%s/roms/%s/boot.img", multirom_dir, INTERNAL_ROM_NAME);
-    return multirom_dump_boot(path);
-}
-
-int multirom_dump_boot(const char *dest)
-{
-    fb_debug("Dumping boot image...");
-
-    //              0            1     2             3
-    char *cmd[] = { busybox_path, "dd", "if="BOOT_BLK, NULL, NULL };
-    cmd[3] = malloc(256);
-    sprintf(cmd[3], "of=%s", dest);
-
-    int res = run_cmd(cmd);
-    free(cmd[3]);
-
-    fb_debug("done, result: %d\n", res);
-    return res;
 }
 
 struct multirom_rom *multirom_get_internal(struct multirom_status *s)
