@@ -88,6 +88,11 @@ ifneq ($(TW_BRIGHTNESS_PATH),)
     LOCAL_CFLAGS += -DTW_BRIGHTNESS_PATH=\"$(TW_BRIGHTNESS_PATH)\"
 endif
 
+ifeq ($(MR_KEXEC_MEM_MIN),)
+    $(error MR_KEXEC_MEM_MIN was not defined in device files!)
+endif
+LOCAL_CFLAGS += -DMR_KEXEC_MEM_MIN=\"$(MR_KEXEC_MEM_MIN)\"
+
 include $(BUILD_EXECUTABLE)
 
 # Trampoline
