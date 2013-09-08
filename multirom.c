@@ -1367,6 +1367,17 @@ int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd)
     if(multirom_extract_bytes("/initrd.img", f, header.ramdisk_size) != 0)
         goto exit;
 
+    // Trampolines in ROM boot images may get out of sync, so we need to check it and
+    // update if needed. I can't do that during ZIP installation because of USB drives.
+    // That header.name is added by recovery.
+    int ver = 0;
+    static const char *ver_tag = "tr_ver";
+    if(strstr((char*)header.name, ver_tag) == (char*)header.name)
+        ver = atoi((char*)header.name+strlen(ver_tag));
+
+    if(ver < multirom_get_trampoline_ver() && multirom_update_rd_trampoline("/initrd.img") != 0)
+         goto exit;
+
     char cmdline[1024];
     if(multirom_get_cmdline(cmdline, sizeof(cmdline)) == -1)
     {
@@ -2136,4 +2147,112 @@ int multirom_run_scripts(const char *type, struct multirom_rom *rom)
         return res;
     }
     return 0;
+}
+
+#define RD_GZIP 1
+#define RD_LZ4  2
+int multirom_update_rd_trampoline(const char *path)
+{
+    int result = -1;
+    uint32_t magic = 0;
+
+    FILE *f = fopen(path, "r");
+    if(!f)
+    {
+        ERROR("Couldn't open %s!\n", path);
+        return -1;
+    }
+    fread(&magic, sizeof(magic), 1, f);
+    fclose(f);
+
+    remove_dir("/mrom_rd");
+    mkdir("/mrom_rd", 0755);
+
+    // Decompress initrd
+    int type;
+    char buff[256];
+    char *cmd[] = { busybox_path, "sh", "-c", buff, NULL };
+
+    if((magic & 0xFFFF) == 0x8B1F)
+    {
+        type = RD_GZIP;
+        snprintf(buff, sizeof(buff), "B=\"%s\"; cd /mrom_rd; \"$B\" gzip -d -c \"%s\" | \"$B\" cpio -i", busybox_path, path);
+    }
+    else if(magic == 0x184C2102)
+    {
+        type = RD_LZ4;
+        snprintf(buff, sizeof(buff), "cd /mrom_rd; \"%s/lz4\" -d \"%s\" stdout | \"%s\" cpio -i", multirom_dir, path, busybox_path);
+    }
+    else
+    {
+        ERROR("Unknown ramdisk magic 0x%08X, can't update trampoline\n", magic);
+        goto success;
+    }
+
+    int r = run_cmd(cmd);
+    if(r != 0)
+    {
+        ERROR("Failed to unpack ramdisk!\n");
+        goto fail;
+    }
+
+    if(access("/mrom_rd/init", F_OK) < 0 || access("/mrom_rd/main_init", F_OK) < 0)
+    {
+        ERROR("This ramdisk is not injected, skipping\n");
+        goto success;
+    }
+
+    // Check version
+    char *cmd_t[] = { "/mrom_rd/init", "-v", NULL };
+    char *res = run_get_stdout(cmd_t);
+    int ver = 0;
+    if(res)
+    {
+        ver = atoi(res);
+        free(res);
+    }
+    else
+    {
+        ERROR("Failed to run trampoline!\n");
+        goto fail;
+    }
+
+    if(ver >= multirom_get_trampoline_ver())
+    {
+        INFO("No need to update trampoline for this rd\n");
+        goto success;
+    }
+
+    INFO("Updating trampoline in %s from ver %d to %d\n", path, ver, multirom_get_trampoline_ver());
+
+    if(copy_file("/init", "/mrom_rd/init") < 0)
+    {
+        ERROR("Failed to update trampoline\n");
+        goto fail;
+    }
+    chmod("/mrom_rd/init", 0755);
+
+    // Pack initrd again
+    switch(type)
+    {
+        case RD_GZIP:
+            snprintf(buff, sizeof(buff), "B=\"%s\"; cd /mrom_rd; \"$B\" find . | \"$B\" cpio -o -H newc | \"$B\" gzip > \"%s\"", busybox_path, path);
+            break;
+        case RD_LZ4:
+            snprintf(buff, sizeof(buff), "B=\"%s\"; cd /mrom_rd; \"$B\" find . | \"$B\" cpio -o -H newc | \"%s/lz4\" stdin \"%s\"", busybox_path, multirom_dir, path);
+            break;
+    }
+
+    r = run_cmd(cmd);
+    if(r != 0)
+    {
+        ERROR("Failed to pack ramdisk!\n");
+        goto fail;
+    }
+
+success:
+    result = 0;
+fail:
+    remove_dir("/mrom_rd");
+    return result;
 }

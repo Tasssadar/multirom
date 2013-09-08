@@ -1,6 +1,6 @@
 #!/sbin/sh
 BUSYBOX="/tmp/multirom/busybox"
-LZ4="/tmp/lz4"
+LZ4="/tmp/multirom/lz4"
 BOOT_DEV="$(cat /tmp/bootdev)"
 RD_ADDR="$(cat /tmp/rd_addr)"
 CMPR_GZIP=0

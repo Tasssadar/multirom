@@ -14,7 +14,6 @@ package_extract_dir("scripts", "/tmp/");
 set_perm(0, 0, 0777, "/tmp/multirom/busybox");
 set_perm(0, 0, 0777, "/tmp/mkbootimg");
 set_perm(0, 0, 0777, "/tmp/unpackbootimg");
-set_perm(0, 0, 0777, "/tmp/lz4");
 set_perm(0, 0, 0777, "/tmp/extract_multirom.sh");
 set_perm(0, 0, 0777, "/tmp/inject_boot.sh");
 
@@ -26,7 +25,6 @@ ui_print("Cleaning up...");
 delete_recursive("/tmp/boot");
 delete_recursive("/tmp/multirom");
 delete("/tmp/mkbootimg");
-delete("/tmp/lz4");
 delete("/tmp/boot.img-cmdline");
 delete("/tmp/boot.img-ramdisk.gz");
 delete("/tmp/boot.img-zImage");

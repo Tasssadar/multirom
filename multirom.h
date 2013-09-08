@@ -153,5 +153,6 @@ char *multirom_get_klog(void);
 int multirom_get_battery(void);
 void multirom_set_brightness(int val);
 int multirom_run_scripts(const char *type, struct multirom_rom *rom);
+int multirom_update_rd_trampoline(const char *path);
 
 #endif
