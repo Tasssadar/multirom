@@ -278,7 +278,7 @@ int write_file(const char *path, const char *value)
 int remove_dir(const char *dir)
 {
     struct DIR *d = opendir(dir);
-    if(!dir)
+    if(!d)
         return -1;
 
     struct dirent *dt;
