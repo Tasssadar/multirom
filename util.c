@@ -376,6 +376,8 @@ char *run_get_stdout(char **cmd)
             res[written] = 0;
         }
 
+        close(fd[0]);
+
         if(written == 0)
         {
             free(res);
