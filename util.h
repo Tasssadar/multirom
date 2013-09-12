@@ -45,12 +45,13 @@ uint32_t timespec_diff(struct timespec *f, struct timespec *s);
 
 // auto-conversion of pointer type occurs only for
 // void*, not for void** nor void***
-typedef void* ptrToList;
-typedef void* listItself;
+typedef void* ptrToList; // void ***
+typedef void* listItself; // void **
 typedef void* callback;
 typedef void(*callbackPtr)(void*);
 
 void list_add(void *item, ptrToList list_p);
+void list_add_from_list(listItself src_p, ptrToList list_p);
 int list_rm(void *item, ptrToList list_p, callback destroy_callback_p);
 int list_rm_noreorder(void *item, ptrToList list_p, callback destroy_callback_p);
 int list_rm_opt(int reorder, void *item, ptrToList list_p, callback destroy_callback_p);

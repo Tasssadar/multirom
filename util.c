@@ -433,6 +433,30 @@ void list_add(void *item, ptrToList list_p)
     (*list)[--i] = item;
 }
 
+int list_add_from_list(listItself src_p, ptrToList list_p)
+{
+    void **src = (void**)src_p;
+    void ***list = (void***)list_p;
+    int i, len_src = 0, len_list = 0;
+
+    while(src && src[i])
+        ++len_src;
+
+    if(len_src == 0)
+        return 0;
+
+    while(*list && (*list)[i])
+        ++len_list;
+
+    *list = realloc(*list, (len_list+len_src+1)*sizeof(void*));
+
+    for(i = 0; i < len_src; ++i)
+        (*list)[i+len_list] = src[i];
+
+    (*list)[i] = NULL;
+    return len_src;
+}
+
 int list_rm_opt(int reorder, void *item, ptrToList list_p, callback destroy_callback_p)
 {
     void ***list = (void***)list_p;
