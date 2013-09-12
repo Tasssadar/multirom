@@ -290,6 +290,10 @@ int multirom_default_status(struct multirom_status *s)
     s->enable_adb = 0;
     s->rotation = MULTIROM_DEFAULT_ROTATION;
 
+    s->fstab = fstab_auto_load();
+    if(!s->fstab)
+        return -1;
+
     char roms_path[256];
     sprintf(roms_path, "%s/roms/"INTERNAL_ROM_NAME, multirom_dir);
     DIR *d = opendir(roms_path);
@@ -553,12 +557,11 @@ int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_parti
 {
     char path[256];
     int i;
-    struct stat info;
     struct dirent *dr;
     struct multirom_rom **add_roms = NULL;
 
     sprintf(path, "%s/multirom", p->mount_path);
-    if(stat(path, &info) < 0)
+    if(access(path, F_OK) < 0)
         return -1;
 
     DIR *d = opendir(path);
@@ -594,9 +597,7 @@ int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_parti
         // sort roms
         qsort(add_roms, list_item_count(add_roms), sizeof(struct multirom_rom*), compare_rom_names);
 
-        //add them to main list
-        for(i = 0; add_roms[i]; ++i)
-            list_add(add_roms[i], &s->roms);
+        list_add_from_list(add_roms, &s->roms);
         list_clear(&add_roms, NULL);
     }
     return 0;
@@ -817,6 +818,7 @@ void multirom_free_status(struct multirom_status *s)
     list_clear(&s->roms, &multirom_free_rom);
     free(s->curr_rom_part);
     free(s->int_display_name);
+    fstab_destroy(s->fstab);
 }
 
 void multirom_free_rom(void *rom)
@@ -1644,12 +1646,9 @@ int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multir
     if(strlen(*s) == c)
         return 0;
 
-    struct usb_partition *p = rom->partition;
-    if(!p && (p = multirom_get_data_partition(status)) == NULL)
-    {
-        ERROR("Failed to find ROM's root partition!\n");
-        return 0;
-    }
+    struct fstab_part *data_part = NULL;
+    if(!rom->partition)
+        data_part = fstab_find_by_path(status->fstab, "/data");
 
     char *buff = malloc(4096);
     memset(buff, 0, 4096);
@@ -1683,25 +1682,39 @@ int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multir
             // root device. is either "UUID=..." (USB drive) or "/dev/mmcblk0p9" or "/dev/mmcblk0p10"
             case 'd':
             {
-                if(!rom->partition)
+                if(data_part)
                 {
-                    struct stat info;
-                    if(stat("/dev/block/mmcblk0p10", &info) < 0)
-                        strcpy(itr_o, "/dev/mmcblk0p9");
+                    char *blk = strstr(data_part->device, "/dev/block/");
+                    if(blk)
+                    {
+                        strcpy(itr_o, "/dev/");
+                        strcat(itr_o, blk+sizeof("/dev/block/")-1);
+                    }
                     else
-                        strcpy(itr_o, "/dev/mmcblk0p10");
+                        strcpy(itr_o, data_part->device);
                 }
-                else
+                else if(rom->partition)
                     sprintf(itr_o, "UUID=%s", rom->partition->uuid);
+                else
+                    ERROR("Failed to set root device\n");
                 break;
             }
             // root fs type
             case 'r':
-                if(!strcmp(p->fs, "ntfs"))
-                    strcpy(itr_o, "ntfs-3g");
+            {
+                if(data_part)
+                    strcpy(itr_o, data_part->type);
+                else if(rom->partition)
+                {
+                    if(!strcmp(rom->partition->fs, "ntfs"))
+                        strcpy(itr_o, "ntfs-3g");
+                    else
+                        strcpy(itr_o, rom->partition->fs);
+                }
                 else
-                    strcpy(itr_o, p->fs);
+                    ERROR("Failed to set root fs type\n");
                 break;
+            }
             // root directory, from root of the root device
             case 's':
             {
@@ -1850,7 +1863,7 @@ int multirom_update_partitions(struct multirom_status *s)
             part->fs = strndup(t, strchr(t, '"') - t);
         }
 
-        if(part->fs && (strstr(part->name, "mmcblk") || multirom_mount_usb(part) == 0))
+        if(part->fs && !strstr(part->name, "mmcblk") && multirom_mount_usb(part) == 0)
         {
             list_add(part, &s->partitions);
             ERROR("Found part %s: %s, %s\n", part->name, part->uuid, part->fs);
@@ -2058,19 +2071,6 @@ struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uu
     for(i = 0; s->partitions && s->partitions[i]; ++i)
         if(strcmp(s->partitions[i]->uuid, uuid) == 0)
             return s->partitions[i];
-    return NULL;
-}
-
-struct usb_partition *multirom_get_data_partition(struct multirom_status *s)
-{
-    int i;
-    struct usb_partition *p;
-    for(i = 0; s->partitions && s->partitions[i]; ++i)
-    {
-        p = s->partitions[i];
-        if(strstr(p->name, "mmcblk") == p->name && strstr(p->fs, "ext") == p->fs)
-            return p;
-    }
     return NULL;
 }
 

@@ -16,7 +16,8 @@ LOCAL_SRC_FILES:= \
     button.c \
     pong.c \
     progressdots.c \
-    multirom_ui_themes.c
+    multirom_ui_themes.c \
+    fstab.c
 
 ifeq ($(ARCH_ARM_HAVE_NEON),true)
     LOCAL_SRC_FILES += col32cb16blend_neon.S

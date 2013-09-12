@@ -120,48 +120,6 @@ static void run_multirom(void)
     } while(restart);
 }
 
-static struct fstab *find_load_fstab(void)
-{
-    char path[64];
-    path[0] = 0;
-
-    if(access("/mrom.fstab", F_OK) >= 0)
-        strcpy(path, "/mrom.fstab");
-    else
-    {
-        DIR *d = opendir("/");
-        if(!d)
-        {
-            ERROR("Failed to open /\n");
-            return NULL;
-        }
-
-        struct dirent *dt;
-        while((dt = readdir(d)))
-        {
-            if(dt->d_type != DT_REG)
-                continue;
-
-            if(strncmp(dt->d_name, "fstab.", sizeof("fstab.")-1) == 0)
-            {
-                strcpy(path, "/");
-                strcat(path, dt->d_name);
-                break;
-            }
-        }
-        closedir(d);
-    }
-
-    if(path[0] == 0)
-    {
-        ERROR("Failed to find fstab!\n");
-        return NULL;
-    }
-
-    ERROR("Loading fstab \"%s\"...\n", path);
-    return fstab_load(path);
-}
-
 static void mount_and_run(struct fstab *fstab)
 {
     struct fstab_part *p = fstab_find_by_path(fstab, "/data");
@@ -238,7 +196,7 @@ int main(int argc, char *argv[])
         goto exit;
     }
 
-    fstab = find_load_fstab();
+    fstab = fstab_auto_load();
     if(!fstab)
         goto exit;
 

@@ -20,6 +20,8 @@
 #include <string.h>
 #include <ctype.h>
 #include <sys/mount.h>
+#include <unistd.h>
+#include <dirent.h>
 
 #include "fstab.h"
 #include "util.h"
@@ -96,7 +98,7 @@ struct fstab *fstab_load(const char *path)
         }
 
         if(t->version == 2)
-            part->device = strdup(p);
+            part->device = readlink_recursive(p);
         else
             part->path = strdup (p);
 
@@ -120,13 +122,22 @@ struct fstab *fstab_load(const char *path)
         if(t->version == 2)
             part->type = strdup(p);
         else
-            part->device = strdup(p);
+            part->device = readlink_recursive(p);
 
         if((p = strtok_r(NULL, delim, &saveptr)))
             fstab_parse_options(p, part);
 
         if((p = strtok_r(NULL, delim, &saveptr)))
             part->options2 = strdup(p);
+
+        // Check device
+        if(!part->device)
+        {
+            ERROR("fstab: device for part %s does not exist!\n", part->path);
+            fstab_destroy_part(part);
+            part = NULL;
+            continue;
+        }
 
         list_add(part, &t->parts);
         ++t->count;
@@ -228,4 +239,46 @@ void fstab_parse_options(char *opt, struct fstab_part *part)
         free(part->options);
         part->options = NULL;
     }
+}
+
+struct fstab *fstab_auto_load(void)
+{
+    char path[64];
+    path[0] = 0;
+
+    if(access("/mrom.fstab", F_OK) >= 0)
+        strcpy(path, "/mrom.fstab");
+    else
+    {
+        DIR *d = opendir("/");
+        if(!d)
+        {
+            ERROR("Failed to open /\n");
+            return NULL;
+        }
+
+        struct dirent *dt;
+        while((dt = readdir(d)))
+        {
+            if(dt->d_type != DT_REG)
+                continue;
+
+            if(strncmp(dt->d_name, "fstab.", sizeof("fstab.")-1) == 0)
+            {
+                strcpy(path, "/");
+                strcat(path, dt->d_name);
+                break;
+            }
+        }
+        closedir(d);
+    }
+
+    if(path[0] == 0)
+    {
+        ERROR("Failed to find fstab!\n");
+        return NULL;
+    }
+
+    ERROR("Loading fstab \"%s\"...\n", path);
+    return fstab_load(path);
 }

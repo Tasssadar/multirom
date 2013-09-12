@@ -23,6 +23,7 @@
 
 #include "boot_img_hdr.h"
 #include "util.h"
+#include "fstab.h"
 
 enum
 {
@@ -99,6 +100,7 @@ struct multirom_status
     struct multirom_rom **roms;
     struct usb_partition **partitions;
     char *curr_rom_part;
+    struct fstab *fstab;
 };
 
 int multirom(void);
@@ -141,7 +143,6 @@ int multirom_mount_loop(const char *src, const char *dst, const char *fs, int fl
 int multirom_copy_log(char *klog);
 int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_partition *p);
 struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uuid);
-struct usb_partition *multirom_get_data_partition(struct multirom_status *s);
 int multirom_path_exists(char *base, char *filename);
 int multirom_search_last_kmsg(const char *expr);
 struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multirom_rom *rom);

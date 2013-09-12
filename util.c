@@ -404,6 +404,44 @@ uint32_t timespec_diff(struct timespec *f, struct timespec *s)
     return res;
 }
 
+char *readlink_recursive(const char *link)
+{
+    struct stat info;
+    if(lstat(link, &info) < 0)
+        return NULL;
+
+    char path[256];
+    char buff[256];
+    char *p = (char*)link;
+
+    while(S_ISLNK(info.st_mode))
+    {
+        if(info.st_size >= sizeof(path)-1)
+        {
+            ERROR("readlink_recursive(): Couldn't resolve, too long path.\n");
+            return NULL;
+        }
+
+        if(readlink(p, buff, info.st_size) != info.st_size)
+        {
+            ERROR("readlink_recursive: readlink() failed on %s!\n", p);
+            return NULL;
+        }
+
+        buff[info.st_size] = 0;
+        strcpy(path, buff);
+        p = path;
+
+        if(lstat(buff, &info) < 0)
+        {
+            ERROR("readlink_recursive: couldn't do lstat on %s!\n", buff);
+            return NULL;
+        }
+    }
+
+    return strdup(buff);
+}
+
 int list_item_count(listItself list)
 {
     void **l = (void**)list;
@@ -439,22 +477,21 @@ int list_add_from_list(listItself src_p, ptrToList list_p)
     void ***list = (void***)list_p;
     int i, len_src = 0, len_list = 0;
 
-    while(src && src[i])
+    while(src && src[len_src])
         ++len_src;
 
     if(len_src == 0)
         return 0;
 
-    while(*list && (*list)[i])
+    while(*list && (*list)[len_list])
         ++len_list;
 
-    *list = realloc(*list, (len_list+len_src+1)*sizeof(void*));
+    ++len_src; // for NULL
+    *list = realloc(*list, (len_list+len_src)*sizeof(void*));
 
     for(i = 0; i < len_src; ++i)
         (*list)[i+len_list] = src[i];
-
-    (*list)[i] = NULL;
-    return len_src;
+    return len_src-1;
 }
 
 int list_rm_opt(int reorder, void *item, ptrToList list_p, callback destroy_callback_p)
