@@ -527,6 +527,49 @@ int multirom_save_status(struct multirom_status *s)
     return 0;
 }
 
+void multirom_dump_status(struct multirom_status *s)
+{
+    fb_debug("Dumping multirom status:\n");
+    fb_debug("  is_second_boot=%d\n", s->is_second_boot);
+    fb_debug("  current_rom=%s\n", s->current_rom ? s->current_rom->name : "NULL");
+    fb_debug("  colors=%d\n", s->colors);
+    fb_debug("  brightness=%d\n", s->brightness);
+    fb_debug("  enable_adb=%d\n", s->enable_adb);
+    fb_debug("  hide_internal=%d\n", s->hide_internal);
+    fb_debug("  int_display_name=%s\n", s->int_display_name ? s->int_display_name : "NULL");
+    fb_debug("  auto_boot_seconds=%d\n", s->auto_boot_seconds);
+    fb_debug("  auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "NULL");
+    fb_debug("  curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "NULL");
+    fb_debug("\n");
+
+    int i;
+    for(i = 0; s->roms && s->roms[i]; ++i)
+    {
+        fb_debug("  ROM: %s\n", s->roms[i]->name);
+        fb_debug("    base_path: %s\n", s->roms[i]->base_path);
+        fb_debug("    type: %d\n", s->roms[i]->type);
+        fb_debug("    has_bootimg: %d\n", s->roms[i]->has_bootimg);
+        if(s->roms[i]->partition)
+            fb_debug("   partition: %s (%s)\n", s->roms[i]->partition->name, s->roms[i]->partition->fs);
+    }
+}
+
+void multirom_free_status(struct multirom_status *s)
+{
+    list_clear(&s->partitions, &multirom_destroy_partition);
+    list_clear(&s->roms, &multirom_free_rom);
+    free(s->curr_rom_part);
+    free(s->int_display_name);
+    fstab_destroy(s->fstab);
+}
+
+void multirom_free_rom(void *rom)
+{
+    free(((struct multirom_rom*)rom)->name);
+    free(((struct multirom_rom*)rom)->base_path);
+    free(rom);
+}
+
 void multirom_find_usb_roms(struct multirom_status *s)
 {
     // remove USB roms
@@ -742,33 +785,6 @@ struct multirom_rom *multirom_get_rom_by_id(struct multirom_status *s, int id)
     return NULL;
 }
 
-void multirom_dump_status(struct multirom_status *s)
-{
-    fb_debug("Dumping multirom status:\n");
-    fb_debug("  is_second_boot=%d\n", s->is_second_boot);
-    fb_debug("  current_rom=%s\n", s->current_rom ? s->current_rom->name : "NULL");
-    fb_debug("  colors=%d\n", s->colors);
-    fb_debug("  brightness=%d\n", s->brightness);
-    fb_debug("  enable_adb=%d\n", s->enable_adb);
-    fb_debug("  hide_internal=%d\n", s->hide_internal);
-    fb_debug("  int_display_name=%s\n", s->int_display_name ? s->int_display_name : "NULL");
-    fb_debug("  auto_boot_seconds=%d\n", s->auto_boot_seconds);
-    fb_debug("  auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "NULL");
-    fb_debug("  curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "NULL");
-    fb_debug("\n");
-
-    int i;
-    for(i = 0; s->roms && s->roms[i]; ++i)
-    {
-        fb_debug("  ROM: %s\n", s->roms[i]->name);
-        fb_debug("    base_path: %s\n", s->roms[i]->base_path);
-        fb_debug("    type: %d\n", s->roms[i]->type);
-        fb_debug("    has_bootimg: %d\n", s->roms[i]->has_bootimg);
-        if(s->roms[i]->partition)
-            fb_debug("   partition: %s (%s)\n", s->roms[i]->partition->name, s->roms[i]->partition->fs);
-    }
-}
-
 int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to_boot)
 {
     int exit = EXIT_UMOUNT;
@@ -810,22 +826,6 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     }
 
     return exit;
-}
-
-void multirom_free_status(struct multirom_status *s)
-{
-    list_clear(&s->partitions, &multirom_destroy_partition);
-    list_clear(&s->roms, &multirom_free_rom);
-    free(s->curr_rom_part);
-    free(s->int_display_name);
-    fstab_destroy(s->fstab);
-}
-
-void multirom_free_rom(void *rom)
-{
-    free(((struct multirom_rom*)rom)->name);
-    free(((struct multirom_rom*)rom)->base_path);
-    free(rom);
 }
 
 #define EXEC_MASK (S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP)
