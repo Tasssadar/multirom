@@ -1684,6 +1684,9 @@ int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multir
             {
                 if(data_part)
                 {
+                    // Only android's ueventd creates /dev/block, so try to remove it
+                    // for _real_ linux OS. We can't use UUID, because it's the same for
+                    // /system, /data and /cache partitions
                     char *blk = strstr(data_part->device, "/dev/block/");
                     if(blk)
                     {
@@ -1832,38 +1835,51 @@ int multirom_update_partitions(struct multirom_status *s)
         return -1;
     }
 
-    char *p = strtok(res, "\n");
-    while(p != NULL)
+    char *tok;
+    char *name;
+    struct usb_partition *part;
+
+    char *line = strtok(res, "\n");
+    while(line != NULL)
     {
-        struct usb_partition *part = malloc(sizeof(struct usb_partition));
-        memset(part, 0, sizeof(struct usb_partition));
-
-        char *t = strndup(p, strchr(p, ':') - p);
-        part->name = strdup(strrchr(t, '/')+1);
-        free(t);
-
-        t = strstr(p, "UUID=\"");
-        if(t)
+        if(strstr(line, "/dev/") != line)
         {
-            t += strlen("UUID=\"");
-            part->uuid = strndup(t, strchr(t, '"') - t);
+            ERROR("blkid line does not start with /dev/!\n");
+            break;
+        }
+
+        tok = strrchr(line, '/')+1;
+        name = strndup(tok, strchr(tok, ':') - tok);
+        if(strstr(name, "mmcblk")) // ignore internal nand
+        {
+            free(name);
+            goto next_itr;
+        }
+
+        part = mzalloc(sizeof(struct usb_partition));
+        part->name = name;
+
+        tok = strstr(line, "UUID=\"");
+        if(tok)
+        {
+            tok += sizeof("UUID=\"")-1;
+            part->uuid = strndup(tok, strchr(tok, '"') - tok);
         }
         else
         {
-            ERROR("Part %s does not have UUID, line: \"%s\"\n", part->name, p);
-            p = strtok(NULL, "\n");
+            ERROR("Part %s does not have UUID, line: \"%s\"\n", part->name, line);
             multirom_destroy_partition(part);
-            continue;
+            goto next_itr;
         }
 
-        t = strstr(p, "TYPE=\"");
-        if(t)
+        tok = strstr(line, "TYPE=\"");
+        if(tok)
         {
-            t += strlen("TYPE=\"");
-            part->fs = strndup(t, strchr(t, '"') - t);
+            tok += sizeof("TYPE=\"")-1;
+            part->fs = strndup(tok, strchr(tok, '"') - tok);
         }
 
-        if(part->fs && !strstr(part->name, "mmcblk") && multirom_mount_usb(part) == 0)
+        if(part->fs && multirom_mount_usb(part) == 0)
         {
             list_add(part, &s->partitions);
             ERROR("Found part %s: %s, %s\n", part->name, part->uuid, part->fs);
@@ -1874,7 +1890,8 @@ int multirom_update_partitions(struct multirom_status *s)
             multirom_destroy_partition(part);
         }
 
-        p = strtok(NULL, "\n");
+next_itr:
+        line = strtok(NULL, "\n");
     }
     pthread_mutex_unlock(&parts_mutex);
     free(res);
