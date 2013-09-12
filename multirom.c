@@ -589,8 +589,7 @@ void multirom_find_usb_roms(struct multirom_status *s)
 
     pthread_mutex_lock(&parts_mutex);
     for(i = 0; s->partitions && s->partitions[i]; ++i)
-        if(!strstr(s->partitions[i]->name, "mmcblk"))
-            multirom_scan_partition_for_roms(s, s->partitions[i]);
+        multirom_scan_partition_for_roms(s, s->partitions[i]);
     pthread_mutex_unlock(&parts_mutex);
 
     multirom_dump_status(s);
@@ -603,7 +602,22 @@ int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_parti
     struct dirent *dr;
     struct multirom_rom **add_roms = NULL;
 
+#ifdef MR_MOVE_USB_DIR
+    // groupers will have old "multirom" folder on USB drive instead of "multirom-grouper".
+    // We have to move it.
     sprintf(path, "%s/multirom", p->mount_path);
+    if(access(path, F_OK) >= 0)
+    {
+        char dest[256];
+        sprintf(dest, "%s/multirom-"TARGET_DEVICE, p->mount_path);
+
+        INFO("Moving usb dir %s to %s!\n", path, dest);
+        char *cmd[] = { busybox_path, "mv", path, dest, NULL };
+        run_cmd(cmd);
+    }
+#endif
+
+    sprintf(path, "%s/multirom-"TARGET_DEVICE, p->mount_path);
     if(access(path, F_OK) < 0)
         return -1;
 
@@ -622,7 +636,7 @@ int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_parti
         rom->id = multirom_generate_rom_id();
         rom->name = strdup(dr->d_name);
 
-        sprintf(path, "%s/multirom/%s", p->mount_path, rom->name);
+        sprintf(path, "%s/multirom-"TARGET_DEVICE"/%s", p->mount_path, rom->name);
         rom->base_path = strdup(path);
 
         rom->partition = p;

@@ -38,6 +38,13 @@ LOCAL_STATIC_LIBRARIES := libfs_mgr libcutils libc libm
 # Init default define values
 MULTIROM_DEFAULT_ROTATION := 0
 
+# This value is used to have different folders on USB drives
+# for different devices. Grouper didn't have that, hence the hack
+LOCAL_CFLAGS += -DTARGET_DEVICE="\"$(TARGET_DEVICE)\""
+ifeq ($(TARGET_DEVICE),grouper)
+    LOCAL_CFLAGS += -DMR_MOVE_USB_DIR
+endif
+
 ifeq ($(MR_INPUT_TYPE),)
     MR_INPUT_TYPE := type_b
 endif
