@@ -564,9 +564,18 @@ int list_move(ptrToList source_p, ptrToList dest_p)
     if(*dest)
         return -1;
 
-    list_copy(*source, dest);
-    list_clear(source, NULL);
+    *dest = *source;
+    *source = NULL;
     return 0;
+}
+
+void list_swap(ptrToList a_p, ptrToList b_p)
+{
+    void ***a = (void***)a_p;
+    void ***b = (void***)b_p;
+    void **tmp = *a;
+    *a = *b;
+    *b = tmp;
 }
 
 int in_rect(int x, int y, int rx, int ry, int rw, int rh)

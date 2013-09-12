@@ -352,11 +352,8 @@ int multirom_default_status(struct multirom_status *s)
         // sort roms
         qsort(add_roms, list_item_count(add_roms), sizeof(struct multirom_rom*), compare_rom_names);
 
-        //add them to main list
-        int i;
-        for(i = 0; add_roms[i]; ++i)
-            list_add(add_roms[i], &s->roms);
-        list_clear(&add_roms, NULL);
+        // add them to main list
+        list_swap(&add_roms, &s->roms);
     }
 
     s->current_rom = multirom_get_internal(s);

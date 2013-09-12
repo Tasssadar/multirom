@@ -60,6 +60,7 @@ int list_item_count(listItself list);
 int list_copy(listItself src, ptrToList dest_p);
 int list_move(ptrToList source_p, ptrToList dest_p);
 void list_clear(ptrToList list_p, callback destroy_callback_p);
+void list_swap(ptrToList a_p, ptrToList b_p);
 
 inline int in_rect(int x, int y, int rx, int ry, int rw, int rh);
 
