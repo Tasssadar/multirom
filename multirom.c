@@ -1385,6 +1385,7 @@ int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd)
     // That header.name is added by recovery.
     int ver = 0;
     static const char *ver_tag = "tr_ver";
+    header.name[BOOT_NAME_SIZE-1] = 0;
     if(strstr((char*)header.name, ver_tag) == (char*)header.name)
         ver = atoi((char*)header.name+strlen(ver_tag));
 
