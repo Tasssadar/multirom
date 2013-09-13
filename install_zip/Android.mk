@@ -9,7 +9,7 @@ multirom_binary := $(TARGET_ROOT_OUT)/multirom
 trampoline_binary := $(TARGET_ROOT_OUT)/trampoline
 
 ifeq ($(MR_FSTAB),)
-    $(error MR_FSTAB not defined in device files)
+    $(info MR_FSTAB not defined in device files)
 endif
 
 $(MULTIROM_ZIP_TARGET): multirom trampoline signapk

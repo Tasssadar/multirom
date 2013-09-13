@@ -51,7 +51,7 @@ endif
 LOCAL_SRC_FILES += input_$(MR_INPUT_TYPE).c
 
 ifeq ($(DEVICE_RESOLUTION),)
-    $(error DEVICE_RESOLUTION was not specified)
+    $(info DEVICE_RESOLUTION was not specified)
 endif
 LOCAL_SRC_FILES += themes/multirom_ui_$(DEVICE_RESOLUTION).c
 LOCAL_CFLAGS += -DMULTIROM_THEME_$(DEVICE_RESOLUTION)
@@ -81,7 +81,7 @@ ifeq ($(TARGET_RECOVERY_PIXEL_FORMAT),"RGB_565")
 endif
 
 ifeq ($(MR_DPI),)
-    $(error MR_DPI not defined in device files)
+    $(info MR_DPI not defined in device files)
 else ifeq ($(MR_DPI),hdpi)
     LOCAL_CFLAGS += -DDPI_MUL=1 -DMR_HDPI
 else ifeq ($(MR_DPI),xhdpi)
@@ -97,7 +97,7 @@ ifneq ($(TW_BRIGHTNESS_PATH),)
 endif
 
 ifeq ($(MR_KEXEC_MEM_MIN),)
-    $(error MR_KEXEC_MEM_MIN was not defined in device files!)
+    $(info MR_KEXEC_MEM_MIN was not defined in device files!)
 endif
 LOCAL_CFLAGS += -DMR_KEXEC_MEM_MIN=\"$(MR_KEXEC_MEM_MIN)\"
 
