@@ -263,6 +263,11 @@ struct fstab *fstab_auto_load(void)
             if(dt->d_type != DT_REG)
                 continue;
 
+            // For some reason, CM includes goldfish's fstab, ignore it
+            // (goldfish is the virtual device for emulator)
+            if(strcmp(dt->d_name, "fstab.goldfish") == 0)
+                continue;
+
             if(strncmp(dt->d_name, "fstab.", sizeof("fstab.")-1) == 0)
             {
                 strcpy(path, "/");
