@@ -19,6 +19,7 @@
 #include "multirom_ui_themes.h"
 #include "multirom.h"
 #include "util.h"
+#include "log.h"
 
 multirom_themes_info *multirom_ui_init_themes(void)
 {
@@ -31,18 +32,9 @@ multirom_themes_info *multirom_ui_init_themes(void)
     extern struct multirom_theme theme_info_ ## RES; \
     list_add(&theme_info_ ## RES, &i->themes);
 
-#ifdef MULTIROM_THEME_800x1280
-    ADD_THEME(800x1280);
-#endif
-#ifdef MULTIROM_THEME_1280x800
-    ADD_THEME(1280x800);
-#endif
-#ifdef MULTIROM_THEME_1200x1920
-    ADD_THEME(1200x1920);
-#endif
-#ifdef MULTIROM_THEME_1920x1200
-    ADD_THEME(1920x1200);
-#endif
+    // universal themes which scale according to DPI_MUL
+    ADD_THEME(landscape);
+    ADD_THEME(portrait);
     return i;
 }
 
@@ -58,10 +50,21 @@ multirom_theme *multirom_ui_select_theme(multirom_themes_info *i, int w, int h)
     if(i->themes == NULL)
         return NULL;
 
+    multirom_theme *universal = NULL;
+    const int uni_type = (w > h) ? TH_LANDSCAPE : TH_PORTRAIT;
+
     multirom_theme **itr;
     for(itr = i->themes; *itr; ++itr)
+    {
         if((*itr)->width == w && (*itr)->height == h)
             return *itr;
 
-    return NULL;
+        if((*itr)->width == uni_type)
+            universal = *itr;
+    }
+
+    if(universal)
+        INFO("Using universal theme (%d)\n", uni_type);
+
+    return universal;
 }

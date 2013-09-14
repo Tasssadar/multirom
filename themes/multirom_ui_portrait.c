@@ -23,25 +23,25 @@
 #include "button.h"
 #include "version.h"
 
-#define HEADER_HEIGHT 110
-#define TAB_BTN_WIDTH 250
+#define HEADER_HEIGHT (75*DPI_MUL)
+#define TAB_BTN_WIDTH (165*DPI_MUL)
 
-#define ROMS_FOOTER_H 165
-#define ROMS_HEADER_H 120
+#define ROMS_FOOTER_H (130*DPI_MUL)
+#define ROMS_HEADER_H (90*DPI_MUL)
 
-#define BOOTBTN_W 380
-#define BOOTBTN_H 105
+#define BOOTBTN_W (300*DPI_MUL)
+#define BOOTBTN_H (80*DPI_MUL)
 
-#define REFRESHBTN_W 400
-#define REFRESHBTN_H 60
+#define REFRESHBTN_W (400*DPI_MUL)
+#define REFRESHBTN_H (60*DPI_MUL)
 
-#define MISCBTN_W 730
-#define MISCBTN_H 150
+#define MISCBTN_W (530*DPI_MUL)
+#define MISCBTN_H (100*DPI_MUL)
 
-#define CLRBTN_W 80
-#define CLRBTN_B 20
+#define CLRBTN_W (50*DPI_MUL)
+#define CLRBTN_B (10*DPI_MUL)
 #define CLRBTN_TOTAL (CLRBTN_W+CLRBTN_B)
-#define CLRBTN_Y 1500
+#define CLRBTN_Y (1150*DPI_MUL)
 
 static button *pong_btn = NULL;
 
@@ -74,7 +74,7 @@ static void init_header(multirom_theme_data *t)
     {
         text_x = center_x(x, TAB_BTN_WIDTH, SIZE_NORMAL, str[i]);
         text_y = center_y(0, HEADER_HEIGHT, SIZE_NORMAL);
-        tab_texts[i] = fb_add_text(text_x, text_y, WHITE, 3, str[i]);
+        tab_texts[i] = fb_add_text(text_x, text_y, WHITE, SIZE_NORMAL, str[i]);
 
         fb_add_rect(x, 0, 2, HEADER_HEIGHT, WHITE);
 
@@ -135,7 +135,7 @@ static void tab_rom_init(multirom_theme_data *t, tab_data_roms *d, int tab_type)
 static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_scheme)
 {
     int x = fb_width/2 - MISCBTN_W/2;
-    int y = 320;
+    int y = 270*DPI_MUL;
 
     button *b = mzalloc(sizeof(button));
     b->x = x;
@@ -146,9 +146,9 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
     button_init_ui(b, "Copy log to /sdcard", SIZE_BIG);
     list_add(b, &d->buttons);
 
-    y += MISCBTN_H+70;
+    y += MISCBTN_H+70*DPI_MUL;
 
-    static const char *texts[] = 
+    static const char *texts[] =
     {
         "Reboot",               // 0
         "Reboot to recovery",   // 1
@@ -175,9 +175,9 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
         button_init_ui(b, texts[i], SIZE_BIG);
         list_add(b, &d->buttons);
 
-        y += MISCBTN_H+40;
+        y += MISCBTN_H+20*DPI_MUL;
         if(i == 2)
-            y += 80;
+            y += 50*DPI_MUL;
     }
 
     fb_text *text = fb_add_text(0, fb_height-16*SIZE_SMALL, WHITE, SIZE_SMALL, "MultiROM v%d"VERSION_DEV_FIX" with trampoline v%d.",
@@ -234,9 +234,9 @@ static void center_rom_name(tab_data_roms *d, const char *name)
     d->rom_name->head.x = center_x(0, fb_width-BOOTBTN_W-20, SIZE_NORMAL, name);
 }
 
-const struct multirom_theme theme_info_1200x1920 = {
-    .width = 1200,
-    .height = 1920,
+const struct multirom_theme theme_info_portrait = {
+    .width = TH_PORTRAIT,
+    .height = TH_PORTRAIT,
 
     .destroy = &destroy,
     .init_header = &init_header,

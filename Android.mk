@@ -17,6 +17,8 @@ LOCAL_SRC_FILES:= \
     pong.c \
     progressdots.c \
     multirom_ui_themes.c \
+    themes/multirom_ui_landscape.c \
+    themes/multirom_ui_portrait.c \
     fstab.c
 
 ifeq ($(ARCH_ARM_HAVE_NEON),true)
@@ -52,13 +54,16 @@ LOCAL_SRC_FILES += input_$(MR_INPUT_TYPE).c
 
 ifeq ($(DEVICE_RESOLUTION),)
     $(info DEVICE_RESOLUTION was not specified)
+else ifneq ($(wildcard $(multirom_local_path)/themes/multirom_ui_$(DEVICE_RESOLUTION).c),)
+    LOCAL_SRC_FILES += themes/multirom_ui_$(DEVICE_RESOLUTION).c
+    LOCAL_CFLAGS += -DMULTIROM_THEME_$(DEVICE_RESOLUTION)
 endif
-LOCAL_SRC_FILES += themes/multirom_ui_$(DEVICE_RESOLUTION).c
-LOCAL_CFLAGS += -DMULTIROM_THEME_$(DEVICE_RESOLUTION)
 
 ifneq ($(LANDSCAPE_RESOLUTION),)
+ifneq ($(wildcard $(multirom_local_path)/themes/multirom_ui_$(LANDSCAPE_RESOLUTION).c),)
     LOCAL_SRC_FILES += themes/multirom_ui_$(LANDSCAPE_RESOLUTION).c
     LOCAL_CFLAGS += -DMULTIROM_THEME_$(LANDSCAPE_RESOLUTION)
+endif
 endif
 ifneq ($(TW_DEFAULT_ROTATION),)
     MULTIROM_DEFAULT_ROTATION := $(TW_DEFAULT_ROTATION)

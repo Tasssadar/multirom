@@ -23,6 +23,11 @@
 #include "progressdots.h"
 #include "listview.h"
 
+// universal themes has these as width and height,
+// instead of real resolution
+#define TH_PORTRAIT  (-1)
+#define TH_LANDSCAPE (-2)
+
 typedef struct 
 {
     listview *list;
@@ -52,8 +57,8 @@ typedef struct
 
 struct multirom_theme
 {
-    uint16_t width;
-    uint16_t height;
+    int16_t width;
+    int16_t height;
 
     void (*destroy)(multirom_theme_data *t);
     void (*init_header)(multirom_theme_data *t);
