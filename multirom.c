@@ -330,7 +330,7 @@ int multirom_default_status(struct multirom_status *s)
             continue;
         }
 
-        fb_debug("Adding ROM %s\n", dr->d_name);
+        INFO("Adding ROM %s\n", dr->d_name);
 
         struct multirom_rom *rom = malloc(sizeof(struct multirom_rom));
         memset(rom, 0, sizeof(struct multirom_rom));
@@ -363,7 +363,7 @@ int multirom_default_status(struct multirom_status *s)
     s->current_rom = multirom_get_internal(s);
     if(!s->current_rom)
     {
-        fb_debug("No internal rom found!\n");
+        ERROR("No internal rom found!\n");
         return -1;
     }
 
@@ -375,7 +375,7 @@ int multirom_default_status(struct multirom_status *s)
 
 int multirom_load_status(struct multirom_status *s)
 {
-    fb_debug("Loading MultiROM status...\n");
+    INFO("Loading MultiROM status...\n");
 
     multirom_default_status(s);
 
@@ -385,7 +385,7 @@ int multirom_load_status(struct multirom_status *s)
     FILE *f = fopen(arg, "r");
     if(!f)
     {
-        fb_debug("Failed to open config file, using defaults!\n");
+        ERROR("Failed to open config file, using defaults!\n");
         return -1;
     }
 
@@ -463,11 +463,11 @@ int multirom_load_status(struct multirom_status *s)
     s->current_rom = multirom_get_rom(s, current_rom, s->curr_rom_part);
     if(!s->current_rom)
     {
-        fb_debug("Failed to select current rom (%s, part %s), using Internal!\n", current_rom, s->curr_rom_part);
+        ERROR("Failed to select current rom (%s, part %s), using Internal!\n", current_rom, s->curr_rom_part);
         s->current_rom = multirom_get_internal(s);
         if(!s->current_rom)
         {
-            fb_debug("No internal rom found!\n");
+            ERROR("No internal rom found!\n");
             return -1;
         }
     }
@@ -488,7 +488,7 @@ int multirom_load_status(struct multirom_status *s)
 
 int multirom_save_status(struct multirom_status *s)
 {
-    fb_debug("Saving multirom status\n");
+    INFO("Saving multirom status\n");
 
     char buff[256];
     sprintf(buff, "%s/multirom.ini", multirom_dir);
@@ -496,7 +496,7 @@ int multirom_save_status(struct multirom_status *s)
     FILE *f = fopen(buff, "w");
     if(!f)
     {
-        fb_debug("Failed to open/create status file!\n");
+        ERROR("Failed to open/create status file!\n");
         return -1;
     }
 
@@ -529,28 +529,28 @@ int multirom_save_status(struct multirom_status *s)
 
 void multirom_dump_status(struct multirom_status *s)
 {
-    fb_debug("Dumping multirom status:\n");
-    fb_debug("  is_second_boot=%d\n", s->is_second_boot);
-    fb_debug("  current_rom=%s\n", s->current_rom ? s->current_rom->name : "NULL");
-    fb_debug("  colors=%d\n", s->colors);
-    fb_debug("  brightness=%d\n", s->brightness);
-    fb_debug("  enable_adb=%d\n", s->enable_adb);
-    fb_debug("  hide_internal=%d\n", s->hide_internal);
-    fb_debug("  int_display_name=%s\n", s->int_display_name ? s->int_display_name : "NULL");
-    fb_debug("  auto_boot_seconds=%d\n", s->auto_boot_seconds);
-    fb_debug("  auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "NULL");
-    fb_debug("  curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "NULL");
-    fb_debug("\n");
+    INFO("Dumping multirom status:\n");
+    INFO("  is_second_boot=%d\n", s->is_second_boot);
+    INFO("  current_rom=%s\n", s->current_rom ? s->current_rom->name : "NULL");
+    INFO("  colors=%d\n", s->colors);
+    INFO("  brightness=%d\n", s->brightness);
+    INFO("  enable_adb=%d\n", s->enable_adb);
+    INFO("  hide_internal=%d\n", s->hide_internal);
+    INFO("  int_display_name=%s\n", s->int_display_name ? s->int_display_name : "NULL");
+    INFO("  auto_boot_seconds=%d\n", s->auto_boot_seconds);
+    INFO("  auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "NULL");
+    INFO("  curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "NULL");
+    INFO("\n");
 
     int i;
     for(i = 0; s->roms && s->roms[i]; ++i)
     {
-        fb_debug("  ROM: %s\n", s->roms[i]->name);
-        fb_debug("    base_path: %s\n", s->roms[i]->base_path);
-        fb_debug("    type: %d\n", s->roms[i]->type);
-        fb_debug("    has_bootimg: %d\n", s->roms[i]->has_bootimg);
+        INFO("  ROM: %s\n", s->roms[i]->name);
+        INFO("    base_path: %s\n", s->roms[i]->base_path);
+        INFO("    type: %d\n", s->roms[i]->type);
+        INFO("    has_bootimg: %d\n", s->roms[i]->has_bootimg);
         if(s->roms[i]->partition)
-            fb_debug("   partition: %s (%s)\n", s->roms[i]->partition->name, s->roms[i]->partition->fs);
+            INFO("   partition: %s (%s)\n", s->roms[i]->partition->name, s->roms[i]->partition->fs);
     }
 }
 
@@ -763,7 +763,7 @@ struct multirom_rom *multirom_get_internal(struct multirom_status *s)
         if(s->roms[i]->type == ROM_DEFAULT)
             return s->roms[i];
     }
-    fb_debug("ERROR: Something is wrong, multirom_get_internal returns NULL!\n");
+    ERROR(" Something is wrong, multirom_get_internal returns NULL!\n");
     return NULL;
 }
 

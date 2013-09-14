@@ -166,13 +166,6 @@ void fb_pop_context(void);
 inline int center_x(int x, int width, int size, const char *text);
 inline int center_y(int y, int height, int size);
 
-#if 0
-#define fb_debug(fmt, ...) fb_printf(fmt, ##__VA_ARGS__)
-#else
-#define fb_debug(fmt, ...) ERROR(fmt, ##__VA_ARGS__)
-#define fb_printf(fmt, ...) ERROR(fmt, ##__VA_ARGS__)
-#endif
-
 int vt_set_mode(int graphics);
 
 #endif

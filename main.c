@@ -74,6 +74,10 @@ int main(int argc, char *argv[])
     srand(time(0));
     klog_init();
 
+    // output all messages to dmesg,
+    // but it is possible to filter out INFO messages
+    klog_set_level(6);
+
     ERROR("Running MultiROM v%d\n", VERSION_MULTIROM);
 
     int exit = multirom();

@@ -21,6 +21,6 @@
 
 #define ERROR(x...)   KLOG_ERROR("multirom", x)
 #define NOTICE(x...)  KLOG_NOTICE("multirom", x)
-#define INFO(x...)    KLOG_ERROR("multirom", x)
+#define INFO(x...)    KLOG_INFO("multirom", x)
 
 #endif
