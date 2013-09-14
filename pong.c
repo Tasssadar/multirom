@@ -27,21 +27,21 @@
 #include "pong.h"
 #include "util.h"
 
-#define SCORE_SPACE 75
+#define SCORE_SPACE (75*DPI_MUL)
 #define L 0
 #define R 1
 
-#define PADDLE_W 150
-#define PADDLE_H 60
+#define PADDLE_W (150*DPI_MUL)
+#define PADDLE_H (60*DPI_MUL)
 #define PADDLE_REF ((PADDLE_H/3)*2)
-#define PADDLE_Y 20
+#define PADDLE_Y (20*DPI_MUL)
 
-#define BALL_W 25
-#define DEFAULT_BALL_SPEED 10
+#define BALL_W (25*DPI_MUL)
+#define DEFAULT_BALL_SPEED (10*DPI_MUL)
 #define BALL_SPEED_MOD ((PADDLE_W/2)/ball_speed)
 
 #define COMPUTER L
-#define COMPUTER_SPEED 10
+#define COMPUTER_SPEED (10*DPI_MUL)
 
 static fb_text *score[2] = { NULL, NULL };
 static fb_rect *paddles[2] = { NULL, NULL };
@@ -122,8 +122,8 @@ void pong(void)
 
         step = pong_do_movement(step);
 
-        fb_draw();
-        usleep(1000);
+        fb_request_draw();
+        usleep(16000);
     }
 
     rm_touch_handler(&pong_touch_handler, NULL);
@@ -169,10 +169,10 @@ int pong_do_movement(int step)
             else
             {
                 pong_add_score(!s);
-                for(col = 0; col < 1000; col += 15)
+                for(col = 0; col < 1000; col += 16)
                 {
-                    fb_draw();
-                    usleep(15000);
+                    fb_request_draw();
+                    usleep(16000);
                 }
                 pong_spawn_ball(s);
             }
@@ -211,7 +211,7 @@ int pong_touch_handler(touch_event *ev, void *data)
         int newX = paddles[i]->head.x + (ev->x - paddle_last_x[i]);
         paddle_last_x[i] = ev->x;
 
-        if(newX > 0 && newX < fb_width-PADDLE_W)
+        if(newX > 0 && newX < (int)fb_width-PADDLE_W)
             paddles[i]->head.x = newX;
         return 0;
     }
@@ -229,7 +229,7 @@ void pong_spawn_ball(int side)
     ball_speed_x = cos(angle)*ball_speed;
     ball_speed_y = sin(angle)*ball_speed;
 
-    ball->head.x = rand()%(fb_width-BALL_W);
+    ball->head.x = rand()%(int)(fb_width-BALL_W);
     ball->head.y = fb_height/2 - BALL_W/2;
 }
 
@@ -268,12 +268,12 @@ int pong_get_collision(int x, int y)
 {
     if(y < PADDLE_Y+PADDLE_REF)
         return COL_LEFT;
-    if(y > fb_height-PADDLE_Y-PADDLE_REF-BALL_W)
+    if(y > (int)fb_height-PADDLE_Y-PADDLE_REF-BALL_W)
         return COL_RIGHT;
 
     if(x < 0)
         return COL_BOTTOM;
-    if(x > fb_width-BALL_W)
+    if(x > (int)fb_width-BALL_W)
         return COL_TOP;
 
     return COL_NONE;
@@ -319,7 +319,7 @@ void pong_handle_ai(void)
 
     if(ball_center > computer_x)
     {
-        if(paddles[COMPUTER]->head.x + PADDLE_W + COMPUTER_SPEED <= fb_width)
+        if(paddles[COMPUTER]->head.x + PADDLE_W + COMPUTER_SPEED <= (int)fb_width)
             paddles[COMPUTER]->head.x += move_dist;
     }
     else
