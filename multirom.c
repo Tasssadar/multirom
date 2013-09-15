@@ -941,7 +941,7 @@ int multirom_process_android_fstab(void)
     struct dirent *dp = NULL;
     while((dp = readdir(d)))
     {
-        if(strstr(dp->d_name, "fstab."))
+        if(strstr(dp->d_name, "fstab.") == dp->d_name && strcmp(dp->d_name, "fstab.goldfish") != 0)
         {
             fstab_name = strdup(dp->d_name);
             break;
