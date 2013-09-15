@@ -612,8 +612,16 @@ int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_parti
         sprintf(dest, "%s/multirom-"TARGET_DEVICE, p->mount_path);
 
         INFO("Moving usb dir %s to %s!\n", path, dest);
-        char *cmd[] = { busybox_path, "mv", path, dest, NULL };
+
+        mkdir(dest, 0777);
+
+        char *cmd[] = { busybox_path, "sh", "-c", malloc(1024), path, dest, NULL };
+        sprintf(cmd[3], "mv \"%s\"/* \"%s\"/", path, dest);
+
         run_cmd(cmd);
+
+        rmdir(path);
+        free(cmd[3]);
     }
 #endif
 
