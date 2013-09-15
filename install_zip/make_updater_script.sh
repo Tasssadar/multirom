@@ -15,6 +15,9 @@ case "$DEVICES" in
     "grouper")
         DEVICES="${DEVICES} tilapia"
         ;;
+    "flo")
+        DEVICES="${DEVICES} deb"
+        ;;
 esac
 
 fail()
