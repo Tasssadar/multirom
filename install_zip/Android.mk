@@ -43,6 +43,7 @@ $(MULTIROM_UNINST_TARGET): signapk
 	mkdir -p $(MULTIROM_UNINST_DIR)
 	cp -a $(install_zip_path)/prebuilt-uninstaller/* $(MULTIROM_UNINST_DIR)/
 	$(install_zip_path)/extract_boot_dev.sh $(PWD)/$(MR_FSTAB) $(MULTIROM_UNINST_DIR)/scripts/bootdev
+	echo $(MR_RD_ADDR) > $(MULTIROM_UNINST_DIR)/scripts/rd_addr
 	$(install_zip_path)/make_updater_script.sh $(TARGET_DEVICE) $(MULTIROM_UNINST_DIR)/META-INF/com/google/android "MultiROM uninstaller -"
 	rm -f $(MULTIROM_UNINST_TARGET).zip $(MULTIROM_UNINST_TARGET)-unsigned.zip
 	cd $(MULTIROM_UNINST_DIR) && zip -qr ../$(notdir $@)-unsigned.zip *
