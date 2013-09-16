@@ -615,13 +615,15 @@ int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_parti
 
         mkdir(dest, 0777);
 
-        char *cmd[] = { busybox_path, "sh", "-c", malloc(1024), path, dest, NULL };
-        sprintf(cmd[3], "mv \"%s\"/* \"%s\"/", path, dest);
+        char *cmd[] = { busybox_path, "sh", "-c", malloc(1024), NULL };
+        sprintf(cmd[3], "%s mv \"%s\"/* \"%s\"/", busybox_path, path, dest);
 
         run_cmd(cmd);
 
         rmdir(path);
         free(cmd[3]);
+
+        sync();
     }
 #endif
 
