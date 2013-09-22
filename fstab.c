@@ -272,7 +272,10 @@ struct fstab *fstab_auto_load(void)
             {
                 strcpy(path, "/");
                 strcat(path, dt->d_name);
-                break;
+
+                // try to find specifically fstab.device
+                if(strcmp(dt->d_name, "fstab."TARGET_DEVICE) == 0)
+                    break;
             }
         }
         closedir(d);

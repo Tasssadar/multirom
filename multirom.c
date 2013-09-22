@@ -27,6 +27,7 @@
 #include <sys/mount.h>
 #include <sys/klog.h>
 #include <linux/loop.h>
+#include <ctype.h>
 
 #include "multirom.h"
 #include "multirom_ui.h"
@@ -854,11 +855,47 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
 
 #define EXEC_MASK (S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP)
 
+char *multirom_find_fstab_in_rc(const char *rcfile)
+{
+    FILE *f = fopen(rcfile, "r");
+    if(!f)
+    {
+        ERROR("Failed to open rcfile %s\n", rcfile);
+        return NULL;
+    }
+
+    char *p,*e;
+    char line[1024];
+    while(fgets(line, sizeof(line), f))
+    {
+        for(p = line; isspace(*p); ++p) { }
+
+        for(e = p+strlen(p)-1; isspace(*e); --e)
+            *e = 0;
+
+        if(*p == '#' || *p == 0)
+            continue;
+
+        if(strstr(p, "mount_all") == p)
+        {
+            fclose(f);
+
+            p += sizeof("mount_all")-1;
+            for(; isspace(*p); ++p) { }
+
+            return strdup(p);
+        }
+    }
+    fclose(f);
+    return NULL;
+}
+
 int multirom_prep_android_mounts(struct multirom_rom *rom)
 {
     char in[128];
     char out[128];
     char folder[256];
+    char *fstab_name = NULL;
     sprintf(folder, "%s/boot", rom->base_path);
 
     DIR *d = opendir(folder);
@@ -880,13 +917,18 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
 
         copy_file(in, out);
 
-        // set permissions for .rc files
         if(strstr(dp->d_name, ".rc"))
+        {
+            // set permissions for .rc files
             chmod(out, EXEC_MASK);
+
+            if(!fstab_name && strcmp(dp->d_name, "init."TARGET_DEVICE".rc") == 0)
+                fstab_name = multirom_find_fstab_in_rc(out);
+        }
     }
     closedir(d);
 
-    if(multirom_process_android_fstab() != 0)
+    if(multirom_process_android_fstab(fstab_name) != 0)
         return -1;
 
     mkdir_with_perms("/system", 0755, NULL, NULL);
@@ -930,31 +972,38 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
     return 0;
 }
 
-int multirom_process_android_fstab(void)
+int multirom_process_android_fstab(char *fstab_name)
 {
-    DIR *d = opendir("/");
-    if(!d)
+    if(fstab_name != NULL)
+        INFO("Using fstab %s from rc files\n", fstab_name);
+    else
     {
-        ERROR("Failed to open root folder!\n");
-        return -1;
-    }
-
-    char *fstab_name = NULL;
-    struct dirent *dp = NULL;
-    while((dp = readdir(d)))
-    {
-        if(strstr(dp->d_name, "fstab.") == dp->d_name && strcmp(dp->d_name, "fstab.goldfish") != 0)
+        DIR *d = opendir("/");
+        if(!d)
         {
-            fstab_name = strdup(dp->d_name);
-            break;
+            ERROR("Failed to open root folder!\n");
+            return -1;
         }
-    }
-    closedir(d);
 
-    if(!fstab_name)
-    {
-        ERROR("Failed to find fstab file in root!\n");
-        return -1;
+        struct dirent *dp = NULL;
+        while((dp = readdir(d)))
+        {
+            if(strstr(dp->d_name, "fstab.") == dp->d_name && strcmp(dp->d_name, "fstab.goldfish") != 0)
+            {
+                fstab_name = realloc(fstab_name, strlen(dp->d_name)+1);
+                strcpy(fstab_name, dp->d_name);
+                // try to find specifically fstab.device
+                if(strcmp(fstab_name, "fstab."TARGET_DEVICE) == 0)
+                    break;
+            }
+        }
+        closedir(d);
+
+        if(!fstab_name)
+        {
+            ERROR("Failed to find fstab file in root!\n");
+            return -1;
+        }
     }
 
     ERROR("Modifying fstab: %s\n", fstab_name);
