@@ -135,6 +135,10 @@ static void mount_and_run(struct fstab *fstab)
         return;
     }
 
+    // Remove nosuid flag, because secondary ROMs have
+    // su binaries on /data
+    p->mountflags &= ~(MS_NOSUID);
+
     mkdir(REALDATA, 0755);
     if (mount(p->device, REALDATA, p->type, p->mountflags, p->options) < 0)
     {
