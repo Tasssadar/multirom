@@ -15,13 +15,13 @@
  * along with MultiROM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "multirom_ui.h"
-#include "multirom_ui_themes.h"
-#include "multirom.h"
-#include "framebuffer.h"
-#include "util.h"
-#include "button.h"
-#include "version.h"
+#include "../multirom_ui.h"
+#include "../multirom_ui_themes.h"
+#include "../multirom.h"
+#include "../framebuffer.h"
+#include "../util.h"
+#include "../button.h"
+#include "../version.h"
 
 #define HEADER_WIDTH (300*DPI_MUL)
 #define TAB_BTN_HEIGHT (75*DPI_MUL)

@@ -12,13 +12,14 @@ ifeq ($(MR_FSTAB),)
     $(info MR_FSTAB not defined in device files)
 endif
 
-$(MULTIROM_ZIP_TARGET): multirom trampoline signapk
+$(MULTIROM_ZIP_TARGET): multirom trampoline signapk bbootimg
 	@echo ----- Making MultiROM ZIP installer ------
 	rm -rf $(MULTIROM_INST_DIR)
 	mkdir -p $(MULTIROM_INST_DIR)
 	cp -a $(install_zip_path)/prebuilt-installer/* $(MULTIROM_INST_DIR)/
 	cp -a $(TARGET_ROOT_OUT)/multirom $(MULTIROM_INST_DIR)/multirom/
 	cp -a $(TARGET_ROOT_OUT)/trampoline $(MULTIROM_INST_DIR)/multirom/
+	cp -a $(TARGET_OUT_OPTIONAL_EXECUTABLES)/bbootimg $(MULTIROM_INST_DIR)/scripts/
 	cp $(PWD)/$(MR_FSTAB) $(MULTIROM_INST_DIR)/multirom/mrom.fstab
 	$(install_zip_path)/extract_boot_dev.sh $(PWD)/$(MR_FSTAB) $(MULTIROM_INST_DIR)/scripts/bootdev
 	echo $(MR_RD_ADDR) > $(MULTIROM_INST_DIR)/scripts/rd_addr
@@ -37,11 +38,12 @@ multirom_zip: $(MULTIROM_ZIP_TARGET)
 MULTIROM_UNINST_TARGET := $(PRODUCT_OUT)/multirom_uninstaller
 MULTIROM_UNINST_DIR := $(PRODUCT_OUT)/multirom_uninstaller
 
-$(MULTIROM_UNINST_TARGET): signapk
+$(MULTIROM_UNINST_TARGET): signapk bbootimg
 	@echo ----- Making MultiROM uninstaller ------
 	rm -rf $(MULTIROM_UNINST_DIR)
 	mkdir -p $(MULTIROM_UNINST_DIR)
 	cp -a $(install_zip_path)/prebuilt-uninstaller/* $(MULTIROM_UNINST_DIR)/
+	cp -a $(TARGET_OUT_OPTIONAL_EXECUTABLES)/bbootimg $(MULTIROM_UNINST_DIR)/scripts/
 	$(install_zip_path)/extract_boot_dev.sh $(PWD)/$(MR_FSTAB) $(MULTIROM_UNINST_DIR)/scripts/bootdev
 	echo $(MR_RD_ADDR) > $(MULTIROM_UNINST_DIR)/scripts/rd_addr
 	$(install_zip_path)/make_updater_script.sh $(TARGET_DEVICE) $(MULTIROM_UNINST_DIR)/META-INF/com/google/android "MultiROM uninstaller -"

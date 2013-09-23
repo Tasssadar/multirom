@@ -11,15 +11,9 @@ if [ ! -e "$BOOT_DEV" ]; then
     return 1
 fi
 
-if [ -n "$RD_ADDR" ]; then
-    echo "Using ramdisk addr $RD_ADDR"
-    RD_ADDR="--ramdiskaddr $RD_ADDR"
-fi
-
-
 dd if=$BOOT_DEV of=/tmp/boot.img
-/tmp/unpackbootimg -i /tmp/boot.img -o /tmp/
-if [ ! -f /tmp/boot.img-zImage ] ; then
+/tmp/bbootimg -x /tmp/boot.img /tmp/bootimg.cfg /tmp/zImage /tmp/initrd.img
+if [ ! -f /tmp/zImage ] ; then
     echo "Failed to extract boot.img"
     return 1
 fi
@@ -29,14 +23,14 @@ mkdir /tmp/boot
 
 cd /tmp/boot
 rd_cmpr=-1
-magic=$($BUSYBOX hexdump -n 4 -v -e '/1 "%02X"' "../boot.img-ramdisk.gz")
+magic=$($BUSYBOX hexdump -n 4 -v -e '/1 "%02X"' "../initrd.img")
 case "$magic" in
     1F8B*)           # GZIP
-        $BUSYBOX gzip -d -c "../boot.img-ramdisk.gz" | $BUSYBOX cpio -i
+        $BUSYBOX gzip -d -c "../initrd.img" | $BUSYBOX cpio -i
         rd_cmpr=CMPR_GZIP;
         ;;
     02214C18)        # LZ4
-        $LZ4 -d "../boot.img-ramdisk.gz" stdout | $BUSYBOX cpio -i
+        $LZ4 -d "../initrd.img" stdout | $BUSYBOX cpio -i
         rd_cmpr=CMPR_LZ4;
         ;;
     *)
@@ -69,15 +63,21 @@ cd /tmp/boot
 
 case $rd_cmpr in
     CMPR_GZIP)
-        find . | $BUSYBOX cpio -o -H newc | $BUSYBOX gzip > "../boot.img-ramdisk.gz"
+        find . | $BUSYBOX cpio -o -H newc | $BUSYBOX gzip > "../initrd.img"
         ;;
     CMPR_LZ4)
-        find . | $BUSYBOX cpio -o -H newc | $LZ4 stdin "../boot.img-ramdisk.gz"
+        find . | $BUSYBOX cpio -o -H newc | $LZ4 stdin "../initrd.img"
         ;;
 esac
 
+echo "bootsize = 0x0" >> /tmp/bootimg.cfg
+if [ -n "$RD_ADDR" ]; then
+    echo "Using ramdisk addr $RD_ADDR"
+    echo "ramdiskaddr = $RD_ADDR" >> /tmp/bootimg.cfg
+fi
+
 cd /tmp
-/tmp/mkbootimg --kernel boot.img-zImage --ramdisk boot.img-ramdisk.gz --cmdline "$(cat boot.img-cmdline)" --base $(cat boot.img-base) --output /tmp/newboot.img $RD_ADDR
+/tmp/bbootimg --create newboot.img -f bootimg.cfg -k zImage -r initrd.img
 
 if [ ! -e "/tmp/newboot.img" ] ; then
     echo "Failed to inject boot.img!"

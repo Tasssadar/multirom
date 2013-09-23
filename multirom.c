@@ -29,6 +29,10 @@
 #include <linux/loop.h>
 #include <ctype.h>
 
+// clone libbootimg to /system/extras/ from
+// https://github.com/Tasssadar/libbootimg.git
+#include <libbootimg.h>
+
 #include "multirom.h"
 #include "multirom_ui.h"
 #include "framebuffer.h"
@@ -1419,55 +1423,66 @@ int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd)
     char img_path[256];
     sprintf(img_path, "%s/boot.img", rom->base_path);
 
-    FILE *f = fopen(img_path, "r");
-    if(!f)
+    struct bootimg img;
+    if(libbootimg_init_load(&img, img_path) < 0)
     {
-        ERROR("kexec_fill could not open boot image (%s)!", img_path);
+        ERROR("fill_kexec could not open boot image (%s)!", img_path);
         return -1;
     }
 
-    struct boot_img_hdr header;
-    fread(header.magic, 1, sizeof(struct boot_img_hdr), f);
-
-    unsigned p = header.page_size;
-
-    fseek(f, p, SEEK_SET); // seek to kernel
-    if(multirom_extract_bytes("/zImage", f, header.kernel_size) != 0)
+    if(libbootimg_dump_kernel(&img, "/zImage") < 0)
         goto exit;
-
-    fseek(f, p + ((header.kernel_size + p - 1) / p)*p, SEEK_SET); // seek to ramdisk
-    if(multirom_extract_bytes("/initrd.img", f, header.ramdisk_size) != 0)
+    if(libbootimg_dump_ramdisk(&img, "/initrd.img") < 0)
         goto exit;
 
     // Trampolines in ROM boot images may get out of sync, so we need to check it and
     // update if needed. I can't do that during ZIP installation because of USB drives.
     // That header.name is added by recovery.
     int ver = 0;
-    static const char *ver_tag = "tr_ver";
-    header.name[BOOT_NAME_SIZE-1] = 0;
-    if(strstr((char*)header.name, ver_tag) == (char*)header.name)
-        ver = atoi((char*)header.name+strlen(ver_tag));
+    if(strncmp((char*)img.hdr.name, "tr_ver", 6) == 0)
+        ver = atoi((char*)img.hdr.name + 6);
 
-    if(ver < multirom_get_trampoline_ver() && multirom_update_rd_trampoline("/initrd.img") != 0)
-         goto exit;
+    if(ver < multirom_get_trampoline_ver())
+    {
+        if(multirom_update_rd_trampoline("/initrd.img") != 0)
+            goto exit;
+        else
+        {
+            // Update the boot.img
+            snprintf((char*)img.hdr.name, BOOT_NAME_SIZE, "tr_ver%d", multirom_get_trampoline_ver());
+            img.size = 0; // reset to enable any size
+
+            if(libbootimg_load_ramdisk(&img, "/initrd.img") >= 0)
+            {
+                char tmp[256];
+                strcpy(tmp, img_path);
+                strcat(tmp, ".new");
+                if(libbootimg_write_img(&img, tmp) >= 0)
+                {
+                    INFO("Writing boot.img updated with trampoline v%d\n", multirom_get_trampoline_ver());
+                    rename(tmp, img_path);
+                }
+            }
+        }
+    }
 
     char cmdline[1024];
     if(multirom_get_cmdline(cmdline, sizeof(cmdline)) == -1)
     {
         ERROR("Failed to get cmdline\n");
-        return -1;
+        goto exit;
     }
 
     strcpy(cmd[2], "/zImage");
     strcpy(cmd[4], "--initrd=/initrd.img");
-    sprintf(cmd[5], "--command-line=%s mrom_kexecd=1 %s", cmdline, header.cmdline);
+    sprintf(cmd[5], "--command-line=%s mrom_kexecd=1 %s", cmdline, img.hdr.cmdline);
 
     // mrom_kexecd=1 param might be lost if kernel does not have kexec patches
     ERROR(SECOND_BOOT_KMESG);
 
     res = 0;
 exit:
-    fclose(f);
+    libbootimg_destroy(&img);
     return res;
 }
 

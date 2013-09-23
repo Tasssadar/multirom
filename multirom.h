@@ -21,7 +21,6 @@
 #include <pthread.h>
 #include <stdio.h>
 
-#include "boot_img_hdr.h"
 #include "util.h"
 #include "fstab.h"
 
