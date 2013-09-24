@@ -38,7 +38,7 @@ LOCAL_STATIC_LIBRARIES := libfs_mgr libcutils libc libm
 # clone libbootimg to /system/extras/ from
 # https://github.com/Tasssadar/libbootimg.git
 LOCAL_STATIC_LIBRARIES += libbootimg
-LOCAL_C_INCLUDES += system/extras/libbootimg
+LOCAL_C_INCLUDES += system/extras/libbootimg/include
 
 # Defines from device files
 # Init default define values
