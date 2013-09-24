@@ -13,6 +13,15 @@ ifeq ($(MR_FSTAB),)
 endif
 
 $(MULTIROM_ZIP_TARGET): multirom trampoline signapk bbootimg
+	@echo
+	@echo
+	@echo "A crowdfunding campaign for MultiROM took place in 2013. These people got perk 'The Tenth':"
+	@echo "    * Bibi"
+	@echo "    * flash5000"
+	@echo "Thank you. See DONORS.md in MultiROM's folder for more informations."
+	@echo
+	@echo
+
 	@echo ----- Making MultiROM ZIP installer ------
 	rm -rf $(MULTIROM_INST_DIR)
 	mkdir -p $(MULTIROM_INST_DIR)
