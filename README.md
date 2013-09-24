@@ -1,13 +1,17 @@
-#MultiROM for Nexus 7
-MultiROM is multi-boot solution for Nexus 7. It can boot android ROM while
+# MultiROM
+MultiROM is a one-of-a-kind multi-boot solution. It can boot android ROM while
 keeping the one in internal memory intact or boot Ubuntu without formating
 the whole device. MultiROM can boot either from internal memory of the device
 or from USB flash drive.
 
-More info in the XDA thread: http://forum.xda-developers.com/showthread.php?t=2011403
+XDA threads:
+* grouper: http://forum.xda-developers.com/showthread.php?t=2011403
+* flo: http://forum.xda-developers.com/showthread.php?t=2457063
 
 ###Build
-Clone repo to some folder inside Android 4.1.x source tree, I use `/system/extras/multirom`. Then just
+Clone repo to folder `system/extras/multirom` inside Android 4.x source tree.
+MultiROM also needs libbootimg (https://github.com/Tasssadar/libbootimg)
+in folder `system/extras/libbootimg`. Use something like this to build:
 
     . build/envsetup.h
     lunch full_grouper-userdebug
