@@ -401,7 +401,7 @@ int multirom_load_status(struct multirom_status *s)
     char name[64];
     char *pch;
 
-    if(multirom_get_cmdline(line, sizeof(line)) != 0)
+    if(multirom_get_bootloader_cmdline(s, line, sizeof(line)) != 0)
     {
         ERROR("Failed to get cmdline!\n");
         return -1;
@@ -1274,28 +1274,54 @@ int multirom_has_kexec(void)
     return has_kexec;
 }
 
-int multirom_get_cmdline(char *str, size_t size)
+int multirom_get_bootloader_cmdline(struct multirom_status *s, char *str, size_t size)
 {
-    FILE *f = fopen("/proc/cmdline", "r");
+    FILE *f;
+    char *c, *e, *l;
+    int res = -1;
+    struct boot_img_hdr hdr;
+    struct fstab_part *boot;
+
+    f = fopen("/proc/cmdline", "r");
     if(!f)
         return -1;
 
-    memset(str, 0, size);
+    str[0] = 0;
 
-    char buff[1024];
-    while(fgets(buff, sizeof(buff), f))
-        strcat(str, buff);
+    if(fgets(str, size, f) == NULL)
+        goto exit;
 
-    fclose(f);
-
-    char *c;
     for(c = str; *c; ++c)
-    {
         if(*c == '\n')
             *c = ' ';
+
+    // Remove the part from boot.img
+    boot = fstab_find_by_path(s->fstab, "/boot");
+    if(boot && libbootimg_load_header(&hdr, boot->device) >= 0)
+    {
+        l = (char*)hdr.cmdline;
+        hdr.cmdline[BOOT_ARGS_SIZE-1] = 0;
+
+#ifdef FLO_CMDLINE_HACK
+        // Flo's bootloader (at least 03.15) removes first 26 characters
+        // from boot.img's cmdline because of reasons. On stock
+        // boot.img, those 26 characters are "console=ttyHSL0,115200,n8 "
+        l += 26;
+#endif
+
+        if(*l != 0 && (c = strstr(str, l)))
+        {
+            e = c + strlen(l);
+            if(*e == ' ')
+                ++e;
+            memmove(c, e, strlen(e)+1); // plus NULL
+        }
     }
 
-    return 0;
+    res = 0;
+exit:
+    fclose(f);
+    return res;
 }
 
 int multirom_find_file(char *res, const char *name_part, const char *path)
@@ -1347,8 +1373,8 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
     // kexec --load-hardboot ./zImage --command-line="$(cat /proc/cmdline)" --mem-min=0xA0000000 --initrd=./rd.img
     // --mem-min should be somewhere in System RAM (see /proc/iomem). Location just above kernel seems to work fine.
     // It must not conflict with vmalloc ram. Vmalloc area seems to be allocated from top of System RAM.
-    //                    0            1                 2            3                       4            5            6
-    char *cmd[] = { kexec_path, "--load-hardboot", malloc(1024), "--mem-min="MR_KEXEC_MEM_MIN, malloc(1024), malloc(1024), NULL };
+    //                    0            1                 2            3                          4            5            6
+    char *cmd[] = { kexec_path, "--load-hardboot", malloc(1024), "--mem-min="MR_KEXEC_MEM_MIN, malloc(1024), malloc(2048), NULL };
 
     int loop_mounted = 0;
     switch(rom->type)
@@ -1356,7 +1382,7 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
         case ROM_ANDROID_INTERNAL:
         case ROM_ANDROID_USB_DIR:
         case ROM_ANDROID_USB_IMG:
-            if(multirom_fill_kexec_android(rom, cmd) != 0)
+            if(multirom_fill_kexec_android(s, rom, cmd) != 0)
                 goto exit;
             break;
         case ROM_LINUX_INTERNAL:
@@ -1417,7 +1443,7 @@ exit:
     return res;
 }
 
-int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd)
+int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *rom, char **cmd)
 {
     int res = -1;
     char img_path[256];
@@ -1467,7 +1493,7 @@ int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd)
     }
 
     char cmdline[1024];
-    if(multirom_get_cmdline(cmdline, sizeof(cmdline)) == -1)
+    if(multirom_get_bootloader_cmdline(s, cmdline, sizeof(cmdline)) == -1)
     {
         ERROR("Failed to get cmdline\n");
         goto exit;
@@ -1475,7 +1501,26 @@ int multirom_fill_kexec_android(struct multirom_rom *rom, char **cmd)
 
     strcpy(cmd[2], "/zImage");
     strcpy(cmd[4], "--initrd=/initrd.img");
-    sprintf(cmd[5], "--command-line=%s mrom_kexecd=1 %s", cmdline, img.hdr.cmdline);
+
+    strcpy(cmd[5], "--command-line=");
+    if(img.hdr.cmdline[0] != 0)
+    {
+        img.hdr.cmdline[BOOT_ARGS_SIZE-1] = 0;
+
+        // see multirom_get_bootloader_cmdline
+#ifdef FLO_CMDLINE_HACK
+        strcat(cmd[5], (char*)img.hdr.cmdline+26);
+#else
+        strcat(cmd[5], (char*)img.hdr.cmdline);
+#endif
+        strcat(cmd[5], " ");
+    }
+    if(cmdline[0] != 0)
+    {
+        strcat(cmd[5], cmdline);
+        strcat(cmd[5], " ");
+    }
+    strcat(cmd[5], "mrom_kexecd=1");
 
     // mrom_kexecd=1 param might be lost if kernel does not have kexec patches
     ERROR(SECOND_BOOT_KMESG);
@@ -1761,7 +1806,7 @@ int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multir
             // base command line from bootloader. You want this as first thing in cmdline.
             case 'b':
             {
-                if(multirom_get_cmdline(itr_o, 1024) == -1)
+                if(multirom_get_bootloader_cmdline(status, itr_o, 1024) == -1)
                 {
                     ERROR("Failed to get cmdline\n");
                     goto fail;

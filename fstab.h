@@ -42,6 +42,5 @@ void fstab_destroy_part(struct fstab_part *p);
 void fstab_dump(struct fstab *f);
 struct fstab_part *fstab_find_by_path(struct fstab *f, const char *path);
 void fstab_parse_options(char *opt, struct fstab_part *p);
-void fstab_get_part_dev(struct fstab_part *part, char *out);
 
 #endif

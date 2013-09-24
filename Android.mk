@@ -51,6 +51,13 @@ ifeq ($(TARGET_DEVICE),grouper)
     LOCAL_CFLAGS += -DMR_MOVE_USB_DIR
 endif
 
+# Flo's bootloader removes first 26 characters from boot.img's cmdline
+# because of reasons. On unmodified boot.img, those 26 characters are
+# "console=ttyHSL0,115200,n8 "
+ifeq ($(TARGET_DEVICE),flo)
+    LOCAL_CFLAGS += -DFLO_CMDLINE_HACK
+endif
+
 ifeq ($(MR_INPUT_TYPE),)
     MR_INPUT_TYPE := type_b
 endif
