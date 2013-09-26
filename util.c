@@ -410,6 +410,9 @@ char *readlink_recursive(const char *link)
     if(lstat(link, &info) < 0)
         return NULL;
 
+    if(!S_ISLNK(info.st_mode))
+        return strdup(link);
+
     char path[256];
     char buff[256];
     char *p = (char*)link;
