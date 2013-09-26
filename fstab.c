@@ -133,7 +133,11 @@ struct fstab *fstab_load(const char *path)
         // Check device
         if(!part->device)
         {
-            ERROR("fstab: device for part %s does not exist!\n", part->path);
+            if (strcmp(part->path, "/data") == 0 || strcmp(part->path, "/system") == 0 ||
+                strcmp(part->path, "/boot") == 0 || strcmp(part->path, "/cache") == 0)
+            {
+                ERROR("fstab: device for part %s does not exist!\n", part->path);
+            }
             fstab_destroy_part(part);
             part = NULL;
             continue;
