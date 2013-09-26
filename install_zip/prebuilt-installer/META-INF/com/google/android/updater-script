@@ -33,5 +33,6 @@ delete("/tmp/extract_multirom.sh");
 delete("/tmp/inject_boot.sh");
 delete("/tmp/bootdev");
 delete("/tmp/rd_addr");
+delete("/tmp/use_mrom_fstab");
 
 ui_print("Installation complete!");
