@@ -217,8 +217,6 @@ void multirom_emergency_reboot(void)
     fb_add_text_long(0, 395, GRAYISH, 1, ++tail);
 
     fb_draw();
-    fb_clear();
-    fb_close();
 
     multirom_copy_log(klog);
     free(klog);
@@ -227,6 +225,9 @@ void multirom_emergency_reboot(void)
     start_input_thread();
     while(wait_for_key() != KEY_POWER);
     stop_input_thread();
+
+    fb_clear();
+    fb_close();
 }
 
 static int find_idx(int c)
