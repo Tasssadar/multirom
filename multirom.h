@@ -156,4 +156,10 @@ int multirom_run_scripts(const char *type, struct multirom_rom *rom);
 int multirom_update_rd_trampoline(const char *path);
 char *multirom_find_fstab_in_rc(const char *rcfile);
 
+#ifdef MR_DEVICE_HOOKS
+#if MR_DEVICE_HOOKS >= 1
+int mrom_hook_after_android_mounts(const char *busybox_path, const char *base_path, int type);
+#endif
+#endif
+
 #endif

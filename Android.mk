@@ -117,6 +117,15 @@ ifeq ($(MR_KEXEC_MEM_MIN),)
 endif
 LOCAL_CFLAGS += -DMR_KEXEC_MEM_MIN=\"$(MR_KEXEC_MEM_MIN)\"
 
+ifneq ($(MR_DEVICE_HOOKS),)
+ifeq ($(MR_DEVICE_HOOKS_VER),)
+    $(info MR_DEVICE_HOOKS is set but MS_DEVICE_HOOKS_VER is not specified!)
+else
+    LOCAL_CFLAGS += -DMR_DEVICE_HOOKS=$(MR_DEVICE_HOOKS_VER)
+    LOCAL_SRC_FILES += ../../../$(MR_DEVICE_HOOKS)
+endif
+endif
+
 include $(BUILD_EXECUTABLE)
 
 # Trampoline

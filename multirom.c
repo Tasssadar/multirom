@@ -973,6 +973,16 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
                 return -1;
         }
     }
+
+#if MR_DEVICE_HOOKS >= 1
+    int res = mrom_hook_after_android_mounts(busybox_path, rom->base_path, rom->type);
+    if(res < 0)
+    {
+        ERROR("mrom_hook_after_android_mounts returned %d!\n", res);
+        return -1;
+    }
+#endif
+
     return 0;
 }
 
