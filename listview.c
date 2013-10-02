@@ -23,12 +23,45 @@
 #include "log.h"
 #include "checkbox.h"
 #include "multirom_ui.h"
+#include "workers.h"
 
 #define MARK_W (10*DPI_MUL)
 #define MARK_H (50*DPI_MUL)
 #define PADDING (20*DPI_MUL)
 #define LINE_W (2*DPI_MUL)
 #define SCROLL_DIST (20*DPI_MUL)
+#define OVERSCROLL_H (130*DPI_MUL)
+#define OVERSCROLL_MARK_H (4*DPI_MUL)
+#define OVERSCROLL_RETURN_SPD (15*DPI_MUL)
+
+static void listview_bounceback(uint32_t diff, void *data)
+{
+    listview *v = (listview*)data;
+    const int max = v->fullH - v->h;
+
+    int step;
+    if(v->pos < 0)
+    {
+        step = imin(-v->pos, OVERSCROLL_RETURN_SPD);
+        listview_update_overscroll_mark(v, 0, -(v->pos+step));
+    }
+    else if(v->pos > max)
+    {
+        step = -imin(v->pos-max, OVERSCROLL_RETURN_SPD);
+        listview_update_overscroll_mark(v, 1, (v->pos - max + step));
+    }
+    else
+    {
+        if(v->overscroll_marks[0]->w != 0)
+            v->overscroll_marks[0]->w = 0;
+        if(v->overscroll_marks[1]->w != 0)
+            v->overscroll_marks[1]->w = 0;
+        return;
+    }
+
+    if(v->touch.id == -1)
+        listview_scroll_by(v, step);
+}
 
 void listview_init_ui(listview *view)
 {
@@ -45,12 +78,16 @@ void listview_init_ui(listview *view)
 
 void listview_destroy(listview *view)
 {
+    workers_remove(listview_bounceback, view);
+
     rm_touch_handler(&listview_touch_handler, view);
 
     listview_clear(view);
     list_clear(&view->ui_items, &fb_remove_item);
 
     fb_rm_rect(view->scroll_mark);
+    fb_rm_rect(view->overscroll_marks[0]);
+    fb_rm_rect(view->overscroll_marks[1]);
 
     free(view);
 }
@@ -116,11 +153,23 @@ void listview_enable_scroll(listview *view, int enable)
     {
         int x = view->x + view->w - PADDING/2 - MARK_W/2;
         view->scroll_mark = fb_add_rect(x, view->y, MARK_W, MARK_H, GRAYISH);
+
+        view->overscroll_marks[0] = fb_add_rect(view->x, view->y, 0, OVERSCROLL_MARK_H, CLR_SECONDARY);
+        view->overscroll_marks[1] = fb_add_rect(view->x, view->y+view->h-OVERSCROLL_MARK_H,
+                                                0, OVERSCROLL_MARK_H, CLR_SECONDARY);
+        workers_add(listview_bounceback, view);
     }
     else
     {
+        workers_remove(listview_bounceback, view);
+
         fb_rm_rect(view->scroll_mark);
+        fb_rm_rect(view->overscroll_marks[0]);
+        fb_rm_rect(view->overscroll_marks[1]);
+
         view->scroll_mark = NULL;
+        view->overscroll_marks[0] = NULL;
+        view->overscroll_marks[1] = NULL;
     }
 }
 
@@ -129,9 +178,22 @@ void listview_update_scroll_mark(listview *view)
     if(!view->scroll_mark)
         return;
 
-    int pct = (view->pos*100)/(view->fullH-view->h);
+    int pos = view->pos;
+    if(pos < 0)
+        pos = 0;
+    else if(pos > view->fullH - view->h)
+        pos = view->fullH - view->h;
+
+    int pct = (pos*100)/(view->fullH-view->h);
     int y = view->y + ((view->h - MARK_H)*pct)/100;
     view->scroll_mark->head.y = y;
+}
+
+void listview_update_overscroll_mark(listview *v, int side, float overscroll)
+{
+    int w = v->w * (overscroll / OVERSCROLL_H);
+    v->overscroll_marks[side]->w = w;
+    v->overscroll_marks[side]->head.x = v->x + (v->w >> 1) - (w >> 1);
 }
 
 int listview_touch_handler(touch_event *ev, void *data)
@@ -219,10 +281,10 @@ void listview_scroll_by(listview *view, int y)
 
     view->pos += y;
 
-    if(view->pos < 0)
-        view->pos = 0;
-    else if(view->pos > (view->fullH - view->h))
-        view->pos = (view->fullH - view->h);
+    if(view->pos < -OVERSCROLL_H)
+        view->pos = -OVERSCROLL_H;
+    else if(view->pos > (view->fullH - view->h) + OVERSCROLL_H)
+        view->pos = (view->fullH - view->h) + OVERSCROLL_H;
 
     listview_update_ui(view);
 }

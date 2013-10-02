@@ -64,6 +64,7 @@ typedef struct
 
     fb_item_header **ui_items;
     fb_rect *scroll_mark;
+    fb_rect *overscroll_marks[2];
 
     listview_touch_data touch;
 } listview;
@@ -77,6 +78,7 @@ void listview_clear(listview *view);
 void listview_update_ui(listview *view);
 void listview_enable_scroll(listview *view, int enable);
 void listview_update_scroll_mark(listview *view);
+void listview_update_overscroll_mark(listview *v, int side, float overscroll);
 void listview_scroll_by(listview *view, int y);
 void listview_scroll_to(listview *view, int pct);
 listview_item *listview_item_at(listview *view, int y_pos);
