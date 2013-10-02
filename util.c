@@ -445,6 +445,16 @@ char *readlink_recursive(const char *link)
     return strdup(buff);
 }
 
+int imin(int a, int b)
+{
+    return (a < b) ? a : b;
+}
+
+int imax(int a, int b)
+{
+    return (a > b) ? a : b;
+}
+
 int list_item_count(listItself list)
 {
     void **l = (void**)list;

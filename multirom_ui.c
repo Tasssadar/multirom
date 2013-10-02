@@ -35,6 +35,7 @@
 #include "pong.h"
 #include "progressdots.h"
 #include "multirom_ui_themes.h"
+#include "workers.h"
 
 
 static struct multirom_status *mrom_status = NULL;
@@ -113,6 +114,8 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
         stop_input_thread();
         return UI_EXIT_REBOOT;
     }
+
+    workers_start();
 
     multirom_ui_init_header();
     multirom_ui_switch(TAB_INTERNAL);
@@ -220,6 +223,8 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     multirom_ui_destroy_tab(themes_info->data->selected_tab);
     multirom_ui_free_themes(themes_info);
     themes_info = NULL;
+
+    workers_stop();
 
     fb_clear();
     fb_close();

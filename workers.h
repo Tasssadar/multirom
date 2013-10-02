@@ -15,26 +15,16 @@
  * along with MultiROM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef PROGRESSDOTS_H
-#define PROGRESSDOTS_H
+#ifndef WORKERS_H
+#define WORKERS_H
 
-#include <pthread.h>
-#include "framebuffer.h"
+#include <stdint.h>
 
-#define PROGDOTS_W (300*DPI_MUL)
-#define PROGDOTS_H (10*DPI_MUL)
-#define PROGDOTS_CNT 8
+typedef void (*worker_call)(uint32_t, void *); // ms_diff, data
 
-typedef struct
-{
-    int x, y;
-    fb_rect *dots[PROGDOTS_CNT];
-    int active_dot;
-    uint32_t switch_timer;
-} progdots;
-
-progdots *progdots_create(int x, int y);
-void progdots_destroy(progdots *p);
-void progdots_set_active(progdots *p, int dot);
+void workers_start(void);
+void workers_stop(void);
+void workers_add(worker_call call, void *data);
+void workers_remove(worker_call call, void *data);
 
 #endif

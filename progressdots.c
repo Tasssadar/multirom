@@ -18,42 +18,35 @@
 #include <unistd.h>
 #include "progressdots.h"
 #include "multirom_ui.h"
+#include "workers.h"
 
 // ms
 #define SWITCH_SPEED 800
-#define THREAD_SLEEP 50
 
-static void *progdots_thread(void *data)
+static void progdots_animate(uint32_t diff, void *data)
 {
     progdots *p = (progdots*)data;
-    int timer = SWITCH_SPEED;
 
-    while(p->run)
+    if(p->switch_timer <= diff)
     {
-        if(timer <= THREAD_SLEEP)
-        {
-            if(++p->active_dot >= PROGDOTS_CNT)
-                p->active_dot = 0;
+        if(++p->active_dot >= PROGDOTS_CNT)
+            p->active_dot = 0;
 
-            progdots_set_active(p, p->active_dot); 
-            fb_request_draw();
+        progdots_set_active(p, p->active_dot);
+        fb_request_draw();
 
-            timer = SWITCH_SPEED;
-        }
-        else timer -= THREAD_SLEEP;
-
-        usleep(THREAD_SLEEP*1000);
+        p->switch_timer = SWITCH_SPEED;
     }
-    return NULL;
+    else
+        p->switch_timer -= diff;
 }
 
 progdots *progdots_create(int x, int y)
 {
-    progdots *p = malloc(sizeof(progdots));
-    memset(p, 0, sizeof(progdots));
+    progdots *p = mzalloc(sizeof(progdots));
     p->x = x;
     p->y = y;
-    p->run = 1;
+    p->switch_timer = SWITCH_SPEED;
 
     int i;
     for(i = 0; i < PROGDOTS_CNT; ++i)
@@ -61,15 +54,16 @@ progdots *progdots_create(int x, int y)
         p->dots[i] = fb_add_rect(x, y, PROGDOTS_H, PROGDOTS_H, (i == 0 ? CLR_PRIMARY : WHITE));
         x += PROGDOTS_H + (PROGDOTS_W - (PROGDOTS_CNT*PROGDOTS_H))/(PROGDOTS_CNT-1);
     }
-    pthread_create(&p->thread, NULL, progdots_thread, p);
+
+    workers_add(progdots_animate, p);
+
     fb_draw();
     return p;
 }
 
 void progdots_destroy(progdots *p)
 {
-    p->run = 0;
-    pthread_join(p->thread, NULL);
+    workers_remove(progdots_animate, p);
 
     int i;
     for(i = 0; i < PROGDOTS_CNT; ++i)

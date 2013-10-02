@@ -67,11 +67,11 @@ static void *fb_draw_thread_work(void*);
 
 struct FB *fb = &framebuffers[0];
 
-void fb_destroy_item(void *item); // private!
-inline void fb_cpy_fb_with_rotation(px_type *dst, px_type *src);
-inline void fb_rotate_90deg(px_type *dst, px_type *src);
-inline void fb_rotate_270deg(px_type *dst, px_type *src);
-inline void fb_rotate_180deg(px_type *dst, px_type *src);
+static void fb_destroy_item(void *item); // private!
+static inline void fb_cpy_fb_with_rotation(px_type *dst, px_type *src);
+static inline void fb_rotate_90deg(px_type *dst, px_type *src);
+static inline void fb_rotate_270deg(px_type *dst, px_type *src);
+static inline void fb_rotate_180deg(px_type *dst, px_type *src);
 
 int vt_set_mode(int graphics)
 {

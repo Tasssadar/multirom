@@ -43,6 +43,8 @@ char *readlink_recursive(const char *link);
 
 char *parse_string(char *src);
 uint32_t timespec_diff(struct timespec *f, struct timespec *s);
+inline int imin(int a, int b);
+inline int imax(int a, int b);
 
 // auto-conversion of pointer type occurs only for
 // void*, not for void** nor void***

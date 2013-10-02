@@ -19,7 +19,8 @@ LOCAL_SRC_FILES:= \
     multirom_ui_themes.c \
     themes/multirom_ui_landscape.c \
     themes/multirom_ui_portrait.c \
-    fstab.c
+    fstab.c \
+    workers.c
 
 ifeq ($(ARCH_ARM_HAVE_NEON),true)
     LOCAL_SRC_FILES += col32cb16blend_neon.S
@@ -33,7 +34,7 @@ LOCAL_FORCE_STATIC_EXECUTABLE := true
 LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT)
 LOCAL_UNSTRIPPED_PATH := $(TARGET_ROOT_OUT_UNSTRIPPED)
 
-LOCAL_STATIC_LIBRARIES := libfs_mgr libcutils libc libm
+LOCAL_STATIC_LIBRARIES := libcutils libc libm
 
 # clone libbootimg to /system/extras/ from
 # https://github.com/Tasssadar/libbootimg.git
