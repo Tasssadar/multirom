@@ -56,7 +56,7 @@ extern struct FB *fb;
 #define GRAY      0xFF7F7F7F
 #define DRED      0xFF0000CC
 
-#if MR_XHDPI
+#if defined(MR_XHDPI)
 enum
 {
     SIZE_SMALL     = 2,
