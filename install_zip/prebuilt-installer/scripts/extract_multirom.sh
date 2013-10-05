@@ -21,12 +21,10 @@ else
 
     touch "$base/.nomedia"
     chown media_rw:media_rw "$base/.nomedia"
-
-    # remove internal ROM in order to regenerate boot.img
-    rm -r "$base/roms/Internal"
 fi
 
 rm "$base/boot.img-ubuntu"*
+rm "$base/infos/"*
 cp -r /tmp/multirom/* "$base/"
 chmod 755 "$base/multirom"
 chmod 755 "$base/busybox"
