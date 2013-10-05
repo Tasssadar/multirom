@@ -21,6 +21,7 @@
 #include "input.h"
 #include "util.h"
 #include "multirom_ui.h"
+#include "log.h"
 
 void button_init_ui(button *b, const char *text, int size)
 {
@@ -55,6 +56,7 @@ void button_init_ui(button *b, const char *text, int size)
 void button_destroy(button *b)
 {
     rm_touch_handler(&button_touch_handler, b);
+    keyaction_remove(&button_keyaction_call, b);
 
     if(b->text)
     {
@@ -180,4 +182,37 @@ void button_set_checked(button *b, int checked)
 
     button_update_colors(b);
     fb_draw();
+}
+
+int button_keyaction_call(void *data, int act)
+{
+    button *b = data;
+    switch(act)
+    {
+        case KEYACT_UP:
+        case KEYACT_DOWN:
+        case KEYACT_CLEAR:
+        {
+            if(act != KEYACT_CLEAR && b->keyact_frame == NULL)
+            {
+                fb_add_rect_notfilled(b->x, b->y, b->w, b->h, KEYACT_FRAME_CLR, KEYACT_FRAME_W, &b->keyact_frame);
+                fb_request_draw();
+                return 0;
+            }
+            else
+            {
+                list_clear(&b->keyact_frame, &fb_remove_item);
+                fb_request_draw();
+                return (act == KEYACT_CLEAR) ? 0 : 1;
+            }
+        }
+        case KEYACT_CONFIRM:
+        {
+            if(b->clicked && !(b->flags & BTN_DISABLED))
+                (*b->clicked)(b->action);
+            return 0;
+        }
+        default:
+            return 0;
+    }
 }

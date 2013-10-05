@@ -122,6 +122,8 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     add_touch_handler(&multirom_ui_touch_handler, NULL);
     start_input_thread();
+    keyaction_enable(1);
+    keyaction_set_destroy_msgbox_handle(multirom_ui_destroy_msgbox);
 
     multirom_set_brightness(s->brightness);
 
@@ -152,6 +154,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
         if(loop_act & LOOP_START_PONG)
         {
             loop_act &= ~(LOOP_START_PONG);
+            keyaction_enable(0);
             input_push_context();
             fb_push_context();
 
@@ -159,6 +162,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
             fb_pop_context();
             input_pop_context();
+            keyaction_enable(1);
         }
 
         if(loop_act & LOOP_CHANGE_CLR)
@@ -184,6 +188,9 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
         usleep(100000);
     }
+
+    keyaction_enable(0);
+    keyaction_clear();
 
     rm_touch_handler(&multirom_ui_touch_handler, NULL);
 
@@ -356,22 +363,28 @@ int multirom_ui_touch_handler(touch_event *ev, void *data)
             touch_count = 0;
         }
 
-        if(active_msgbox)
-        {
-            pthread_mutex_lock(&exit_code_mutex);
-            fb_destroy_msgbox();
-            fb_freeze(0);
-            fb_draw();
-            active_msgbox = NULL;
-            set_touch_handlers_mode(HANDLERS_FIRST);
-            pthread_mutex_unlock(&exit_code_mutex);
-        }
+        multirom_ui_destroy_msgbox();
     }
 
     if((ev->changed & TCHNG_REMOVED) && touch_count > 0)
         --touch_count;
 
     return -1;
+}
+
+int multirom_ui_destroy_msgbox(void)
+{
+    if(!active_msgbox)
+        return 0;
+
+    pthread_mutex_lock(&exit_code_mutex);
+    fb_destroy_msgbox();
+    fb_freeze(0);
+    fb_draw();
+    active_msgbox = NULL;
+    set_touch_handlers_mode(HANDLERS_FIRST);
+    pthread_mutex_unlock(&exit_code_mutex);
+    return 1;
 }
 
 void multirom_ui_auto_boot(void)
@@ -448,6 +461,7 @@ void *multirom_ui_tab_rom_init(int tab_type)
     t->list->item_height = &rom_item_height;
     t->list->item_destroy = &rom_item_destroy;
     t->list->item_selected = &multirom_ui_tab_rom_selected;
+    t->list->item_confirmed = &multirom_ui_tab_rom_confirmed;
 
     t->boot_btn = mzalloc(sizeof(button));
     list_add(t->boot_btn, &t->buttons);
@@ -510,6 +524,11 @@ void multirom_ui_tab_rom_selected(listview_item *prev, listview_item *now)
     cur_theme->center_rom_name(t, rom->name);
 
     fb_draw();
+}
+
+void multirom_ui_tab_rom_confirmed(listview_item *it)
+{
+    multirom_ui_tab_rom_boot_btn(0);
 }
 
 void multirom_ui_tab_rom_boot_btn(int action)

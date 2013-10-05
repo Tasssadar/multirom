@@ -61,10 +61,13 @@ typedef struct
     int (*item_height)(void*); // data
     void (*item_destroy)(listview_item *);
     void (*item_selected)(listview_item *, listview_item *); // prev, now
+    void (*item_confirmed)(listview_item *); // item - confirmed by keyaction
 
     fb_item_header **ui_items;
     fb_rect *scroll_mark;
     fb_rect *overscroll_marks[2];
+    fb_rect **keyact_frame;
+    int keyact_item_selected;
 
     listview_touch_data touch;
 } listview;
@@ -81,8 +84,11 @@ void listview_update_scroll_mark(listview *view);
 void listview_update_overscroll_mark(listview *v, int side, float overscroll);
 void listview_scroll_by(listview *view, int y);
 void listview_scroll_to(listview *view, int pct);
+void listview_ensure_visible(listview *view, listview_item *it);
 listview_item *listview_item_at(listview *view, int y_pos);
 inline void listview_select_item(listview *view, listview_item *it);
+void listview_update_keyact_frame(listview *view);
+int listview_keyaction_call(void *data, int act);
 
 void *rom_item_create(const char *text, const char *partition);
 void rom_item_draw(int x, int y, int w, listview_item *it);

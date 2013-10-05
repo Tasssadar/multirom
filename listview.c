@@ -24,6 +24,7 @@
 #include "checkbox.h"
 #include "multirom_ui.h"
 #include "workers.h"
+#include "input.h"
 
 #define MARK_W (10*DPI_MUL)
 #define MARK_H (50*DPI_MUL)
@@ -70,6 +71,8 @@ void listview_init_ui(listview *view)
     fb_rect *scroll_line = fb_add_rect(x, view->y, LINE_W, view->h, GRAYISH);
     list_add(scroll_line, &view->ui_items);
 
+    view->keyact_item_selected = -1;
+
     view->touch.id = -1;
     view->touch.last_y = -1;
 
@@ -99,6 +102,9 @@ listview_item *listview_add_item(listview *view, int id, void *data)
     it->data = data;
     it->flags = 0;
 
+    if(!view->items)
+        keyaction_add(view->x, view->y, listview_keyaction_call, view);
+
     list_add(it, &view->items);
     return it;
 }
@@ -107,6 +113,8 @@ void listview_clear(listview *view)
 {
     list_clear(&view->items, view->item_destroy);
     view->selected = NULL;
+
+    keyaction_remove(listview_keyaction_call, view);
 }
 
 void listview_update_ui(listview *view)
@@ -146,7 +154,7 @@ void listview_update_ui(listview *view)
 
 void listview_enable_scroll(listview *view, int enable)
 {
-    if(!((view->scroll_mark != NULL) ^ (enable)))
+    if((view->scroll_mark != NULL) == (enable))
         return;
 
     if(enable)
@@ -217,6 +225,7 @@ int listview_touch_handler(touch_event *ev, void *data)
             view->touch.hover->flags |= IT_HOVER;
             listview_update_ui(view);
         }
+        listview_keyaction_call(view, KEYACT_CLEAR);
         listview_update_ui(view);
         return 0;
     }
@@ -304,6 +313,28 @@ void listview_scroll_to(listview *view, int pct)
     listview_update_ui(view);
 }
 
+void listview_ensure_visible(listview *view, listview_item *it)
+{
+    if(!view->scroll_mark)
+        return;
+
+    int i;
+    int y = 0;
+    for(i = 0; view->items[i]; ++i)
+    {
+        if(it == view->items[i])
+            break;
+        y += view->item_height(view->items[i]->data);
+    }
+
+    int last_h = view->items[i] ? view->item_height(view->items[i]->data) : 0;
+
+    if((y + last_h) - view->pos > view->h)
+        view->pos = (y + last_h) - view->h;
+    else if(y - view->pos < 0)
+        view->pos = y;
+}
+
 listview_item *listview_item_at(listview *view, int y_pos)
 {
     int y = -view->pos + view->y;
@@ -321,6 +352,88 @@ listview_item *listview_item_at(listview *view, int y_pos)
         y += it_h;
     }
     return NULL;
+}
+
+int listview_keyaction_call(void *data, int act)
+{
+    listview *v = data;
+    switch(act)
+    {
+        case KEYACT_DOWN:
+        {
+            ++v->keyact_item_selected;
+            if(v->keyact_item_selected >= list_item_count(v->items))
+                v->keyact_item_selected = -1;
+            listview_update_keyact_frame(v);
+            return (v->keyact_item_selected == -1) ? 1 :0;
+        }
+        case KEYACT_UP:
+        {
+            if(v->keyact_item_selected == -1)
+                v->keyact_item_selected = list_item_count(v->items)-1;
+            else
+                --v->keyact_item_selected;
+            listview_update_keyact_frame(v);
+            return (v->keyact_item_selected == -1) ? 1 :0;
+        }
+        case KEYACT_CLEAR:
+        {
+            v->keyact_item_selected = -1;
+            listview_update_keyact_frame(v);
+            fb_request_draw();
+            return 0;
+        }
+        case KEYACT_CONFIRM:
+        {
+            if(v->item_confirmed)
+                v->item_confirmed(v->items[v->keyact_item_selected]);
+            return 0;
+        }
+        default:
+            return 0;
+    }
+}
+
+void listview_update_keyact_frame(listview *view)
+{
+    if(view->keyact_item_selected == -1 && view->keyact_frame)
+    {
+        list_clear(&view->keyact_frame, &fb_remove_item);
+        return;
+    }
+    else if(view->keyact_item_selected != -1 && !view->keyact_frame)
+    {
+        fb_add_rect_notfilled(view->x, 0, view->w-PADDING, 0,
+                              KEYACT_FRAME_CLR, KEYACT_FRAME_W,
+                              &view->keyact_frame);
+    }
+    else if(view->keyact_item_selected == -1 && !view->keyact_frame)
+        return;
+
+    listview_item *it = view->items[view->keyact_item_selected];
+    listview_ensure_visible(view, it);
+
+    int i;
+    int y = view->y;
+    for(i = 0; i < view->keyact_item_selected && view->items[i]; ++i)
+        y += view->item_height(view->items[i]->data);
+
+    int h = view->item_height(view->items[i]->data);
+    y -= view->pos;
+
+    // top
+    view->keyact_frame[0]->head.y = y;
+    // right
+    view->keyact_frame[1]->head.y = y;
+    view->keyact_frame[1]->h = h;
+    // bottom
+    view->keyact_frame[2]->head.y = y+h-KEYACT_FRAME_W;
+    // left
+    view->keyact_frame[3]->head.y = y;
+    view->keyact_frame[3]->h = h;
+
+    listview_select_item(view, it);
+    listview_update_ui(view);
 }
 
 #define ROM_ITEM_H (100*DPI_MUL)

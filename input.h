@@ -64,4 +64,25 @@ void set_touch_handlers_mode(int mode);
 void input_push_context(void);
 void input_pop_context(void);
 
+
+enum
+{
+    KEYACT_NONE = 0,
+    KEYACT_UP,
+    KEYACT_DOWN,
+    KEYACT_CONFIRM,
+    KEYACT_CLEAR,
+};
+
+#define KEYACT_FRAME_W (8*DPI_MUL)
+#define KEYACT_FRAME_CLR (0xFFFF0000)
+
+typedef int (*keyaction_call)(void *, int); // data, action
+void keyaction_add(int x, int y, keyaction_call call, void *data);
+void keyaction_remove(keyaction_call call, void *data);
+void keyaction_clear(void);
+int keyaction_handle_keyevent(int key, int press);
+void keyaction_enable(int enable);
+void keyaction_set_destroy_msgbox_handle(int (*handler)(void));
+
 #endif

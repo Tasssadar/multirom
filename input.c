@@ -26,12 +26,14 @@
 #include <linux/kd.h>
 #include <pthread.h>
 #include <dirent.h>
+#include <assert.h>
 
 #include "input.h"
 #include "input_priv.h"
 #include "framebuffer.h"
 #include "util.h"
 #include "log.h"
+#include "workers.h"
 
 // for touch calculation
 int mt_screen_res[2] = { 0 };
@@ -162,7 +164,13 @@ static int ev_get(struct input_event *ev, unsigned dont_wait)
 
 static void handle_key_event(struct input_event *ev)
 {
-    if(ev->value != 0 || !IS_KEY_HANDLED(ev->code))
+    if(!IS_KEY_HANDLED(ev->code))
+        return;
+
+    if(keyaction_handle_keyevent(ev->code, (ev->value != 0)) != -1)
+        return;
+
+    if(ev->value != 0)
         return;
 
     pthread_mutex_lock(&key_mutex);
@@ -414,4 +422,242 @@ void input_pop_context(void)
     pthread_mutex_unlock(&touch_mutex);
 
     list_rm_noreorder(ctx, &inactive_ctx, &free);
+}
+
+struct keyaction
+{
+    int x, y;
+    void *data;
+    keyaction_call call;
+};
+
+struct keyaction_ctx
+{
+    int actions_len;
+    struct keyaction **actions;
+    struct keyaction *cur_act;
+    pthread_mutex_t lock;
+    uint32_t repeat_timer;
+    int repeat;
+    int enable;
+    int (*destroy_msgbox)(void);
+};
+
+static struct keyaction_ctx keyaction_ctx = {
+    .actions_len = 0,
+    .actions = NULL,
+    .cur_act = NULL,
+    .lock = PTHREAD_MUTEX_INITIALIZER,
+    .repeat = KEYACT_NONE,
+    .enable = 0,
+    .destroy_msgbox = NULL,
+};
+
+#define REPEAT_TIME_FIRST 500
+#define REPEAT_TIME 100
+
+static int compare_keyactions(const void* k1, const void* k2)
+{
+    const struct keyaction *a1 = *((const struct keyaction **)k1);
+    const struct keyaction *a2 = *((const struct keyaction **)k2);
+
+    if(a1->y < a2->y)
+        return -1;
+    else if(a1->y > a2->y)
+        return 1;
+    else
+    {
+        if(a1->x < a2->x)
+            return -1;
+        else if(a1->x > a2->x)
+            return 1;
+    }
+    return 0;
+}
+
+void keyaction_add(int x, int y, keyaction_call call, void *data)
+{
+    struct keyaction *k = mzalloc(sizeof(struct keyaction));
+    k->x = x;
+    k->y = y;
+    k->data = data;
+    k->call = call;
+
+    pthread_mutex_lock(&keyaction_ctx.lock);
+
+    list_add(k, &keyaction_ctx.actions);
+    ++keyaction_ctx.actions_len;
+
+    qsort(keyaction_ctx.actions, keyaction_ctx.actions_len,
+          sizeof(struct keyaction *), &compare_keyactions);
+
+    pthread_mutex_unlock(&keyaction_ctx.lock);
+}
+
+void keyaction_remove(keyaction_call call, void *data)
+{
+    pthread_mutex_lock(&keyaction_ctx.lock);
+    if(keyaction_ctx.actions)
+    {
+        int i;
+        struct keyaction *a;
+        for(i = 0; keyaction_ctx.actions[i]; ++i)
+        {
+            a = keyaction_ctx.actions[i];
+            if(a->call == call && a->data == data)
+            {
+                if(a == keyaction_ctx.cur_act)
+                {
+                    a->call(a->data, KEYACT_CLEAR);
+                    keyaction_ctx.cur_act = NULL;
+                }
+
+                list_rm_at(i, &keyaction_ctx.actions, &free);
+                --keyaction_ctx.actions_len;
+                break;
+            }
+        }
+    }
+    pthread_mutex_unlock(&keyaction_ctx.lock);
+}
+
+void keyaction_clear(void)
+{
+    pthread_mutex_lock(&keyaction_ctx.lock);
+
+    list_clear(&keyaction_ctx.actions, &free);
+    keyaction_ctx.actions_len = 0;
+    keyaction_ctx.repeat = KEYACT_NONE;
+    keyaction_ctx.cur_act = NULL;
+
+    pthread_mutex_unlock(&keyaction_ctx.lock);
+}
+
+// expects locked mutex
+static void keyaction_call_cur_act(struct keyaction_ctx *c, int action)
+{
+    if(!c->cur_act)
+        return;
+
+    keyaction_call call = c->cur_act->call;
+    void *data = c->cur_act->data;
+    int res;
+
+    pthread_mutex_unlock(&c->lock);
+    res = (*call)(data, action);
+    pthread_mutex_lock(&c->lock);
+
+    if (res != 1 || (action != KEYACT_UP && action != KEYACT_DOWN))
+        return;
+
+    struct keyaction **a = c->actions;
+    for(; *a; ++a)
+    {
+        if(*a == c->cur_act)
+        {
+            if(action == KEYACT_UP)
+                c->cur_act = (a != c->actions) ? *(--a) : NULL;
+            else
+                c->cur_act = *(++a);
+
+            if(c->cur_act)
+                c->cur_act->call(c->cur_act->data, action);
+            return;
+        }
+    }
+    // should never be reached
+    ERROR("keyaction_call_cur_act: current action not found in actions!\n");
+}
+
+static void keyaction_repeat_worker(uint32_t diff, void *data)
+{
+    struct keyaction_ctx *c = data;
+
+    pthread_mutex_lock(&c->lock);
+    if(c->repeat != KEYACT_NONE)
+    {
+        if(c->repeat_timer <= diff)
+        {
+            keyaction_call_cur_act(c, c->repeat);
+            c->repeat_timer = REPEAT_TIME;
+        }
+        else
+            c->repeat_timer -= diff;
+    }
+    pthread_mutex_unlock(&c->lock);
+}
+
+int keyaction_handle_keyevent(int key, int press)
+{
+    int res = -1;
+    int act = KEYACT_NONE;
+    switch(key)
+    {
+        case KEY_POWER:
+            act = KEYACT_CONFIRM;
+            break;
+        case KEY_VOLUMEDOWN:
+            act = KEYACT_DOWN;
+            break;
+        case KEY_VOLUMEUP:
+            act = KEYACT_UP;
+            break;
+    }
+
+    pthread_mutex_lock(&keyaction_ctx.lock);
+    if(keyaction_ctx.enable == 0 || !keyaction_ctx.actions)
+        goto exit;
+
+    res = 0;
+
+    if(press == 1 && keyaction_ctx.destroy_msgbox() == 1)
+        goto exit;
+
+    if(keyaction_ctx.repeat == act && press == 0)
+        keyaction_ctx.repeat = KEYACT_NONE;
+    else if(keyaction_ctx.repeat == KEYACT_NONE && press == 1)
+    {
+        if(keyaction_ctx.cur_act == NULL)
+        {
+            if(act == KEYACT_DOWN)
+                keyaction_ctx.cur_act = *keyaction_ctx.actions;
+            else if(act == KEYACT_UP)
+                keyaction_ctx.cur_act = *(keyaction_ctx.actions + keyaction_ctx.actions_len - 1);
+            else
+                goto exit;
+        }
+
+        keyaction_call_cur_act(&keyaction_ctx, act);
+
+        if(act != KEYACT_CONFIRM)
+        {
+            keyaction_ctx.repeat = act;
+            keyaction_ctx.repeat_timer = REPEAT_TIME_FIRST;
+        }
+    }
+
+exit:
+    pthread_mutex_unlock(&keyaction_ctx.lock);
+    return res;
+}
+
+void keyaction_enable(int enable)
+{
+    pthread_mutex_lock(&keyaction_ctx.lock);
+    if(enable != keyaction_ctx.enable)
+    {
+        keyaction_ctx.enable = enable;
+        if(enable)
+            workers_add(&keyaction_repeat_worker, &keyaction_ctx);
+        else
+            workers_remove(&keyaction_repeat_worker, &keyaction_ctx);
+    }
+    pthread_mutex_unlock(&keyaction_ctx.lock);
+}
+
+void keyaction_set_destroy_msgbox_handle(int (*handler)(void))
+{
+    pthread_mutex_lock(&keyaction_ctx.lock);
+    keyaction_ctx.destroy_msgbox = handler;
+    pthread_mutex_unlock(&keyaction_ctx.lock);
 }

@@ -571,6 +571,26 @@ fb_rect *fb_add_rect(int x, int y, int w, int h, uint32_t color)
     return r;
 }
 
+void fb_add_rect_notfilled(int x, int y, int w, int h, uint32_t color, int thickness, fb_rect ***list)
+{
+    fb_rect *r;
+    // top
+    r = fb_add_rect(x, y, w, thickness, color);
+    list_add(r, list);
+
+    // right
+    r = fb_add_rect(x + w - thickness, y, thickness, h, color);
+    list_add(r, list);
+
+    // bottom
+    r = fb_add_rect(x, y + h - thickness, w, thickness, color);
+    list_add(r, list);
+
+    // left
+    r = fb_add_rect(x, y, thickness, h, color);
+    list_add(r, list);
+}
+
 void fb_rm_text(fb_text *t)
 {
     if(!t)

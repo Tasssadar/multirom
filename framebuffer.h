@@ -140,6 +140,7 @@ int fb_generate_item_id();
 fb_text *fb_add_text(int x, int y, uint32_t color, int size, const char *fmt, ...);
 fb_text *fb_add_text_long(int x, int y, uint32_t color, int size, char *text);
 fb_rect *fb_add_rect(int x, int y, int w, int h, uint32_t color);
+void fb_add_rect_notfilled(int x, int y, int w, int h, uint32_t color, int thickness, fb_rect ***list);
 fb_msgbox *fb_create_msgbox(int w, int h, int bgcolor);
 fb_text *fb_msgbox_add_text(int x, int y, int size, char *txt, ...);
 void fb_msgbox_rm_text(fb_text *text);

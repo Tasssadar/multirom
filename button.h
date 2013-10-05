@@ -44,6 +44,7 @@ typedef struct
     int w, h;
     fb_text *text;
     fb_rect *rect;
+    fb_rect **keyact_frame;
 
     uint32_t c[CLR_MAX][2];
  
@@ -63,5 +64,6 @@ void button_set_checked(button *b, int checked);
 void button_set_color(button *b, int idx, int text, uint32_t color);
 void button_update_colors(button *b);
 int button_touch_handler(touch_event *ev, void *data);
+int button_keyaction_call(void *data, int act);
 
 #endif

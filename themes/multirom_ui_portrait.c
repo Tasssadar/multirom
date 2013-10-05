@@ -22,6 +22,7 @@
 #include "../util.h"
 #include "../button.h"
 #include "../version.h"
+#include "../input.h"
 
 #define HEADER_HEIGHT (75*DPI_MUL)
 #define TAB_BTN_WIDTH (165*DPI_MUL)
@@ -87,6 +88,8 @@ static void init_header(multirom_theme_data *t)
         tab_btns[i]->clicked = &multirom_ui_switch;
         button_init_ui(tab_btns[i], NULL, 0);
 
+        keyaction_add(tab_btns[i]->x, tab_btns[i]->y, button_keyaction_call, tab_btns[i]);
+
         x += TAB_BTN_WIDTH;
     }
 
@@ -130,6 +133,8 @@ static void tab_rom_init(multirom_theme_data *t, tab_data_roms *d, int tab_type)
     d->boot_btn->y = base_y + (ROMS_FOOTER_H-BOOTBTN_H)/2;
     d->boot_btn->w = BOOTBTN_W;
     d->boot_btn->h = BOOTBTN_H;
+
+    keyaction_add(d->boot_btn->x, d->boot_btn->y, button_keyaction_call, d->boot_btn);
 }
 
 static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_scheme)
@@ -217,6 +222,9 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
 
         x += CLRBTN_TOTAL;
     }
+
+    for(i = 0; d->buttons[i]; ++i)
+        keyaction_add(d->buttons[i]->x, d->buttons[i]->y, button_keyaction_call, d->buttons[i]);
 }
 
 static int get_tab_width(multirom_theme_data *t)
