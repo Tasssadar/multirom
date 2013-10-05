@@ -581,7 +581,7 @@ int list_rm_at(int idx, ptrToList list_p, callback destroy_callback_p)
     }
 
     int i = idx;
-    for(; i+1 < size; ++i)
+    for(; i < size; ++i)
         (*list)[i] = (*list)[i+1];
 
     *list= realloc(*list, size*sizeof(item));
