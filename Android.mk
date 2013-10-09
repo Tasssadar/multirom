@@ -100,9 +100,21 @@ endif
 ifeq ($(MR_DPI),)
     $(info MR_DPI not defined in device files)
 else ifeq ($(MR_DPI),hdpi)
-    LOCAL_CFLAGS += -DDPI_MUL=1 -DMR_HDPI
+ifeq ($(MR_DPI_MUL),)
+    MR_DPI_MUL := 1
+endif
+    LOCAL_CFLAGS += -DMR_HDPI
 else ifeq ($(MR_DPI),xhdpi)
-    LOCAL_CFLAGS += -DDPI_MUL=1.5 -DMR_XHDPI
+ifeq ($(MR_DPI_MUL),)
+    MR_DPI_MUL := 1.5
+endif
+    LOCAL_CFLAGS += -DMR_XHDPI
+endif
+
+ifneq ($(MR_DPI_MUL),)
+    LOCAL_CFLAGS += -DDPI_MUL=$(MR_DPI_MUL)
+else
+    $(info MR_DPI_MUL not defined!)
 endif
 
 ifeq ($(MR_DISABLE_ALPHA),true)
