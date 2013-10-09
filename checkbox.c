@@ -97,7 +97,7 @@ void checkbox_set_pos(checkbox *c, int x, int y)
 
 void checkbox_select(checkbox *c, int select)
 {
-    if(!((c->selected != NULL) ^ (select != 0)))
+    if((c->selected != NULL) == (select != 0))
         return;
 
     if(select)
