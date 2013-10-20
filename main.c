@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
     {
         if(strcmp(argv[i], "-v") == 0)
         {
-            printf("%d\n", VERSION_MULTIROM);
+            printf("%d%s\n", VERSION_MULTIROM, VERSION_DEV_FIX);
             return 0;
         }
     }
@@ -78,7 +78,7 @@ int main(int argc, char *argv[])
     // but it is possible to filter out INFO messages
     klog_set_level(6);
 
-    ERROR("Running MultiROM v%d\n", VERSION_MULTIROM);
+    ERROR("Running MultiROM v%d%s\n", VERSION_MULTIROM, VERSION_DEV_FIX);
 
     int exit = multirom();
 
