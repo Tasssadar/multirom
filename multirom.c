@@ -45,6 +45,7 @@
 #define BUSYBOX_BIN "busybox"
 #define KEXEC_BIN "kexec"
 #define NTFS_BIN "ntfs-3g"
+#define EXFAT_BIN "exfat-fuse"
 #define INTERNAL_ROM_NAME "Internal"
 #define MAX_ROM_NAME_LEN 26
 #define LAYOUT_VERSION "/data/.layout_version"
@@ -58,6 +59,7 @@ static char busybox_path[64] = { 0 };
 static char multirom_dir[64] = { 0 };
 static char kexec_path[64] = { 0 };
 static char ntfs_path[64] = { 0 };
+static char exfat_path[64] = { 0 };
 
 static volatile int run_usb_refresh = 0;
 static pthread_t usb_refresh_thread;
@@ -84,9 +86,11 @@ int multirom_find_base_dir(void)
         sprintf(busybox_path, "%s/%s", paths[i], BUSYBOX_BIN);
         sprintf(kexec_path, "%s/%s", paths[i], KEXEC_BIN);
         sprintf(ntfs_path, "%s/%s", paths[i], NTFS_BIN);
+        sprintf(exfat_path, "%s/%s", paths[i], EXFAT_BIN);
 
         chmod(kexec_path, 0755);
         chmod(ntfs_path, 0755);
+        chmod(exfat_path, 0755);
         return 0;
     }
     return -1;
@@ -556,7 +560,7 @@ void multirom_dump_status(struct multirom_status *s)
         INFO("    type: %d\n", s->roms[i]->type);
         INFO("    has_bootimg: %d\n", s->roms[i]->has_bootimg);
         if(s->roms[i]->partition)
-            INFO("   partition: %s (%s)\n", s->roms[i]->partition->name, s->roms[i]->partition->fs);
+            INFO("    partition: %s (%s)\n", s->roms[i]->partition->name, s->roms[i]->partition->fs);
     }
 }
 
@@ -584,7 +588,7 @@ void multirom_find_usb_roms(struct multirom_status *s)
     {
         if(s->roms[i]->partition)
         {
-            list_rm(s->roms[i], &s->roms, &multirom_free_rom);
+            list_rm_at(i, &s->roms, &multirom_free_rom);
             i = 0;
         }
         else ++i;
@@ -838,13 +842,15 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
         case ROM_ANDROID_INTERNAL:
         {
             if(!(exit & (EXIT_REBOOT | EXIT_KEXEC)))
+            {
                 exit &= ~(EXIT_UMOUNT);
 
-            if(multirom_prep_android_mounts(to_boot) == -1)
-                return -1;
+                if(multirom_prep_android_mounts(to_boot) == -1)
+                    return -1;
 
-            if(multirom_create_media_link() == -1)
-                return -1;
+                if(multirom_create_media_link() == -1)
+                    return -1;
+            }
 
             if(to_boot->partition)
                 to_boot->partition->keep_mounted = 1;
@@ -2059,15 +2065,7 @@ int multirom_mount_usb(struct usb_partition *part)
     char src[256];
     sprintf(src, "/dev/block/%s", part->name);
 
-    if(!strstr(part->fs, "ntfs"))
-    {
-        if(mount(src, path, part->fs, MS_NOATIME, "") < 0)
-        {
-            ERROR("Failed to mount %s (%d: %s)\n", src, errno, strerror(errno));
-            return -1;
-        }
-    }
-    else // ntfs
+    if(strcmp(part->fs, "ntfs-3g") == 0)
     {
         char *cmd[] = { ntfs_path, src, path, NULL };
         if(run_cmd(cmd) != 0)
@@ -2076,6 +2074,21 @@ int multirom_mount_usb(struct usb_partition *part)
             return -1;
         }
     }
+    else if(strcmp(part->fs, "exfat") == 0)
+    {
+        char *cmd[] = { exfat_path, "-o", "big_writes,max_read=131072,max_write=131072,nonempty", src, path, NULL };
+        if(run_cmd(cmd) != 0)
+        {
+            ERROR("Failed to mount %s with exfat\n", src);
+            return -1;
+        }
+    }
+    else if(mount(src, path, part->fs, MS_NOATIME, "") < 0)
+    {
+        ERROR("Failed to mount %s (%d: %s)\n", src, errno, strerror(errno));
+        return -1;
+    }
+
     part->mount_path = strdup(path);
     return 0;
 }
