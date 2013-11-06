@@ -37,6 +37,8 @@ chmod 755 "$base/ubuntu-init/init"
 chmod 644 "$base/ubuntu-init/local"
 chmod 755 "$base/ubuntu-touch-init/init"
 chmod 644 "$base/ubuntu-touch-init/scripts/touch"
+chmod 755 "$base/ubuntu-touch-sysimage-init/init"
+chmod 644 "$base/ubuntu-touch-sysimage-init/scripts/touch"
 
 # This makes does not allows access for media scanner on android, but
 # still is enough for ubuntu
