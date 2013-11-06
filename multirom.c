@@ -582,7 +582,7 @@ void multirom_find_usb_roms(struct multirom_status *s)
     int i;
     for(i = 0; s->roms && s->roms[i];)
     {
-        if(M(s->roms[i]->type) & MASK_USB_ROMS)
+        if(s->roms[i]->partition)
         {
             list_rm(s->roms[i], &s->roms, &multirom_free_rom);
             i = 0;
