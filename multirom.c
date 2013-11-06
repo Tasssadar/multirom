@@ -2255,16 +2255,18 @@ int multirom_search_last_kmsg(const char *expr)
     if(!f)
         return -1;
 
-    char *buff = malloc(2048);
     int res = -1;
+    char buff[2048];
 
-    while(res == -1 && fgets(buff, 2048, f))
+    while(fgets(buff, sizeof(buff), f))
     {
         if(strstr(buff, expr))
+        {
             res = 0;
+            break;
+        }
     }
 
-    free(buff);
     fclose(f);
     return res;
 }
