@@ -320,16 +320,19 @@ int remove_dir(const char *dir)
 
 int run_cmd(char **cmd)
 {
-    pid_t pID = fork();
+    pid_t pID = vfork();
     if(pID == 0)
     {
-        int res = execve(cmd[0], cmd, NULL);
-        ERROR("exec failed %d %d %s\n", res, errno, strerror(errno));
+        execve(cmd[0], cmd, NULL);
         _exit(127);
     }
-    int status = 0;
-    while(waitpid(pID, &status, WNOHANG) == 0) { usleep(300000); }
-    return status;
+    else
+    {
+        int status = 0;
+        while(waitpid(pID, &status, WNOHANG) == 0)
+            usleep(50000);
+        return status;
+    }
 }
 
 char *run_get_stdout(char **cmd)
@@ -338,7 +341,7 @@ char *run_get_stdout(char **cmd)
    if(pipe(fd) < 0)
         return NULL;
 
-    pid_t pid = fork();
+    pid_t pid = vfork();
     if (pid < 0)
     {
         close(fd[0]);
@@ -354,8 +357,7 @@ char *run_get_stdout(char **cmd)
         close(fd[1]);
 
         execv(cmd[0], cmd);
-        ERROR("execv failed: %d %s\n", errno, strerror(errno));
-        exit(0);
+        _exit(127);
     }
     else
     {
