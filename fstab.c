@@ -148,6 +148,7 @@ struct fstab *fstab_load(const char *path)
         part = NULL;
     }
 
+    fclose(f);
     return t;
 
 fail:
