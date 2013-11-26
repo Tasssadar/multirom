@@ -157,6 +157,20 @@ static void mount_and_run(struct fstab *fstab)
     adb_quit();
 }
 
+static int is_charger_mode()
+{
+    char buff[2048] = { 0 };
+
+    FILE *f = fopen("/proc/cmdline", "r");
+    if(!f)
+        return 0;
+
+    fgets(buff, sizeof(buff), f);
+    fclose(f);
+
+    return (strstr(buff, "androidboot.mode=charger") != NULL);
+}
+
 int main(int argc, char *argv[])
 {
     int i, res;
@@ -187,8 +201,13 @@ int main(int argc, char *argv[])
     mount("sysfs", "/sys", "sysfs", 0, NULL);
 
     klog_init();
-
     ERROR("Running trampoline v%d\n", VERSION_TRAMPOLINE);
+
+    if(is_charger_mode())
+    {
+        INFO("Charger mode detected, skipping multirom\n");
+        goto run_main_init;
+    }
 
     ERROR("Initializing devices...");
     devices_init();
@@ -218,6 +237,7 @@ exit:
     // close and destroy everything
     devices_close();
 
+run_main_init:
     if(access(KEEP_REALDATA, F_OK) < 0)
     {
         umount(REALDATA);
