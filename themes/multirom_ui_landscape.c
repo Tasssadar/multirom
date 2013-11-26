@@ -131,8 +131,10 @@ static void tab_rom_init(multirom_theme_data *t, tab_data_roms *d, int tab_type)
 
 static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_scheme)
 {
+    const int SPACING = imax((fb_height - 5*MISCBTN_H - 3*20*DPI_MUL - CLRBTN_TOTAL)/4, 20*DPI_MUL);
+
     int x = HEADER_WIDTH + ((fb_width - HEADER_WIDTH)/2 - MISCBTN_W/2);
-    int y = 10;
+    int y = SPACING;
 
     button *b = mzalloc(sizeof(button));
     b->x = x;
@@ -143,7 +145,7 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
     button_init_ui(b, "Copy log to /sdcard", SIZE_BIG);
     list_add(b, &d->buttons);
 
-    y += MISCBTN_H+50*DPI_MUL;
+    y += MISCBTN_H + SPACING;
 
     static const char *texts[] =
     {
@@ -172,9 +174,10 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
         button_init_ui(b, texts[i], SIZE_BIG);
         list_add(b, &d->buttons);
 
-        y += MISCBTN_H+20*DPI_MUL;
         if(i == 2)
-            y += 30*DPI_MUL;
+            y += MISCBTN_H + SPACING;
+        else
+            y += MISCBTN_H+20*DPI_MUL;
     }
 
     fb_text *text = fb_add_text(HEADER_WIDTH+5, fb_height-16*SIZE_SMALL, WHITE, SIZE_SMALL, "MultiROM v%d"VERSION_DEV_FIX" with trampoline v%d.",
@@ -195,16 +198,16 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
 
         if(i == color_scheme)
         {
-            r = fb_add_rect(x, CLRBTN_Y, CLRBTN_TOTAL, CLRBTN_TOTAL, WHITE);
+            r = fb_add_rect(x, y, CLRBTN_TOTAL, CLRBTN_TOTAL, WHITE);
             list_add(r, &d->ui_elements);
         }
 
-        r = fb_add_rect(x+CLRBTN_B/2, CLRBTN_Y+CLRBTN_B/2, CLRBTN_W, CLRBTN_W, p);
+        r = fb_add_rect(x+CLRBTN_B/2, y+CLRBTN_B/2, CLRBTN_W, CLRBTN_W, p);
         list_add(r, &d->ui_elements);
 
         b = mzalloc(sizeof(button));
         b->x = x;
-        b->y = CLRBTN_Y;
+        b->y = y;
         b->w = CLRBTN_TOTAL;
         b->h = CLRBTN_TOTAL;
         b->action = i;

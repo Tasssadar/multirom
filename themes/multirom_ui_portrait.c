@@ -25,7 +25,6 @@
 #include "../input.h"
 
 #define HEADER_HEIGHT (75*DPI_MUL)
-#define TAB_BTN_WIDTH (165*DPI_MUL)
 
 #define ROMS_FOOTER_H (130*DPI_MUL)
 #define ROMS_HEADER_H (90*DPI_MUL)
@@ -45,7 +44,6 @@
 #define CLRBTN_Y (1150*DPI_MUL)
 
 static button *pong_btn = NULL;
-
 static void destroy(multirom_theme_data *t)
 {
     button_destroy(pong_btn);
@@ -56,6 +54,8 @@ static void init_header(multirom_theme_data *t)
 {
     button **tab_btns = t->tab_btns;
     fb_text **tab_texts = t->tab_texts;
+
+    const int TAB_BTN_WIDTH = fb_width*0.21;
 
     int i, text_x, text_y;
     int x = fb_width - (TAB_BTN_WIDTH*TAB_COUNT);
@@ -101,6 +101,8 @@ static void header_select(multirom_theme_data *t, int tab)
     int i;
     for(i = 0; i < TAB_COUNT; ++i)
         t->tab_texts[i]->color = (i == tab) ? BLACK : WHITE;
+
+    const int TAB_BTN_WIDTH = fb_width*0.21;
 
     if(!t->selected_tab_rect)
         t->selected_tab_rect = fb_add_rect(0, 0, TAB_BTN_WIDTH, HEADER_HEIGHT, WHITE);
