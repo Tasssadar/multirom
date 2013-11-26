@@ -143,8 +143,8 @@ static void init_folder(const char *path)
 
 void devices_init(void)
 {
-    /* is 64K enough? udev uses 16MB! */
-    device_fd = uevent_open_socket(64*1024, true);
+    /* is 256K enough? udev uses 16MB! */
+    device_fd = uevent_open_socket(256*1024, true);
     if(device_fd < 0)
         return;
 
