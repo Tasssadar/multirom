@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
 {
     int i, res;
     static char *const cmd[] = { "/main_init", NULL };
-    struct fstab *fstab = NULL;;
+    struct fstab *fstab = NULL;
 
     for(i = 1; i < argc; ++i)
     {
@@ -201,7 +201,7 @@ int main(int argc, char *argv[])
     mount("sysfs", "/sys", "sysfs", 0, NULL);
 
     klog_init();
-    ERROR("Running trampoline v%d\n", VERSION_TRAMPOLINE);
+    INFO("Running trampoline v%d\n", VERSION_TRAMPOLINE);
 
     if(is_charger_mode())
     {
@@ -209,9 +209,9 @@ int main(int argc, char *argv[])
         goto run_main_init;
     }
 
-    ERROR("Initializing devices...");
+    INFO("Initializing devices...");
     devices_init();
-    ERROR("Done initializing");
+    INFO("Done initializing");
 
     if(wait_for_file("/dev/graphics/fb0", 5) < 0)
     {
@@ -256,6 +256,7 @@ run_main_init:
 
     chmod("/main_init", EXEC_MASK);
 
+    INFO("Running main init\n");
     // run the main init
     res = execve(cmd[0], cmd, NULL);
     ERROR("execve returned %d %d %s\n", res, errno, strerror(errno));
