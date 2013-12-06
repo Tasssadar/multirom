@@ -611,8 +611,8 @@ void fb_rm_rect(fb_rect *r)
     pthread_mutex_unlock(&fb_mutex);
 }
 
-#define BOX_BORDER 2
-#define SHADOW 10
+#define BOX_BORDER (2*DPI_MUL)
+#define SHADOW (10*DPI_MUL)
 fb_msgbox *fb_create_msgbox(int w, int h, int bgcolor)
 {
     if(fb_items.msgbox)
