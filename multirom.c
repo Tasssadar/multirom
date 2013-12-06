@@ -1259,7 +1259,14 @@ int multirom_has_kexec(void)
         has_kexec = 0;
 
         uint32_t i;
-        static const char *checks[] = { "CONFIG_KEXEC_HARDBOOT=y", "CONFIG_ATAGS_PROC=y" };
+        static const char *checks[] = {
+            "CONFIG_KEXEC_HARDBOOT=y",
+#ifndef MR_KEXEC_DTB
+            "CONFIG_ATAGS_PROC=y",
+#else
+            "CONFIG_PROC_DEVICETREE=y",
+#endif
+        };
         //                   0             1       2     3
         char *cmd_grep[] = { busybox_path, "grep", NULL, "/config", NULL };
         for(i = 0; i < ARRAY_SIZE(checks); ++i)
@@ -1279,9 +1286,14 @@ int multirom_has_kexec(void)
         // Kernel without /proc/config.gz enabled - check for /proc/atags file,
         // if it is present, there is good change kexec-hardboot is enabled too.
         ERROR("/proc/config.gz is not available!\n");
-        if(access("/proc/atags", R_OK) < 0)
+#ifndef MR_KEXEC_DTB
+        const char *checkfile = "/proc/atags";
+#else
+        const char *checkfile = "/proc/device-tree";
+#endif
+        if(access(checkfile, R_OK) < 0)
         {
-            ERROR("/proc/atags was not found!\n");
+            ERROR("%s was not found!\n", checkfile);
             has_kexec = -1;
         }
         else
@@ -1390,8 +1402,18 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
     // kexec --load-hardboot ./zImage --command-line="$(cat /proc/cmdline)" --mem-min=0xA0000000 --initrd=./rd.img
     // --mem-min should be somewhere in System RAM (see /proc/iomem). Location just above kernel seems to work fine.
     // It must not conflict with vmalloc ram. Vmalloc area seems to be allocated from top of System RAM.
-    //                    0            1                 2            3                          4            5            6
-    char *cmd[] = { kexec_path, "--load-hardboot", malloc(1024), "--mem-min="MR_KEXEC_MEM_MIN, malloc(1024), malloc(2048), NULL };
+    char *cmd[] = {
+        kexec_path,                      // 0
+        "--load-hardboot",               // 1
+        malloc(1024),                    // 2 - path to zImage
+        "--mem-min="MR_KEXEC_MEM_MIN,    // 3
+        malloc(1024),                    // 4 - --initrd=<path to initrd>
+        malloc(2048),                    // 5 - --command-line=<cmdline>
+#ifdef MR_KEXEC_DTB
+        "--dtb",                         // 6
+#endif
+        NULL
+    };
 
     int loop_mounted = 0;
     switch(rom->type)

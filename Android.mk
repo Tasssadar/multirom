@@ -131,6 +131,10 @@ else
     $(info MR_KEXEC_MEM_MIN was not defined in device files!)
 endif
 
+ifeq ($(MR_KEXEC_DTB),true)
+    LOCAL_CFLAGS += -DMR_KEXEC_DTB
+endif
+
 ifneq ($(MR_DEVICE_HOOKS),)
 ifeq ($(MR_DEVICE_HOOKS_VER),)
     $(info MR_DEVICE_HOOKS is set but MS_DEVICE_HOOKS_VER is not specified!)
