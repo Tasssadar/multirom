@@ -67,6 +67,7 @@ int main(int argc, char *argv[])
         if(strcmp(argv[i], "-v") == 0)
         {
             printf("%d%s\n", VERSION_MULTIROM, VERSION_DEV_FIX);
+            fflush(stdout);
             return 0;
         }
     }

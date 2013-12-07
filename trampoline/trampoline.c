@@ -182,6 +182,7 @@ int main(int argc, char *argv[])
         if(strcmp(argv[i], "-v") == 0)
         {
             printf("%d\n", VERSION_TRAMPOLINE);
+            fflush(stdout);
             return 0;
         }
     }
