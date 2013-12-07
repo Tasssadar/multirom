@@ -201,17 +201,17 @@ int main(int argc, char *argv[])
     mount("sysfs", "/sys", "sysfs", 0, NULL);
 
     klog_init();
-    INFO("Running trampoline v%d\n", VERSION_TRAMPOLINE);
+    ERROR("Running trampoline v%d\n", VERSION_TRAMPOLINE);
 
     if(is_charger_mode())
     {
-        INFO("Charger mode detected, skipping multirom\n");
+        ERROR("Charger mode detected, skipping multirom\n");
         goto run_main_init;
     }
 
-    INFO("Initializing devices...");
+    ERROR("Initializing devices...");
     devices_init();
-    INFO("Done initializing");
+    ERROR("Done initializing");
 
     if(wait_for_file("/dev/graphics/fb0", 5) < 0)
     {
@@ -256,7 +256,7 @@ run_main_init:
 
     chmod("/main_init", EXEC_MASK);
 
-    INFO("Running main init\n");
+    ERROR("Running main_init\n");
     // run the main init
     res = execve(cmd[0], cmd, NULL);
     ERROR("execve returned %d %d %s\n", res, errno, strerror(errno));

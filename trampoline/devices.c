@@ -49,6 +49,14 @@
 #include "../util.h"
 #include "log.h"
 
+//#define DEBUG_MISSING_UEVENTS 1
+
+#ifdef DEBUG_MISSING_UEVENTS
+#define UEVENT_ERR(x...) ERROR(x)
+#else
+#define UEVENT_ERR(x...)
+#endif
+
 #define SYSFS_PREFIX    "/sys"
 #define FIRMWARE_DIR1   "/etc/firmware"
 #define FIRMWARE_DIR2   "/vendor/firmware"
@@ -92,7 +100,7 @@ static void init_single_path(const char *path)
     d = opendir(path);
     if(!d)
     {
-        ERROR("Failed to open dir %s", path);
+        UEVENT_ERR("Failed to open folder %s", path);
         return;
     }
 
@@ -106,7 +114,9 @@ static void init_single_path(const char *path)
         handle_device_fd();
     }
     else
-        ERROR("Failed to open uevent at %s", path);
+    {
+        UEVENT_ERR("Failed to open uevent at %s", path);
+    }
 
     closedir(d);
 }
@@ -118,7 +128,7 @@ static void init_folder(const char *path)
     DIR *d = opendir(path);
     if(!d)
     {
-        ERROR("Failed to open folder %s\n", path);
+        UEVENT_ERR("Failed to open folder %s\n", path);
         return;
     }
 
