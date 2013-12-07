@@ -234,6 +234,9 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     workers_stop();
 
     fb_clear();
+#if MR_DEVICE_HOOKS >= 2
+    mrom_hook_before_fb_close();
+#endif
     fb_close();
     return exit_ui_code;
 }
