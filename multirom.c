@@ -379,6 +379,7 @@ int multirom_default_status(struct multirom_status *s)
 
     s->auto_boot_rom = s->current_rom;
     s->auto_boot_seconds = 5;
+    s->auto_boot_type = 0;
 
     return 0;
 }
@@ -430,6 +431,8 @@ int multirom_load_status(struct multirom_status *s)
             s->auto_boot_seconds = atoi(arg);
         else if(strstr(name, "auto_boot_rom"))
             strcpy(auto_boot_rom, arg);
+        else if(strstr(name, "auto_boot_type"))
+            s->auto_boot_type = atoi(arg);
         else if(strstr(name, "curr_rom_part"))
             s->curr_rom_part = strdup(arg);
         else if(strstr(name, "colors"))
@@ -482,9 +485,19 @@ int multirom_load_status(struct multirom_status *s)
         }
     }
 
-    s->auto_boot_rom = multirom_get_rom(s, auto_boot_rom, NULL);
-    if(!s->auto_boot_rom)
-        ERROR("Could not find rom %s to auto-boot", auto_boot_rom);
+    // Auto-boot types:
+    // * 0: use ROM selected in settings
+    // * 1: Use last booted ROM (only if not from USB)
+    if(s->auto_boot_type == 1 && !s->curr_rom_part)
+    {
+        s->auto_boot_rom = s->current_rom;
+    }
+    else
+    {
+        s->auto_boot_rom = multirom_get_rom(s, auto_boot_rom, NULL);
+        if(!s->auto_boot_rom)
+            ERROR("Could not find rom %s to auto-boot", auto_boot_rom);
+    }
 
     if(s->int_display_name)
     {
@@ -525,6 +538,7 @@ int multirom_save_status(struct multirom_status *s)
     fprintf(f, "current_rom=%s\n", s->current_rom ? s->current_rom->name : multirom_get_internal(s)->name);
     fprintf(f, "auto_boot_seconds=%d\n", s->auto_boot_seconds);
     fprintf(f, "auto_boot_rom=%s\n", auto_boot_name);
+    fprintf(f, "auto_boot_type=%d\n", s->auto_boot_type);
     fprintf(f, "curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "");
     fprintf(f, "colors=%d\n", s->colors);
     fprintf(f, "brightness=%d\n", s->brightness);
@@ -549,6 +563,7 @@ void multirom_dump_status(struct multirom_status *s)
     INFO("  int_display_name=%s\n", s->int_display_name ? s->int_display_name : "NULL");
     INFO("  auto_boot_seconds=%d\n", s->auto_boot_seconds);
     INFO("  auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "NULL");
+    INFO("  auto_boot_type=%d\n", s->auto_boot_type);
     INFO("  curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "NULL");
     INFO("\n");
 

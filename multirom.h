@@ -88,6 +88,7 @@ struct multirom_status
 {
     int is_second_boot;
     int auto_boot_seconds;
+    int auto_boot_type;
     int colors;
     int brightness;
     int enable_adb;
