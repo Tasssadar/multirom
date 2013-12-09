@@ -175,6 +175,9 @@ void devices_init(void)
         }
     }
 
+    // /dev/null
+    init_single_path("/sys/devices/virtual/mem/null");
+
     run_event_thread = 1;
     pthread_create(&uevent_thread, NULL, uevent_thread_work, NULL);
 }

@@ -40,6 +40,7 @@ int remove_dir(const char *dir);
 int run_cmd(char **cmd);
 char *run_get_stdout(char **cmd);
 char *readlink_recursive(const char *link);
+void stdio_to_null();
 
 char *parse_string(char *src);
 uint32_t timespec_diff(struct timespec *f, struct timespec *s);

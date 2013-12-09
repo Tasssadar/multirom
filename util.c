@@ -23,6 +23,7 @@
 #include <errno.h>
 #include <time.h>
 #include <dirent.h>
+#include <fcntl.h>
 
 #ifdef HAVE_SELINUX
 #include <selinux/label.h>
@@ -330,11 +331,24 @@ int remove_dir(const char *dir)
     return res;
 }
 
+void stdio_to_null(void)
+{
+    int fd = open("/dev/null", O_RDWR);
+    if(fd >= 0)
+    {
+        dup2(fd, 0);
+        dup2(fd, 1);
+        dup2(fd, 2);
+        close(fd);
+    }
+}
+
 int run_cmd(char **cmd)
 {
     pid_t pID = vfork();
     if(pID == 0)
     {
+        stdio_to_null();
         execve(cmd[0], cmd, NULL);
         _exit(127);
     }

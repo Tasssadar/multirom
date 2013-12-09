@@ -72,8 +72,9 @@ static void *adb_thread_work(void *mrom_path)
         adb_pid = fork();
         if(adb_pid == 0) // child
         {
-            setsid();
             umask(077);
+            setsid();
+            stdio_to_null();
             setpgid(0, getpid());
 
             static char * const cmd[] = { adbd_path, NULL };
