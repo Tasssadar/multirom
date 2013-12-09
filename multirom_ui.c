@@ -36,6 +36,7 @@
 #include "progressdots.h"
 #include "multirom_ui_themes.h"
 #include "workers.h"
+#include "hooks.h"
 
 
 static struct multirom_status *mrom_status = NULL;

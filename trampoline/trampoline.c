@@ -31,6 +31,7 @@
 #include "../version.h"
 #include "adb.h"
 #include "../fstab.h"
+#include "../hooks.h"
 
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 #define REALDATA "/realdata"
@@ -209,6 +210,10 @@ int main(int argc, char *argv[])
         ERROR("Charger mode detected, skipping multirom\n");
         goto run_main_init;
     }
+
+#if MR_DEVICE_HOOKS >= 3
+    tramp_hook_before_device_init();
+#endif
 
     ERROR("Initializing devices...");
     devices_init();

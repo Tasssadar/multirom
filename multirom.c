@@ -40,6 +40,7 @@
 #include "log.h"
 #include "util.h"
 #include "version.h"
+#include "hooks.h"
 
 #define REALDATA "/realdata"
 #define BUSYBOX_BIN "busybox"

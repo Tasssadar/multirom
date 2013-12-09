@@ -1,6 +1,7 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
+LOCAL_C_INCLUDES += $(multirom_local_path)
 LOCAL_SRC_FILES:= \
     trampoline.c \
     devices.c \
@@ -27,5 +28,14 @@ LOCAL_CFLAGS += -DPRODUCT_MODEL="\"$(PRODUCT_MODEL)\"" -DPRODUCT_MANUFACTURER="\
 
 # to find fstab
 LOCAL_CFLAGS += -DTARGET_DEVICE="\"$(TARGET_DEVICE)\""
+
+ifneq ($(MR_DEVICE_HOOKS),)
+ifeq ($(MR_DEVICE_HOOKS_VER),)
+    $(info MR_DEVICE_HOOKS is set but MR_DEVICE_HOOKS_VER is not specified!)
+else
+    LOCAL_CFLAGS += -DMR_DEVICE_HOOKS=$(MR_DEVICE_HOOKS_VER)
+    LOCAL_SRC_FILES += ../../../../$(MR_DEVICE_HOOKS)
+endif
+endif
 
 include $(BUILD_EXECUTABLE)

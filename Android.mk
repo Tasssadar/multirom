@@ -4,6 +4,7 @@ include $(CLEAR_VARS)
 
 multirom_local_path := $(LOCAL_PATH)
 
+LOCAL_C_INCLUDES += $(multirom_local_path)
 LOCAL_SRC_FILES:= \
     main.c \
     util.c \
@@ -137,7 +138,7 @@ endif
 
 ifneq ($(MR_DEVICE_HOOKS),)
 ifeq ($(MR_DEVICE_HOOKS_VER),)
-    $(info MR_DEVICE_HOOKS is set but MS_DEVICE_HOOKS_VER is not specified!)
+    $(info MR_DEVICE_HOOKS is set but MR_DEVICE_HOOKS_VER is not specified!)
 else
     LOCAL_CFLAGS += -DMR_DEVICE_HOOKS=$(MR_DEVICE_HOOKS_VER)
     LOCAL_SRC_FILES += ../../../$(MR_DEVICE_HOOKS)
