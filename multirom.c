@@ -411,6 +411,7 @@ int multirom_load_status(struct multirom_status *s)
     if(multirom_get_bootloader_cmdline(s, line, sizeof(line)) != 0)
     {
         ERROR("Failed to get cmdline!\n");
+        fclose(f);
         return -1;
     }
 
