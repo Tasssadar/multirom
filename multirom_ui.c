@@ -397,7 +397,7 @@ void multirom_ui_auto_boot(void)
     active_msgbox = fb_create_msgbox(500*DPI_MUL, 300*DPI_MUL, CLR_PRIMARY);
 
     fb_msgbox_add_text(-1, 40*DPI_MUL, SIZE_BIG, "Auto-boot");
-    fb_msgbox_add_text(-1, active_msgbox->h-100*DPI_MUL, SIZE_NORMAL, "ROM: %s", mrom_status->auto_boot_rom->name);
+    fb_msgbox_add_text(-1, active_msgbox->h-100*DPI_MUL, SIZE_NORMAL, "%s", mrom_status->auto_boot_rom->name);
     fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to cancel");
 
     fb_text *sec_text = fb_msgbox_add_text(-1, -1, SIZE_BIG, "%d", seconds/1000);
