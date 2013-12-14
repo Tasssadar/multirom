@@ -92,6 +92,7 @@ sync_dirs() {
 process_ubuntu()
 {
 	cache_dir="$1"
+	fw_image="$2"
 
 	# Loop-mounted flipped model
 	if [ -e /tmpmnt/system.img ]; then
@@ -212,6 +213,8 @@ process_ubuntu()
 			echo $1 | egrep -q "^#" && continue
 			([ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ]) && continue
 			([ "$2" = "/system" ] || [ "$2" = "/data" ] || [ "$2" = "/cache" ]) && continue
+			# Skip firmware if custom fw_image is present
+			([ -n "$fw_image"] && [ "$2" = "/firmware" ]) && continue
 
 			label=$(echo $1 | awk -F/ '{print $NF}')
 			[ -z "$label" ] && continue
@@ -233,6 +236,12 @@ process_ubuntu()
 		# cache is a special case
 		echo "initrd: mounting ${cache_dir} as ${rootmnt}/android/cache" >/dev/kmsg || true
 		mount -o bind ${cache_dir} ${rootmnt}/android/cache
+
+		# mount fw image if present
+		if [ -n "$fw_image" ]; then
+			echo "initrd: mounting ${fw_image} as /firmware" > /dev/kmsg || true
+			mount -o loop,ro,shortname=lower,uid=1000,gid=1000,dmask=227,fmask=337 -t vfat ${fw_image} /firmware
+		fi
 
 		# Apply device-specific udev rules
 		if [ "$device" != "unknown" ]; then
@@ -350,9 +359,13 @@ able to reboot again and resume the installation.
 		mkdir -p $ /android-cache
 		mount ${roflag} -o loop -t ${FSTYPE} ${LOOPFLAGS} "/host/${LOOP}/cache.img" /android-cache
 
+		if [ -f "/host/${LOOP}/firmware.img" ]; then
+			fw_image="/host/${LOOP}/firmware.img"
+		fi
+
 		echo "initrd: mounted all loops" >/dev/kmsg || true
 
-		process_ubuntu "/android-cache"
+		process_ubuntu "/android-cache" "$fw_image"
 		
 		echo "process_ubuntu complete" >/dev/kmsg || true
 
@@ -383,7 +396,11 @@ of a removable device without first unmounting or ejecting it.
 		mkdir -p /tmpmnt
 		mount -o bind "/host/$ROOTSUBDIR/data" /tmpmnt
 
-		process_ubuntu "/host/$ROOTSUBDIR/cache"
+		if [ -f "/host/${ROOTSUBDIR}/firmware.img" ]; then
+			fw_image="/host/${ROOTSUBDIR}/firmware.img"
+		fi
+
+		process_ubuntu "/host/$ROOTSUBDIR/cache" "$fw_image"
 
 		mkdir -p ${rootmnt}/host
 		mount -o move /host ${rootmnt}/host
