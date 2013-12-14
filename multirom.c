@@ -922,14 +922,19 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
 {
     char in[128];
     char out[128];
-    char folder[256];
+    char path[256];
     char *fstab_name = NULL;
-    sprintf(folder, "%s/boot", rom->base_path);
+    int has_fw = 0;
 
-    DIR *d = opendir(folder);
+    sprintf(path, "%s/firmware.img", rom->base_path);
+    has_fw = (access(path, R_OK) >= 0);
+
+    sprintf(path, "%s/boot", rom->base_path);
+
+    DIR *d = opendir(path);
     if(!d)
     {
-        ERROR("Failed to open rom folder %s", folder);
+        ERROR("Failed to open rom path %s", path);
         return -1;
     }
 
@@ -940,7 +945,7 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
         if(dp->d_name[0] == '.' && (dp->d_name[1] == '.' || dp->d_name[1] == 0))
             continue;
 
-        sprintf(in, "%s/%s", folder, dp->d_name);
+        sprintf(in, "%s/%s", path, dp->d_name);
         sprintf(out, "/%s", dp->d_name);
 
         copy_file(in, out);
@@ -956,12 +961,14 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
     }
     closedir(d);
 
-    if(multirom_process_android_fstab(fstab_name) != 0)
+    if(multirom_process_android_fstab(fstab_name, has_fw) != 0)
         return -1;
 
     mkdir_with_perms("/system", 0755, NULL, NULL);
     mkdir_with_perms("/data", 0771, "system", "system");
     mkdir_with_perms("/cache", 0770, "system", "cache");
+    if(has_fw)
+        mkdir_with_perms("/firmware", 0771, "system", "system");
 
     static const char *folders[2][3] = 
     {
@@ -993,8 +1000,19 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
         }
         else
         {
-            if(multirom_mount_loop(from, to, "ext4", flags[img][i]) < 0)
+            if(multirom_mount_loop(from, to, "ext4", flags[img][i], NULL) < 0)
                 return -1;
+        }
+    }
+
+    if(has_fw)
+    {
+        INFO("Mounting ROM's FW image instead of FW partition\n");
+        sprintf(from, "%s/firmware.img", rom->base_path);
+        if(multirom_mount_loop(from, "/firmware", "vfat", MS_RDONLY,
+            "shortname=lower,uid=1000,gid=1000,dmask=227,fmask=337") < 0)
+        {
+            return -1;
         }
     }
 
@@ -1010,7 +1028,7 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
     return 0;
 }
 
-int multirom_process_android_fstab(char *fstab_name)
+int multirom_process_android_fstab(char *fstab_name, int has_fw)
 {
     if(fstab_name != NULL)
         INFO("Using fstab %s from rc files\n", fstab_name);
@@ -1078,10 +1096,11 @@ int multirom_process_android_fstab(char *fstab_name)
     {
         if(line[0] != '#')
         {
-            if(strstr(line, "/system") || strstr(line, "/cache") || strstr(line, "/data"))
+            if (strstr(line, "/system") || strstr(line, "/cache") || strstr(line, "/data") ||
+                (has_fw && strstr(line, "/firmware")))
             {
                 strcat(out, "#");
-                if(++counter > 3)
+                if(++counter > 3 + has_fw)
                 {
                     ERROR("Commented %u lines instead of 3 in fstab, stopping boot!\n", counter);
                     fclose(fstab);
@@ -1652,7 +1671,7 @@ int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *ro
 
             // mount the image file
             mkdir("/mnt/image", 0777);
-            if(multirom_mount_loop(path, "/mnt/image", img_fs ? img_fs : "ext4", MS_NOATIME) < 0)
+            if(multirom_mount_loop(path, "/mnt/image", img_fs ? img_fs : "ext4", MS_NOATIME, NULL) < 0)
                 goto exit;
 
             loop_mounted = 1;
@@ -2180,7 +2199,7 @@ void multirom_set_usb_refresh_handler(void (*handler)(void))
     usb_refresh_handler = handler;
 }
 
-int multirom_mount_loop(const char *src, const char *dst, const char *fs, int flags)
+int multirom_mount_loop(const char *src, const char *dst, const char *fs, int flags, const void *data)
 {
     int file_fd, device_fd, res = -1;
 
@@ -2214,7 +2233,7 @@ int multirom_mount_loop(const char *src, const char *dst, const char *fs, int fl
         goto close_dev;
     }
 
-    if(mount(path, dst, fs, flags, "") < 0)
+    if(mount(path, dst, fs, flags, data) < 0)
         ERROR("Failed to mount loop (%d: %s)\n", errno, strerror(errno));
     else
         res = 0;
