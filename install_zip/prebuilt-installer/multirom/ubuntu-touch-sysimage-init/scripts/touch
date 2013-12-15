@@ -239,8 +239,9 @@ process_ubuntu()
 
 		# mount fw image if present
 		if [ -n "$fw_image" ]; then
-			echo "initrd: mounting ${fw_image} as /firmware" > /dev/kmsg || true
-			mount -o loop,ro,shortname=lower,uid=1000,gid=1000,dmask=227,fmask=337 -t vfat ${fw_image} /firmware
+			echo "initrd: mounting ${fw_image} as ${rootmnt}/android/firmware" > /dev/kmsg || true
+			mkdir -p ${rootmnt}/android/firmware
+			mount -o loop,ro,shortname=lower,uid=1000,gid=1000,dmask=227,fmask=337 -t vfat ${fw_image} ${rootmnt}/android/firmware
 		fi
 
 		# Apply device-specific udev rules
