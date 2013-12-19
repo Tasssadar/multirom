@@ -24,8 +24,6 @@
 
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 
-static const char *coldboot_done = "/dev/.coldboot_done";
-
 time_t gettime(void);
 unsigned int decode_uid(const char *s);
 int mkdir_recursive(const char *pathname, mode_t mode);
@@ -41,11 +39,14 @@ int run_cmd(char **cmd);
 char *run_get_stdout(char **cmd);
 char *readlink_recursive(const char *link);
 void stdio_to_null();
-
 char *parse_string(char *src);
 uint32_t timespec_diff(struct timespec *f, struct timespec *s);
+
 inline int imin(int a, int b);
 inline int imax(int a, int b);
+inline int in_rect(int x, int y, int rx, int ry, int rw, int rh);
+inline void *mzalloc(size_t size); // alloc and fill with 0s
+
 
 // auto-conversion of pointer type occurs only for
 // void*, not for void** nor void***
@@ -67,8 +68,6 @@ int list_move(ptrToList source_p, ptrToList dest_p);
 void list_clear(ptrToList list_p, callback destroy_callback_p);
 void list_swap(ptrToList a_p, ptrToList b_p);
 
-inline int in_rect(int x, int y, int rx, int ry, int rw, int rh);
-
 typedef struct
 {
     char **keys;
@@ -83,8 +82,5 @@ void map_rm(map *m, char *key, void (*destroy_callback)(void*));
 int map_find(map *m, char *key);
 void *map_get_val(map *m, char *key);
 void *map_get_ref(map *m, char *key);
-
-// alloc and fill with 0s
-inline void *mzalloc(size_t size);
 
 #endif

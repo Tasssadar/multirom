@@ -483,6 +483,35 @@ int imax(int a, int b)
     return (a > b) ? a : b;
 }
 
+int in_rect(int x, int y, int rx, int ry, int rw, int rh)
+{
+    if(x < rx || y < ry)
+        return 0;
+
+    if(x > rx+rw || y > ry+rh)
+        return 0;
+    return 1;
+}
+
+char *parse_string(char *src)
+{
+    char *start = strchr(src, '"');
+    char *end = strrchr(src, '"');
+
+    if(!start || start == end || start+1 == end)
+        return NULL;
+    ++start;
+    return strndup(start, end-start);
+}
+
+// alloc and fill with 0s
+void *mzalloc(size_t size)
+{
+    void *res = malloc(size);
+    memset(res, 0, size);
+    return res;
+}
+
 int list_item_count(listItself list)
 {
     void **l = (void**)list;
@@ -504,7 +533,7 @@ void list_add(void *item, ptrToList list_p)
     int i = 0;
     while(*list && (*list)[i])
         ++i;
-    i += 2;
+    i += 2; // NULL and the new item
 
     *list = realloc(*list, i*sizeof(item));
 
@@ -680,27 +709,6 @@ void list_swap(ptrToList a_p, ptrToList b_p)
     *b = tmp;
 }
 
-int in_rect(int x, int y, int rx, int ry, int rw, int rh)
-{
-    if(x < rx || y < ry)
-        return 0;
-
-    if(x > rx+rw || y > ry+rh)
-        return 0;
-    return 1;
-}
-
-char *parse_string(char *src)
-{
-    char *start = strchr(src, '"');
-    char *end = strrchr(src, '"');
-
-    if(!start || start == end || start+1 == end)
-        return NULL;
-    ++start;
-    return strndup(start, end-start);
-}
-
 map *map_create(void)
 {
     map *m = mzalloc(sizeof(map));
@@ -769,12 +777,4 @@ void *map_get_ref(map *m, char *key)
     if(idx < 0)
         return NULL;
     return &m->values[idx];
-}
-
-// alloc and fill with 0s
-void *mzalloc(size_t size)
-{
-    void *res = malloc(size);
-    memset(res, 0, size);
-    return res;
 }
