@@ -214,7 +214,7 @@ process_ubuntu()
 			([ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] || [ -z "$4" ]) && continue
 			([ "$2" = "/system" ] || [ "$2" = "/data" ] || [ "$2" = "/cache" ]) && continue
 			# Skip firmware if custom fw_image is present
-			([ -n "$fw_image"] && [ "$2" = "/firmware" ]) && continue
+			([ -n "$fw_image" ] && [ "$2" = "/firmware" ]) && continue
 
 			label=$(echo $1 | awk -F/ '{print $NF}')
 			[ -z "$label" ] && continue
