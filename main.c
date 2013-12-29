@@ -59,9 +59,11 @@ static void do_kexec(void)
     while(1);
 }
 
-int main(int argc, char *argv[])
+int main(int argc, const char *argv[])
 {
     int i;
+    const char *rom_to_boot = NULL;
+
     for(i = 1; i < argc; ++i)
     {
         if(strcmp(argv[i], "-v") == 0)
@@ -69,6 +71,10 @@ int main(int argc, char *argv[])
             printf("%d%s\n", VERSION_MULTIROM, VERSION_DEV_FIX);
             fflush(stdout);
             return 0;
+        }
+        else if(strncmp(argv[i], "--boot-rom=", sizeof("--boot-rom")) == 0)
+        {
+            rom_to_boot = argv[i] + sizeof("--boot-rom");
         }
     }
 
@@ -81,7 +87,16 @@ int main(int argc, char *argv[])
 
     ERROR("Running MultiROM v%d%s\n", VERSION_MULTIROM, VERSION_DEV_FIX);
 
-    int exit = multirom();
+    // root is mounted read only in android and MultiROM uses
+    // it to store some temp files, so remount it.
+    // Yes, there is better solution to this.
+    if(rom_to_boot)
+        mount(NULL, "/", NULL, MS_REMOUNT, NULL);
+
+    int exit = multirom(rom_to_boot);
+
+    if(rom_to_boot)
+        mount(NULL, "/", NULL, MS_RDONLY | MS_REMOUNT, NULL);
 
     if(exit >= 0)
     {

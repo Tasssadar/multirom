@@ -60,6 +60,13 @@ enum
     EXIT_REBOOT_MASK         = (EXIT_REBOOT | EXIT_REBOOT_RECOVERY | EXIT_REBOOT_BOOTLOADER | EXIT_SHUTDOWN),
 };
 
+enum
+{
+    AUTOBOOT_NAME            = 0x00,
+    AUTOBOOT_LAST            = 0x01,
+    AUTOBOOT_FORCE_CURRENT   = 0x02
+};
+
 struct usb_partition
 {
     char *name;
@@ -103,7 +110,7 @@ struct multirom_status
     struct fstab *fstab;
 };
 
-int multirom(void);
+int multirom(const char *rom_to_boot);
 int multirom_find_base_dir(void);
 void multirom_emergency_reboot(void);
 int multirom_default_status(struct multirom_status *s);

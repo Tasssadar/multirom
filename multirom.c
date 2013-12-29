@@ -75,6 +75,8 @@ int multirom_find_base_dir(void)
     static const char *paths[] = {
         REALDATA"/media/0/multirom", // 4.2
         REALDATA"/media/multirom",
+        "/data/media/0/multirom",
+        "/data/media/multirom",
         NULL,
     };
 
@@ -97,7 +99,7 @@ int multirom_find_base_dir(void)
     return -1;
 }
 
-int multirom(void)
+int multirom(const char *rom_to_boot)
 {
     if(multirom_find_base_dir() == -1)
     {
@@ -114,7 +116,39 @@ int multirom(void)
     struct multirom_rom *to_boot = NULL;
     int exit = (EXIT_REBOOT | EXIT_UMOUNT);
 
-    if(s.is_second_boot == 0)
+    if(rom_to_boot != NULL)
+    {
+        struct multirom_rom *rom = multirom_get_rom(&s, rom_to_boot, NULL);
+        if(rom)
+        {
+            // Two possible scenarios: this ROM has kexec-hardboot and target
+            // ROM has boot image, so kexec it immediatelly or
+            // reboot and then proceed as usuall
+            if(((M(rom->type) & MASK_KEXEC) || rom->has_bootimg) && rom->type != ROM_DEFAULT && multirom_has_kexec() == 0)
+            {
+                to_boot = rom;
+                s.is_second_boot = 0;
+                INFO("Booting ROM %s...\n", rom_to_boot);
+            }
+            else
+            {
+                s.current_rom = rom;
+                s.auto_boot_type |= AUTOBOOT_FORCE_CURRENT;
+                INFO("Setting ROM %s to force autoboot\n", rom_to_boot);
+            }
+        }
+        else
+        {
+            ERROR("ROM %s was not found, force autoboot was not set!\n", rom_to_boot);
+            exit = EXIT_UMOUNT;
+        }
+    }
+    else if(s.is_second_boot != 0 || (s.auto_boot_type & AUTOBOOT_FORCE_CURRENT))
+    {
+        ERROR("Skipping ROM selection, is_second_boot=%d, auto_boot_type=0x%x\n", s.is_second_boot, s.auto_boot_type);
+        to_boot = s.current_rom;
+    }
+    else
     {
         // just to cache the result so that it does not take
         // any time when the UI is up
@@ -137,23 +171,27 @@ int multirom(void)
                 break;
         }
     }
-    else
-    {
-        ERROR("Skipping ROM selection beacause of is_second_boot==1");
-        to_boot = s.current_rom;
-    }
 
     if(to_boot)
     {
-        multirom_run_scripts("run-on-boot", to_boot);
+        s.auto_boot_type &= ~(AUTOBOOT_FORCE_CURRENT);
+
+        if(rom_to_boot == NULL)
+            multirom_run_scripts("run-on-boot", to_boot);
 
         exit = multirom_prepare_for_boot(&s, to_boot);
 
-        // Something went wrong, reboot
+        // Something went wrong, exit/reboot
         if(exit == -1)
         {
-            multirom_emergency_reboot();
-            return EXIT_REBOOT;
+            if(rom_to_boot == NULL)
+            {
+                multirom_emergency_reboot();
+                exit = EXIT_REBOOT;
+            }
+            else
+                exit = EXIT_UMOUNT;
+            goto finish;
         }
 
         s.current_rom = to_boot;
@@ -165,11 +203,17 @@ int multirom(void)
             s.curr_rom_part = strdup(to_boot->partition->uuid);
 
         if(s.is_second_boot == 0 && (M(to_boot->type) & MASK_ANDROID) && (exit & EXIT_KEXEC))
+        {
             s.is_second_boot = 1;
+
+            // mrom_kexecd=1 param might be lost if kernel does not have kexec patches
+            ERROR(SECOND_BOOT_KMESG);
+        }
         else
             s.is_second_boot = 0;
     }
 
+finish:
     multirom_save_status(&s);
     multirom_free_status(&s);
 
@@ -380,7 +424,7 @@ int multirom_default_status(struct multirom_status *s)
 
     s->auto_boot_rom = s->current_rom;
     s->auto_boot_seconds = 5;
-    s->auto_boot_type = 0;
+    s->auto_boot_type = AUTOBOOT_NAME;
 
     return 0;
 }
@@ -487,10 +531,7 @@ int multirom_load_status(struct multirom_status *s)
         }
     }
 
-    // Auto-boot types:
-    // * 0: use ROM selected in settings
-    // * 1: Use last booted ROM (only if not from USB)
-    if(s->auto_boot_type == 1 && !s->curr_rom_part)
+    if((s->auto_boot_type & AUTOBOOT_LAST) && !s->curr_rom_part)
     {
         s->auto_boot_rom = s->current_rom;
     }
@@ -1596,9 +1637,6 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
         strcat(cmd[5], " ");
     }
     strcat(cmd[5], "mrom_kexecd=1");
-
-    // mrom_kexecd=1 param might be lost if kernel does not have kexec patches
-    ERROR(SECOND_BOOT_KMESG);
 
     res = 0;
 exit:
