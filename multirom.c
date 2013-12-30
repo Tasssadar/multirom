@@ -2161,7 +2161,7 @@ int multirom_mount_usb(struct usb_partition *part)
     char src[256];
     sprintf(src, "/dev/block/%s", part->name);
 
-    if(strcmp(part->fs, "ntfs-3g") == 0)
+    if(strncmp(part->fs, "ntfs", 4) == 0)
     {
         char *cmd[] = { ntfs_path, src, path, NULL };
         if(run_cmd(cmd) != 0)
