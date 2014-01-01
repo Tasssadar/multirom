@@ -556,29 +556,23 @@ int multirom_save_status(struct multirom_status *s)
 {
     INFO("Saving multirom status\n");
 
-    char buff[256];
-    sprintf(buff, "%s/multirom.ini", multirom_dir);
+    char path[256];
+    char auto_boot_name[MAX_ROM_NAME_LEN+1];
+    char current_name[MAX_ROM_NAME_LEN+1];
 
-    FILE *f = fopen(buff, "w");
+    snprintf(path, sizeof(path), "%s/multirom.ini", multirom_dir);
+
+    FILE *f = fopen(path, "w");
     if(!f)
     {
         ERROR("Failed to open/create status file!\n");
         return -1;
     }
 
+    multirom_fixup_rom_name(s->auto_boot_rom, auto_boot_name, "");
+    multirom_fixup_rom_name(s->current_rom, current_name, INTERNAL_ROM_NAME);
 
-    char *auto_boot_name = buff;
-    if(s->auto_boot_rom)
-    {
-        if(s->auto_boot_rom->type == ROM_DEFAULT)
-            strcpy(buff, INTERNAL_ROM_NAME);
-        else
-            auto_boot_name = s->auto_boot_rom->name;
-    }
-    else
-        buff[0] = 0;
-
-    fprintf(f, "current_rom=%s\n", s->current_rom ? s->current_rom->name : multirom_get_internal(s)->name);
+    fprintf(f, "current_rom=%s\n", current_name);
     fprintf(f, "auto_boot_seconds=%d\n", s->auto_boot_seconds);
     fprintf(f, "auto_boot_rom=%s\n", auto_boot_name);
     fprintf(f, "auto_boot_type=%d\n", s->auto_boot_type);
@@ -592,6 +586,21 @@ int multirom_save_status(struct multirom_status *s)
 
     fclose(f);
     return 0;
+}
+
+void multirom_fixup_rom_name(struct multirom_rom *rom, char *name, const char *def)
+{
+    if(rom)
+    {
+        if(rom->type == ROM_DEFAULT)
+            strcpy(name, INTERNAL_ROM_NAME);
+        else
+            strcpy(name, rom->name);
+    }
+    else
+    {
+        strcpy(name, def);
+    }
 }
 
 void multirom_dump_status(struct multirom_status *s)
@@ -847,12 +856,15 @@ struct multirom_rom *multirom_get_internal(struct multirom_status *s)
 
 struct multirom_rom *multirom_get_rom(struct multirom_status *s, const char *name, const char *part_uuid)
 {
+    if(part_uuid == NULL && strcmp(name, INTERNAL_ROM_NAME) == 0)
+        return multirom_get_internal(s);
+
     int i = 0;
     struct multirom_rom *r;
     for(; s->roms && s->roms[i]; ++i)
     {
         r = s->roms[i];
-        if (strcmp(r->name, name) == 0 && 
+        if (r->type != ROM_DEFAULT && strcmp(r->name, name) == 0 &&
            (!part_uuid || (r->partition && strcmp(r->partition->uuid, part_uuid) == 0)))
         {
             return r;

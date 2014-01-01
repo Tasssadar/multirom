@@ -123,6 +123,7 @@ int multirom_load_status(struct multirom_status *s);
 void multirom_import_internal(void);
 void multirom_dump_status(struct multirom_status *s);
 int multirom_save_status(struct multirom_status *s);
+void multirom_fixup_rom_name(struct multirom_rom *rom, char *name, const char *def);
 int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to_boot);
 void multirom_free_status(struct multirom_status *s);
 void multirom_free_rom(void *rom);
