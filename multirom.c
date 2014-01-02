@@ -42,6 +42,7 @@
 #include "version.h"
 #include "hooks.h"
 #include "containers.h"
+#include "rom_quirks.h"
 
 #define REALDATA "/realdata"
 #define BUSYBOX_BIN "busybox"
@@ -1058,6 +1059,8 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
                 return -1;
         }
     }
+
+    rom_quirks_on_android_mounted_fs(rom);
 
     // Remount /system read-only. This is pretty much best-effort only,
     // mount -o remount,rw /system will remount /system to rw correctly,

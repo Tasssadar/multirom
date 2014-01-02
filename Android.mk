@@ -22,7 +22,8 @@ LOCAL_SRC_FILES:= \
     themes/multirom_ui_portrait.c \
     fstab.c \
     workers.c \
-    containers.c
+    containers.c \
+    rom_quirks.c
 
 ifeq ($(ARCH_ARM_HAVE_NEON),true)
     LOCAL_SRC_FILES += col32cb16blend_neon.S
