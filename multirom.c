@@ -63,6 +63,7 @@ static char multirom_dir[64] = { 0 };
 static char kexec_path[64] = { 0 };
 static char ntfs_path[64] = { 0 };
 static char exfat_path[64] = { 0 };
+static char partition_dir[64] = { 0 };
 
 static volatile int run_usb_refresh = 0;
 static pthread_t usb_refresh_thread;
@@ -88,6 +89,9 @@ int multirom_find_base_dir(void)
             continue;
 
         strcpy(multirom_dir, paths[i]);
+
+        strncpy(partition_dir, paths[i], strchr(paths[i]+1, '/') - paths[i]);
+
         sprintf(busybox_path, "%s/%s", paths[i], BUSYBOX_BIN);
         sprintf(kexec_path, "%s/%s", paths[i], KEXEC_BIN);
         sprintf(ntfs_path, "%s/%s", paths[i], NTFS_BIN);
@@ -1712,12 +1716,12 @@ int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *ro
     int root_type = -1; // 0 = dir, 1 = img
     int loop_mounted = 0;
     char root_path[256];
-    char base_path[64];
+    const char *base_path;
 
     if(!rom->partition)
-        strcpy(base_path, REALDATA);
+        base_path = partition_dir;
     else
-        strcpy(base_path, rom->partition->mount_path);
+        base_path = rom->partition->mount_path;
 
     struct stat st;
     char path[256];
@@ -2051,7 +2055,12 @@ int multirom_replace_aliases_root_path(char **s, struct multirom_rom *rom)
 
     char buff[256] = { 0 };
     memcpy(buff, *s, alias-*s);
-    strcat(buff, rom->base_path+strlen(rom->partition ? rom->partition->mount_path : REALDATA));
+
+    if(rom->partition)
+        strcat(buff, rom->base_path + strlen(rom->partition->mount_path));
+    else
+        strcat(buff, rom->base_path + strlen(partition_dir));
+
     strcat(buff, alias+2);
 
     ERROR("Alias-replaced path: %s\n", buff);
