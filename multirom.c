@@ -2131,7 +2131,7 @@ int multirom_update_partitions(struct multirom_status *s)
 
         tok = strrchr(line, '/')+1;
         name = strndup(tok, strchr(tok, ':') - tok);
-        if(strstr(name, "mmcblk")) // ignore internal nand
+        if(strncmp(name, "mmcblk", 6) == 0 || strncmp(name, "dm-", 3) == 0) // ignore internal nand
         {
             free(name);
             goto next_itr;
