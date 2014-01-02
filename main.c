@@ -50,8 +50,7 @@ static void do_reboot(int exit)
 
 static void do_kexec(void)
 {
-    sync();
-    umount(REALDATA);
+    emergency_remount_ro();
 
     execl("/kexec", "/kexec", "-e", NULL);
 

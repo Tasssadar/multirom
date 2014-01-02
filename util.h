@@ -41,6 +41,7 @@ char *readlink_recursive(const char *link);
 void stdio_to_null();
 char *parse_string(char *src);
 uint32_t timespec_diff(struct timespec *f, struct timespec *s);
+void emergency_remount_ro(void);
 
 inline int imin(int a, int b);
 inline int imax(int a, int b);

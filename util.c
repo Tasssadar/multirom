@@ -473,6 +473,85 @@ char *readlink_recursive(const char *link)
     return strdup(buff);
 }
 
+/* Check to see if /proc/mounts contains any writeable filesystems
+ * backed by a block device.
+ * Return true if none found, else return false.
+ */
+static int remount_ro_done(void)
+{
+    FILE *f;
+    char mount_dev[256];
+    char mount_dir[256];
+    char mount_type[256];
+    char mount_opts[256];
+    int mount_freq;
+    int mount_passno;
+    int match;
+    int found_rw_fs = 0;
+
+    f = fopen("/proc/mounts", "r");
+    if (! f) {
+        /* If we can't read /proc/mounts, just give up */
+        return 1;
+    }
+
+    do {
+        match = fscanf(f, "%255s %255s %255s %255s %d %d\n",
+                       mount_dev, mount_dir, mount_type,
+                       mount_opts, &mount_freq, &mount_passno);
+        mount_dev[255] = 0;
+        mount_dir[255] = 0;
+        mount_type[255] = 0;
+        mount_opts[255] = 0;
+        if ((match == 6) && !strncmp(mount_dev, "/dev/block", 10) && strstr(mount_opts, "rw")) {
+            found_rw_fs = 1;
+            break;
+        }
+    } while (match != EOF);
+
+    fclose(f);
+
+    return !found_rw_fs;
+}
+
+/* Remounting filesystems read-only is difficult when there are files
+ * opened for writing or pending deletes on the filesystem.  There is
+ * no way to force the remount with the mount(2) syscall.  The magic sysrq
+ * 'u' command does an emergency remount read-only on all writable filesystems
+ * that have a block device (i.e. not tmpfs filesystems) by calling
+ * emergency_remount(), which knows how to force the remount to read-only.
+ * Unfortunately, that is asynchronous, and just schedules the work and
+ * returns.  The best way to determine if it is done is to read /proc/mounts
+ * repeatedly until there are no more writable filesystems mounted on
+ * block devices.
+ */
+void emergency_remount_ro(void)
+{
+    int fd, cnt = 0;
+
+    sync();
+
+    /* Trigger the remount of the filesystems as read-only,
+     * which also marks them clean.
+     */
+    fd = open("/proc/sysrq-trigger", O_WRONLY);
+    if (fd < 0) {
+        return;
+    }
+    write(fd, "u", 1);
+    close(fd);
+
+
+    /* Now poll /proc/mounts till it's done */
+    while (!remount_ro_done() && (cnt < 3600)) {
+        usleep(100000);
+        cnt++;
+    }
+
+    return;
+}
+
+
 int imin(int a, int b)
 {
     return (a < b) ? a : b;
