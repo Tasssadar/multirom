@@ -36,6 +36,7 @@
 #include "framebuffer.h"
 #include "iso_font.h"
 #include "util.h"
+#include "containers.h"
 
 // only double-buffering is implemented, this define is just
 // for the code to know how many buffers we use

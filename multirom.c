@@ -41,6 +41,7 @@
 #include "util.h"
 #include "version.h"
 #include "hooks.h"
+#include "containers.h"
 
 #define REALDATA "/realdata"
 #define BUSYBOX_BIN "busybox"

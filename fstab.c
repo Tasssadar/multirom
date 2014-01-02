@@ -26,6 +26,7 @@
 #include "fstab.h"
 #include "util.h"
 #include "log.h"
+#include "containers.h"
 
 // flags from system/core/fs_mgr/fs_mgr.c
 struct flag_list {

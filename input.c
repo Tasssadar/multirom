@@ -34,6 +34,7 @@
 #include "util.h"
 #include "log.h"
 #include "workers.h"
+#include "containers.h"
 
 // for touch calculation
 int mt_screen_res[2] = { 0 };

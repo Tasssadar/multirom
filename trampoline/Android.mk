@@ -7,7 +7,8 @@ LOCAL_SRC_FILES:= \
     devices.c \
     ../util.c \
     adb.c \
-    ../fstab.c
+    ../fstab.c \
+    ../containers.c
 
 LOCAL_MODULE:= trampoline
 LOCAL_MODULE_TAGS := eng

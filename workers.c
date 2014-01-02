@@ -22,6 +22,7 @@
 #include "util.h"
 #include "workers.h"
 #include "log.h"
+#include "containers.h"
 
 struct worker
 {

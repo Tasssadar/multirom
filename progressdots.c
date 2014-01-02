@@ -19,6 +19,7 @@
 #include "progressdots.h"
 #include "multirom_ui.h"
 #include "workers.h"
+#include "util.h"
 
 // ms
 #define SWITCH_SPEED 800

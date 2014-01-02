@@ -47,40 +47,4 @@ inline int imax(int a, int b);
 inline int in_rect(int x, int y, int rx, int ry, int rw, int rh);
 inline void *mzalloc(size_t size); // alloc and fill with 0s
 
-
-// auto-conversion of pointer type occurs only for
-// void*, not for void** nor void***
-typedef void* ptrToList; // void ***
-typedef void* listItself; // void **
-typedef void* callback;
-typedef void(*callbackPtr)(void*);
-
-void list_add(void *item, ptrToList list_p);
-int list_add_from_list(listItself src_p, ptrToList list_p);
-int list_rm(void *item, ptrToList list_p, callback destroy_callback_p);
-int list_rm_noreorder(void *item, ptrToList list_p, callback destroy_callback_p);
-int list_rm_opt(int reorder, void *item, ptrToList list_p, callback destroy_callback_p);
-int list_rm_at(int idx, ptrToList list_p, callback destroy_callback_p);
-int list_size(listItself list);
-int list_item_count(listItself list);
-int list_copy(listItself src, ptrToList dest_p);
-int list_move(ptrToList source_p, ptrToList dest_p);
-void list_clear(ptrToList list_p, callback destroy_callback_p);
-void list_swap(ptrToList a_p, ptrToList b_p);
-
-typedef struct
-{
-    char **keys;
-    void **values;
-} map;
-
-map *map_create(void);
-void map_destroy(map *m, void (*destroy_callback)(void*));
-void map_add(map *m, char *key, void *val, void (*destroy_callback)(void*));
-void map_add_not_exist(map *m, char *key, void *val);
-void map_rm(map *m, char *key, void (*destroy_callback)(void*));
-int map_find(map *m, char *key);
-void *map_get_val(map *m, char *key);
-void *map_get_ref(map *m, char *key);
-
 #endif

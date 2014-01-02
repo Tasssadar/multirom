@@ -37,7 +37,7 @@
 #include "multirom_ui_themes.h"
 #include "workers.h"
 #include "hooks.h"
-
+#include "containers.h"
 
 static struct multirom_status *mrom_status = NULL;
 static struct multirom_rom *selected_rom = NULL;

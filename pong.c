@@ -26,6 +26,7 @@
 #include "input.h"
 #include "pong.h"
 #include "util.h"
+#include "containers.h"
 
 #define SCORE_SPACE (75*DPI_MUL)
 #define L 0
