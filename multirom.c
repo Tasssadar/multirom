@@ -1066,15 +1066,6 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
 
     rom_quirks_on_android_mounted_fs(rom);
 
-    // Remount /system read-only. This is pretty much best-effort only,
-    // mount -o remount,rw /system will remount /system to rw correctly,
-    // but mount -o remount,ro /system won't work (root apps often use this
-    // sequence to install system files).
-    // Also, remounting /data with diferent options cancels this, since it
-    // is the same block device.
-    if(!img)
-        mount(NULL, "/system", NULL, MS_REMOUNT | MS_BIND | MS_RDONLY, NULL);
-
     if(has_fw)
     {
         INFO("Mounting ROM's FW image instead of FW partition\n");
