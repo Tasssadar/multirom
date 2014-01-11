@@ -178,6 +178,9 @@ void devices_init(void)
     // /dev/null
     init_single_path("/sys/devices/virtual/mem/null");
 
+    // /dev/fuse
+    init_single_path("/sys/devices/virtual/misc/fuse");
+
     run_event_thread = 1;
     pthread_create(&uevent_thread, NULL, uevent_thread_work, NULL);
 }
