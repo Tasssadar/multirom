@@ -7,6 +7,7 @@ or from USB flash drive.
 XDA threads:
 * grouper: http://forum.xda-developers.com/showthread.php?t=2011403
 * flo: http://forum.xda-developers.com/showthread.php?t=2457063
+* mako: http://forum.xda-developers.com/showthread.php?t=2472295
 
 ###Build
 Clone repo to folder `system/extras/multirom` inside Android 4.x source tree.
