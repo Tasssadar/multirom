@@ -1347,10 +1347,10 @@ int multirom_has_kexec(void)
 
     if(access("/proc/config.gz", F_OK) >= 0)
     {
-        char *cmd_cp[] = { busybox_path, "cp", "/proc/config.gz", "/config.gz", NULL };
+        char *cmd_cp[] = { busybox_path, "cp", "/proc/config.gz", "/ikconfig.gz", NULL };
         run_cmd(cmd_cp);
 
-        char *cmd_gzip[] = { busybox_path, "gzip", "-d", "/config.gz", NULL };
+        char *cmd_gzip[] = { busybox_path, "gzip", "-d", "/ikconfig.gz", NULL };
         run_cmd(cmd_gzip);
 
         has_kexec = 0;
@@ -1365,7 +1365,7 @@ int multirom_has_kexec(void)
 #endif
         };
         //                   0             1       2     3
-        char *cmd_grep[] = { busybox_path, "grep", NULL, "/config", NULL };
+        char *cmd_grep[] = { busybox_path, "grep", NULL, "/ikconfig", NULL };
         for(i = 0; i < ARRAY_SIZE(checks); ++i)
         {
             cmd_grep[2] = (char*)checks[i];
@@ -1376,7 +1376,7 @@ int multirom_has_kexec(void)
             }
         }
 
-        remove("/config");
+        remove("/ikconfig");
     }
     else
     {
