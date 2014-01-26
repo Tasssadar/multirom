@@ -26,6 +26,8 @@ delete("/tmp/lz4");
 delete("/tmp/bootimg.cfg");
 delete("/tmp/initrd.img");
 delete("/tmp/zImage");
+delete("/tmp/dtb.img");
+delete("/tmp/second.img");
 delete("/tmp/bbootimg");
 delete("/tmp/boot.img");
 delete("/tmp/newboot.img");

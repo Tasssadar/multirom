@@ -13,7 +13,7 @@ if [ ! -e "$BOOT_DEV" ]; then
 fi
 
 dd if=$BOOT_DEV of=/tmp/boot.img
-/tmp/bbootimg -x /tmp/boot.img /tmp/bootimg.cfg /tmp/zImage /tmp/initrd.img
+/tmp/bbootimg -x /tmp/boot.img /tmp/bootimg.cfg /tmp/zImage /tmp/initrd.img /tmp/second.img /tmp/dtb.img
 if [ ! -f /tmp/zImage ] ; then
     echo "Failed to extract boot.img"
     return 1
@@ -83,7 +83,14 @@ if [ -n "$RD_ADDR" ]; then
 fi
 
 cd /tmp
-/tmp/bbootimg --create newboot.img -f bootimg.cfg -k zImage -r initrd.img
+
+dtb_cmd=""
+if [ -f "dtb.img" ]; then
+    dtb_cmd="-d dtb.img"
+fi
+
+/tmp/bbootimg --create newboot.img -f bootimg.cfg -k zImage -r initrd.img $dtb
+
 if [ ! -e "/tmp/newboot.img" ] ; then
     echo "Failed to inject boot.img!"
     return 1
