@@ -1917,8 +1917,7 @@ int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multir
     if(!rom->partition)
         data_part = fstab_find_by_path(status->fstab, "/data");
 
-    char *buff = malloc(4096);
-    memset(buff, 0, 4096);
+    char *buff = mzalloc(4096);
 
     char *itr_o = buff;
     char *itr_i = *s;
@@ -1929,6 +1928,8 @@ int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multir
         memcpy(itr_o, itr_i, c);
         itr_o += c;
         itr_i += c;
+
+        *itr_o = 0;
 
         if(*itr_i != '%')
             break;
