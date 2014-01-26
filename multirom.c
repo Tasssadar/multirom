@@ -458,13 +458,6 @@ int multirom_load_status(struct multirom_status *s)
     char name[64];
     char *pch;
 
-    if(multirom_get_bootloader_cmdline(s, line, sizeof(line)) != 0)
-    {
-        ERROR("Failed to get cmdline!\n");
-        fclose(f);
-        return -1;
-    }
-
     if(multirom_search_last_kmsg(SECOND_BOOT_KMESG) == 0)
         s->is_second_boot = 1;
 
