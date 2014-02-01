@@ -100,13 +100,18 @@ process_ubuntu()
 		[ -e /tmpmnt/.developer_mode ] && mv /tmpmnt/.developer_mode /tmpmnt/.writable_image
 
 		# Prepare the root filesystem
+		# NOTE: We mount it read-write in all cases, then remount read-only.
+		#       This is to workaround a behaviour change in busybox which now
+		#       uses read-only loops if the fs is initially mounted read-only.
+		#       An alternative implementation would be to add losetup support
+		#       to busybox and do the mount in two steps (rw loop, ro fs).
+		mount -o loop,rw /tmpmnt/system.img ${rootmnt}
 		if [ -e /tmpmnt/.writable_image ]; then
 			echo "initrd: mounting system.img (image developer mode)" >/dev/kmsg || true
-			mount -o loop,rw /tmpmnt/system.img ${rootmnt}
 			mountroot_status="$?"
 		else
 			echo "initrd: mounting system.img (user mode)" >/dev/kmsg || true
-			mount -o loop,ro /tmpmnt/system.img ${rootmnt}
+			mount -o remount,ro ${rootmnt}
 			mountroot_status="$?"
 		fi
 		mount --move /tmpmnt ${rootmnt}/userdata
@@ -121,6 +126,7 @@ process_ubuntu()
 		echo "initrd: device is $device" >/dev/kmsg || true
 
 		# Mount some tmpfs
+		mkdir -p ${rootmnt}/android
 		mount -o rw,size=4096 -t tmpfs none ${rootmnt}/android
 		mount -o rw,nosuid,noexec,relatime,mode=755 -t tmpfs tmpfs ${rootmnt}/run
 
@@ -147,7 +153,7 @@ process_ubuntu()
 
 			if [ "$3" = "temporary" ]; then
 				# Temporary entries are simple, just mount a tmpfs
-				echo "tmpfs $1 tmpfs $5 0 1" >> $FSTAB
+				echo "tmpfs $1 tmpfs $5 0 0" >> $FSTAB
 			elif [ "$3" = "persistent" ] || [ "$3" = "synced" ]; then
 				# Figure out the source path
 				if [ "$2" = "auto" ]; then
@@ -189,9 +195,9 @@ process_ubuntu()
 
 				# Write the fstab entry
 				if [ "$5" = "none" ]; then
-					echo "$path $1 none bind 0 1" >> $FSTAB
+					echo "$path $1 none bind 0 0" >> $FSTAB
 				else
-					echo "$path $1 none bind,$5 0 1" >> $FSTAB
+					echo "$path $1 none bind,$5 0 0" >> $FSTAB
 				fi
 			else
 				continue
@@ -218,10 +224,19 @@ process_ubuntu()
 
 			label=$(echo $1 | awk -F/ '{print $NF}')
 			[ -z "$label" ] && continue
+
+			echo "initrd: checking mount label $label" >/dev/kmsg || true
+
 			for dir in by-partlabel by-name by-label; do
 				path="/dev/disk/$dir/$label"
 				[ -e "$path" ] && break
 			done
+
+			# MTD based devices, such as the emulator
+			if [ ! -e "$path" ] && echo $label | egrep -q "^mtdblock"; then
+				path="/dev/$label"
+			fi
+
 			[ ! -e "$path" ] && continue
 
 			mkdir -p ${rootmnt}/android/$2
@@ -252,18 +267,28 @@ process_ubuntu()
 		# Bind-mount /lib/modules from Android
 		[ -e ${rootmnt}/android/system/lib/modules ] && mount --bind ${rootmnt}/android/system/lib/modules ${rootmnt}/lib/modules
 
+		# Bind-mount /var/lib/ureadahead if available on persistent storage
+		# this is required because ureadahead runs before mountall
+		if [ -e ${rootmnt}/userdata/system-data/var/lib/ureadahead ] && \
+				[ -e ${rootmnt}/var/lib/ureadahead ]; then
+			mount --bind ${rootmnt}/userdata/system-data/var/lib/ureadahead ${rootmnt}/var/lib/ureadahead
+		fi
+
 		# Setup the swap device
 		[ -e ${rootmnt}/userdata/SWAP.img ] && swapon ${rootmnt}/userdata/SWAP.img
 
 		# Apply customized content
-		if [ -d ${rootmnt}/custom/home ] && [ ! -e ${rootmnt}/userdata/user-data/phablet/.customized ]; then
-			echo "initrd: copying custom content" >/dev/kmsg || true
-			cp -Rap ${rootmnt}/custom/home/* ${rootmnt}/userdata/user-data/phablet
-			cp -Rap ${rootmnt}/custom/home/.[a-zA-Z0-9]* ${rootmnt}/userdata/user-data/phablet
-			touch ${rootmnt}/userdata/user-data/phablet/.customized
-			dstown=$(stat -c "%u:%g" ${rootmnt}/userdata/user-data/phablet)
-			chown -R $dstown ${rootmnt}/userdata/user-data/phablet
-		fi
+		for user in ${rootmnt}/userdata/user-data/*
+		do
+			if [ -d ${rootmnt}/custom/home ] && [ ! -e "$user/.customized" ]; then
+				echo "initrd: copying custom content tp " >/dev/kmsg || true
+				cp -Rap ${rootmnt}/custom/home/* "$user/"
+				cp -Rap ${rootmnt}/custom/home/.[a-zA-Z0-9]* "$user/"
+				touch "$user/.customized"
+				dstown=$(stat -c "%u:%g" "$user")
+				chown -R $dstown "$user/"
+			fi
+		done
 
 	# Old flipped model
 	elif [ -d /tmpmnt/ubuntu ]; then
