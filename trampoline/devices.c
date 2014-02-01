@@ -83,7 +83,7 @@ static void *uevent_thread_work(void *cookie)
         ufd.revents = 0;
         nr = poll(&ufd, 1, 0);
 
-        if (nr > 0 && ufd.revents == POLLIN)
+        if (nr > 0 && (ufd.revents & POLLIN))
             handle_device_fd();
 
         usleep(100000);
