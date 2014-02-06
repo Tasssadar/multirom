@@ -33,6 +33,10 @@
 // https://github.com/Tasssadar/libbootimg.git
 #include <libbootimg.h>
 
+#if LIBBOOTIMG_VERSION  < 0x000200
+#error "libbootimg version 0.2.0 or higher is required. Please update libbootimg."
+#endif
+
 #include "multirom.h"
 #include "multirom_ui.h"
 #include "framebuffer.h"
@@ -1579,7 +1583,7 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
     sprintf(img_path, "%s/boot.img", rom->base_path);
 
     struct bootimg img;
-    if(libbootimg_init_load(&img, img_path) < 0)
+    if(libbootimg_init_load(&img, img_path, LIBBOOTIMG_LOAD_ALL) < 0)
     {
         ERROR("fill_kexec could not open boot image (%s)!", img_path);
         return -1;
@@ -1605,7 +1609,6 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
         {
             // Update the boot.img
             snprintf((char*)img.hdr.name, BOOT_NAME_SIZE, "tr_ver%d", multirom_get_trampoline_ver());
-            img.size = 0; // reset to enable any size
 
             if(libbootimg_load_ramdisk(&img, "/initrd.img") >= 0)
             {
