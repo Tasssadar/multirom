@@ -47,6 +47,7 @@
 #include "hooks.h"
 #include "containers.h"
 #include "rom_quirks.h"
+#include "kexec.h"
 
 #define REALDATA "/realdata"
 #define BUSYBOX_BIN "busybox"
@@ -1485,6 +1486,10 @@ int multirom_find_file(char *res, const char *name_part, const char *path)
 
 int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
 {
+    int res = -1;
+    struct kexec kexec;
+    int loop_mounted = 0;
+
     // to find /data partition
     if(!rom->partition && multirom_update_partitions(s) < 0)
     {
@@ -1492,35 +1497,20 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
         return -1;
     }
 
-    int res = -1;
-    // kexec --load-hardboot ./zImage --command-line="$(cat /proc/cmdline)" --mem-min=0xA0000000 --initrd=./rd.img
-    // --mem-min should be somewhere in System RAM (see /proc/iomem). Location just above kernel seems to work fine.
-    // It must not conflict with vmalloc ram. Vmalloc area seems to be allocated from top of System RAM.
-    char *cmd[] = {
-        kexec_path,                      // 0
-        "--load-hardboot",               // 1
-        malloc(1024),                    // 2 - path to zImage
-        "--mem-min="MR_KEXEC_MEM_MIN,    // 3
-        malloc(1024),                    // 4 - --initrd=<path to initrd>
-        malloc(2048),                    // 5 - --command-line=<cmdline>
-#ifdef MR_KEXEC_DTB
-        "--dtb",                         // 6
-#endif
-        NULL
-    };
+    kexec_init(&kexec, kexec_path);
+    kexec_add_arg(&kexec, "--mem-min="MR_KEXEC_MEM_MIN);
 
-    int loop_mounted = 0;
     switch(rom->type)
     {
         case ROM_ANDROID_INTERNAL:
         case ROM_ANDROID_USB_DIR:
         case ROM_ANDROID_USB_IMG:
-            if(multirom_fill_kexec_android(s, rom, cmd) != 0)
+            if(multirom_fill_kexec_android(s, rom, &kexec) != 0)
                 goto exit;
             break;
         case ROM_LINUX_INTERNAL:
         case ROM_LINUX_USB:
-            loop_mounted = multirom_fill_kexec_linux(s, rom, cmd);
+            loop_mounted = multirom_fill_kexec_linux(s, rom, &kexec);
             if(loop_mounted < 0)
                 goto exit;
             break;
@@ -1529,36 +1519,7 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
             goto exit;
     }
 
-    ERROR("Loading kexec: %s %s %s %s %s\n", cmd[0], cmd[1], cmd[2], cmd[3], cmd[4]);
-    ERROR("With cmdline: ");
-    char *itr = cmd[5];
-    int len;
-    for(len = strlen(itr); len > 0; len = strlen(itr))
-    {
-       if(len > 450)
-           len = 450;
-       char *b = strndup(itr, len);
-       ERROR("  %s\n", b);
-       free(b);
-       itr += len;
-    }
-
-    if(run_cmd(cmd) == 0)
-        res = 0;
-    else
-    {
-        ERROR("kexec call failed, re-running it to get info:\n");
-        char *r = run_get_stdout(cmd);
-        if(!r)
-            ERROR("run_get_stdout returned NULL!\n");
-        char *p = strtok(r, "\n\r");
-        while(p)
-        {
-            ERROR("  %s\n", p);
-            p = strtok(NULL, "\n\r");
-        }
-        free(r);
-    }
+    res = kexec_load_exec(&kexec);
 
     char *cmd_cp[] = { busybox_path, "cp", kexec_path, "/kexec", NULL };
     run_cmd(cmd_cp);
@@ -1570,13 +1531,11 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
     multirom_copy_log(NULL);
 
 exit:
-    free(cmd[2]);
-    free(cmd[4]);
-    free(cmd[5]);
+    kexec_destroy(&kexec);
     return res;
 }
 
-int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *rom, char **cmd)
+int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *rom, struct kexec *kexec)
 {
     int res = -1;
     char img_path[256];
@@ -1591,8 +1550,19 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
 
     if(libbootimg_dump_kernel(&img, "/zImage") < 0)
         goto exit;
+
     if(libbootimg_dump_ramdisk(&img, "/initrd.img") < 0)
         goto exit;
+
+    kexec_add_kernel(kexec, "/zImage", 1);
+    kexec_add_arg(kexec, "--initrd=/initrd.img");
+
+#ifdef MR_KEXEC_DTB
+    if(libbootimg_dump_dtb(&img, "/dtb.img") >= 0)
+        kexec_add_arg(kexec, "--dtb=/dtb.img");
+    else
+        kexec_add_arg(kexec, "--dtb");
+#endif
 
     // Trampolines in ROM boot images may get out of sync, so we need to check it and
     // update if needed. I can't do that during ZIP installation because of USB drives.
@@ -1624,35 +1594,32 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
         }
     }
 
-    char cmdline[1024];
-    if(multirom_get_bootloader_cmdline(s, cmdline, sizeof(cmdline)) == -1)
-    {
-        ERROR("Failed to get cmdline\n");
-        goto exit;
-    }
+    char cmdline[1536];
+    strcpy(cmdline, "--command-line=");
 
-    strcpy(cmd[2], "/zImage");
-    strcpy(cmd[4], "--initrd=/initrd.img");
-
-    strcpy(cmd[5], "--command-line=");
     if(img.hdr.cmdline[0] != 0)
     {
         img.hdr.cmdline[BOOT_ARGS_SIZE-1] = 0;
 
         // see multirom_get_bootloader_cmdline
 #ifdef FLO_CMDLINE_HACK
-        strcat(cmd[5], (char*)img.hdr.cmdline+26);
+        strcat(cmdline, (char*)img.hdr.cmdline+26);
 #else
-        strcat(cmd[5], (char*)img.hdr.cmdline);
+        strcat(cmdline, (char*)img.hdr.cmdline);
 #endif
-        strcat(cmd[5], " ");
+        strcat(cmdline, " ");
     }
-    if(cmdline[0] != 0)
+
+    if(multirom_get_bootloader_cmdline(s, cmdline+strlen(cmdline), sizeof(cmdline)-strlen(cmdline)-1) == -1)
     {
-        strcat(cmd[5], cmdline);
-        strcat(cmd[5], " ");
+        ERROR("Failed to get cmdline\n");
+        goto exit;
     }
-    strcat(cmd[5], "mrom_kexecd=1");
+
+    if(sizeof(cmdline)-strlen(cmdline)-1 >= sizeof("mrom_kexecd=1"))
+        strcat(cmdline, "mrom_kexecd=1");
+
+    kexec_add_arg(kexec, cmdline);
 
     res = 0;
 exit:
@@ -1693,7 +1660,7 @@ static char *find_boot_file(char *path, char *root_path, char *base_path)
     return strdup(res);
 }
 
-int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *rom, char **cmd)
+int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *rom, struct kexec *kexec)
 {
     struct rom_info *info = multirom_parse_rom_info(s, rom);
     if(!info)
@@ -1754,24 +1721,49 @@ int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *ro
     }
 
     char *str = find_boot_file(map_get_val(info->str_vals, "kernel_path"), root_path, rom->base_path);
-    if(!str)
+    if(str)
+    {
+        kexec_add_kernel(kexec, str, 1);
+        free(str);
+    }
+    else
+    {
+        // kernel is required
         goto exit;
-
-    cmd[2] = str;
+    }
 
     str = find_boot_file(map_get_val(info->str_vals, "initrd_path"), root_path, rom->base_path);
     if(str)
     {
-        sprintf(cmd[4], "--initrd=%s", str);
+        kexec_add_arg_prefix(kexec, "--initrd=", str);
         free(str);
     }
 
-    sprintf(cmd[5], "--command-line=%s ", (char*)map_get_val(info->str_vals, "base_cmdline"));
+    char cmdline[1536];
+    snprintf(cmdline, sizeof(cmdline), "--command-line=%s ", (char*)map_get_val(info->str_vals, "base_cmdline"));
 
-    if(root_type == 0 && (str = map_get_val(info->str_vals, "dir_cmdline")))
-        strcat(cmd[5], str);
-    else if(root_type == 1 && (str = map_get_val(info->str_vals, "img_cmdline")))
-        strcat(cmd[5], str);
+    str = NULL;
+    if(root_type == 0)
+        str = map_get_val(info->str_vals, "dir_cmdline");
+    else if(root_type == 1)
+        str = map_get_val(info->str_vals, "img_cmdline");
+
+    if(str)
+    {
+        if(strlen(str)+strlen(cmdline)+1 <= sizeof(cmdline))
+            strcat(cmdline, str);
+        else
+        {
+            ERROR("failed to fill kexec info, cmdline is too long!\n");
+            goto exit;
+        }
+    }
+
+    kexec_add_arg(kexec, cmdline);
+
+#ifdef MR_KEXEC_DTB
+    kexec_add_arg(kexec, "--dtb");
+#endif
 
     res = loop_mounted;
 exit:

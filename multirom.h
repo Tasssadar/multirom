@@ -23,6 +23,7 @@
 
 #include "fstab.h"
 #include "containers.h"
+#include "kexec.h"
 
 enum
 {
@@ -139,8 +140,8 @@ int multirom_has_kexec(void);
 int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom);
 int multirom_get_bootloader_cmdline(struct multirom_status *s, char *str, size_t size);
 int multirom_find_file(char *res, const char *name_part, const char *path);
-int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *rom, char **cmd);
-int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *rom, char **cmd);
+int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *rom, struct kexec *kexec);
+int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *rom, struct kexec *kexec);
 int multirom_extract_bytes(const char *dst, FILE *src, size_t size);
 int multirom_update_partitions(struct multirom_status *s);
 void multirom_destroy_partition(void *part);
