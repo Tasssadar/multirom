@@ -751,9 +751,9 @@ void fb_draw_overlay(void)
  #else
   #ifdef HAS_NEON_BLEND
     uint32_t blend_clr = 0xDC1B1B1B;
-    scanline_col32cb16blend_neon((uint16_t*)fb->bits, &blend_clr, fb->size);
+    scanline_col32cb16blend_neon((uint16_t*)fb->bits, &blend_clr, fb->size >> 1);
   #else
-    const int size = fb->size;
+    const int size = fb->size >> 1;
     uint16_t *bits = fb->bits;
     int i;
     for(i = 0; i < size; ++i)
