@@ -395,8 +395,8 @@ able to reboot again and resume the installation.
 		
 		echo "process_ubuntu complete" >/dev/kmsg || true
 
-		mkdir -p ${rootmnt}/host
-		mount -o move /host ${rootmnt}/host
+		mkdir -p ${rootmnt}/android/realdata
+		mount -o move /host ${rootmnt}/android/realdata
 	elif [ "$ROOTSUBDIR" ]; then
 		if [ "$mountroot_status" != 0 ]; then
 			panic "
@@ -428,8 +428,8 @@ of a removable device without first unmounting or ejecting it.
 
 		process_ubuntu "/host/$ROOTSUBDIR/cache" "$fw_image"
 
-		mkdir -p ${rootmnt}/host
-		mount -o move /host ${rootmnt}/host
+		mkdir -p ${rootmnt}/android/realdata
+		mount -o move /host ${rootmnt}/android/realdata
 	fi
 
 	[ "$quiet" != "y" ] && log_begin_msg "Running /scripts/local-bottom"
