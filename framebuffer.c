@@ -83,9 +83,16 @@ int vt_set_mode(int graphics)
 int fb_open_impl(void)
 {
     extern struct fb_impl fb_impl_generic;
+#ifdef MR_USE_QCOM_OVERLAY
+    extern struct fb_impl fb_impl_qcom_overlay;
+#endif
 
     struct fb_impl * const *i;
     struct fb_impl * const impls[] = {
+#ifdef MR_USE_QCOM_OVERLAY
+        &fb_impl_qcom_overlay,
+#endif
+
         &fb_impl_generic,
         NULL
     };

@@ -149,6 +149,11 @@ else
 endif
 endif
 
+ifeq ($(MR_USE_QCOM_OVERLAY),true)
+    LOCAL_CFLAGS += -DMR_USE_QCOM_OVERLAY
+    LOCAL_SRC_FILES += framebuffer_qcom_overlay.c
+endif
+
 include $(BUILD_EXECUTABLE)
 
 # Trampoline
