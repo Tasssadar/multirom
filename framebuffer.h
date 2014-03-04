@@ -32,17 +32,25 @@ typedef uint32_t px_type;
 typedef uint16_t px_type;
 #endif
 
-struct FB {
-    px_type *bits;
-    px_type *mapped;
+struct framebuffer {
+    px_type *buffer;
     uint32_t size;
-    int stride;
+    uint32_t stride;
     int fd;
     struct fb_fix_screeninfo fi;
     struct fb_var_screeninfo vi;
+    struct fb_impl *impl;
+    void *impl_data;
 };
 
-extern struct FB *fb;
+struct fb_impl {
+    const char *name;
+
+    int (*open)(struct framebuffer *fb);
+    void (*close)(struct framebuffer *fb);
+    int (*update)(struct framebuffer *fb);
+    void *(*get_frame_dest)(struct framebuffer *fb);
+};
 
 #define ISO_CHAR_HEIGHT 16
 #define ISO_CHAR_WIDTH 8
@@ -79,12 +87,12 @@ extern uint32_t fb_height;
 extern int fb_rotation;
 
 int fb_open(int rotation);
+int fb_open_impl(void);
 void fb_close(void);
 void fb_update(void);
-void fb_switch(int n_sig);
-inline struct FB *get_active_fb();
-void fb_set_active_framebuffer(unsigned n);
 void fb_dump_info(void);
+int fb_get_vi_xres(void);
+int fb_get_vi_yres(void);
 
 enum 
 {

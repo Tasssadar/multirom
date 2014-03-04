@@ -93,8 +93,8 @@ static int ev_init(void)
     long absbit[BITS_TO_LONGS(ABS_CNT)];
 
     ev_count = 0;
-    mt_screen_res[0] = fb->vi.xres;
-    mt_screen_res[1] = fb->vi.yres;
+    mt_screen_res[0] = fb_get_vi_xres();
+    mt_screen_res[1] = fb_get_vi_yres();
 
     init_touch_specifics();
 

@@ -24,7 +24,8 @@ LOCAL_SRC_FILES:= \
     workers.c \
     containers.c \
     rom_quirks.c \
-    kexec.c
+    kexec.c \
+    framebuffer_generic.c
 
 ifeq ($(ARCH_ARM_HAVE_NEON),true)
     LOCAL_SRC_FILES += col32cb16blend_neon.S
