@@ -66,28 +66,6 @@ static int find_multirom(void)
     return -1;
 }
 
-static int run_multirom_bin(char *path)
-{
-    ERROR("Running multirom");
-    pid_t pID = fork();
-    if(pID == 0)
-    {
-        char * cmd[] = { path, NULL };
-        int res = execve(cmd[0], cmd, NULL);
-
-        ERROR("exec failed %d %d %s\n", res, errno, strerror(errno));
-        _exit(127);
-    }
-    else
-    {
-        int status = 0;
-        while(waitpid(pID, &status, WNOHANG) == 0)
-            usleep(300000);
-        ERROR("MultiROM exited with status %d", status);
-        return status;
-    }
-}
-
 static void run_multirom(void)
 {
     char path[256];
@@ -115,10 +93,14 @@ static void run_multirom(void)
     }
     chmod(path, EXEC_MASK);
 
-    do {
-        if(run_multirom_bin(path) == 0)
+    char *cmd[] = { path, NULL };
+    do
+    {
+        ERROR("Running multirom");
+        if(run_cmd(cmd) == 0)
             break;
-    } while(restart);
+    }
+    while(restart);
 }
 
 static void mount_and_run(struct fstab *fstab)

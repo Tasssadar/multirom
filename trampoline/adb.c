@@ -84,8 +84,7 @@ static void *adb_thread_work(void *mrom_path)
         else
         {
             int status = 0;
-            while(waitpid(adb_pid, &status, WNOHANG) == 0)
-                usleep(300000);
+            waitpid(adb_pid, &status, 0);
         }
         usleep(300000);
     }

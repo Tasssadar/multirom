@@ -355,8 +355,7 @@ int run_cmd(char **cmd)
     else
     {
         int status = 0;
-        while(waitpid(pID, &status, WNOHANG) == 0)
-            usleep(50000);
+        waitpid(pID, &status, 0);
         return status;
     }
 }
