@@ -41,6 +41,46 @@ struct fb_generic_data {
 
 static int impl_open(struct framebuffer *fb)
 {
+    fb->vi.bits_per_pixel = PIXEL_SIZE * 8;
+    INFO("Pixel format: %dx%d @ %dbpp\n", fb->vi.xres, fb->vi.yres, fb->vi.bits_per_pixel);
+
+#ifdef RECOVERY_BGRA
+    INFO("Pixel format: BGRA_8888\n");
+    fb->vi.red.offset     = 8;
+    fb->vi.red.length     = 8;
+    fb->vi.green.offset   = 16;
+    fb->vi.green.length   = 8;
+    fb->vi.blue.offset    = 24;
+    fb->vi.blue.length    = 8;
+    fb->vi.transp.offset  = 0;
+    fb->vi.transp.length  = 8;
+#elif  defined(RECOVERY_RGBX)
+    INFO("Pixel format: RGBX_8888\n");
+    fb->vi.red.offset     = 24;
+    fb->vi.red.length     = 8;
+    fb->vi.green.offset   = 16;
+    fb->vi.green.length   = 8;
+    fb->vi.blue.offset    = 8;
+    fb->vi.blue.length    = 8;
+    fb->vi.transp.offset  = 0;
+    fb->vi.transp.length  = 8;
+#elif defined(RECOVERY_RGB_565)
+    INFO("Pixel format: RGB_565\n");
+    fb->vi.blue.offset    = 0;
+    fb->vi.green.offset   = 5;
+    fb->vi.red.offset     = 11;
+    fb->vi.blue.length    = 5;
+    fb->vi.green.length   = 6;
+    fb->vi.red.length     = 5;
+    fb->vi.blue.msb_right = 0;
+    fb->vi.green.msb_right = 0;
+    fb->vi.red.msb_right = 0;
+    fb->vi.transp.offset  = 0;
+    fb->vi.transp.length  = 0;
+#else
+#error "Unknown pixel format"
+#endif
+
     fb->vi.vmode = FB_VMODE_NONINTERLACED;
     fb->vi.activate = FB_ACTIVATE_NOW | FB_ACTIVATE_FORCE;
 

@@ -119,56 +119,31 @@ int fb_open(int rotation)
     if (fb.fd < 0)
         return -1;
 
-    if (ioctl(fb.fd, FBIOGET_VSCREENINFO, &fb.vi) < 0)
+    if(ioctl(fb.fd, FBIOGET_VSCREENINFO, &fb.vi) < 0)
         goto fail;
 
-    fb.vi.bits_per_pixel = PIXEL_SIZE * 8;
-    INFO("Pixel format: %dx%d @ %dbpp\n", fb.vi.xres, fb.vi.yres, fb.vi.bits_per_pixel);
-
-#ifdef RECOVERY_BGRA
-    INFO("Pixel format: BGRA_8888\n");
-    fb.vi.red.offset     = 8;
-    fb.vi.red.length     = 8;
-    fb.vi.green.offset   = 16;
-    fb.vi.green.length   = 8;
-    fb.vi.blue.offset    = 24;
-    fb.vi.blue.length    = 8;
-    fb.vi.transp.offset  = 0;
-    fb.vi.transp.length  = 8;
-#elif  defined(RECOVERY_RGBX)
-    INFO("Pixel format: RGBX_8888\n");
-    fb.vi.red.offset     = 24;
-    fb.vi.red.length     = 8;
-    fb.vi.green.offset   = 16;
-    fb.vi.green.length   = 8;
-    fb.vi.blue.offset    = 8;
-    fb.vi.blue.length    = 8;
-    fb.vi.transp.offset  = 0;
-    fb.vi.transp.length  = 8;
-#elif defined(RECOVERY_RGB_565)
-    INFO("Pixel format: RGB_565\n");
-    fb.vi.blue.offset    = 0;
-    fb.vi.green.offset   = 5;
-    fb.vi.red.offset     = 11;
-    fb.vi.blue.length    = 5;
-    fb.vi.green.length   = 6;
-    fb.vi.red.length     = 5;
-    fb.vi.blue.msb_right = 0;
-    fb.vi.green.msb_right = 0;
-    fb.vi.red.msb_right = 0;
-    fb.vi.transp.offset  = 0;
-    fb.vi.transp.length  = 0;
-#else
-#error "Unknown pixel format"
-#endif
-
-    if (ioctl(fb.fd, FBIOPUT_VSCREENINFO, &fb.vi) < 0)
-    {
-        ERROR("failed to set fb0 vi info");
-        return -1;
-    }
-
     if(ioctl(fb.fd, FBIOGET_FSCREENINFO, &fb.fi) < 0)
+        goto fail;
+
+    /*
+     * No FBIOPUT_VSCREENINFO ioctl must be called here. Flo's display drivers
+     * contain a hack to set backlight while in recovery, which is triggered by
+     * this ioctl (and probably other things). The hack turns *something* on
+     * and it causes insane battery drain while in android (it eats at least
+     * five times more energy). The device enters deep sleep just fine, the dmesg
+     * says it was suspended, but it drains more energy. Qualcomm ION overlay
+     * framebuffer implementation works around this hack, because it doesn't
+     * require that ioctl (but we can't set pixel format without it, must use
+     * framebuffer's default format in "TARGET_RECOVERY_PIXEL_FORMAT" config
+     * value). This bug does not manifest when MultiROM isn't installed,
+     * because nothing sets FBIOPUT_VSCREENINFO during Android's boot,
+     * and well, you're not really supposed to stay long in recovery nor does
+     * it have "suspend" state.
+     *
+     * This ioctl call was moved to framebuffer_generic implementation.
+     */
+
+    if(fb_open_impl() < 0)
         goto fail;
 
     fb_frozen = 0;
@@ -184,9 +159,6 @@ int fb_open(int rotation)
         fb_width = fb.vi.yres;
         fb_height = fb.vi.xres;
     }
-
-    if(fb_open_impl() < 0)
-        goto fail;
 
 #ifdef RECOVERY_GRAPHICS_USE_LINELENGTH
     fb.vi.xres_virtual = fb.fi.line_length / PIXEL_SIZE;
