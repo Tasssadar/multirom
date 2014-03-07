@@ -43,17 +43,6 @@ struct fb_qcom_overlay_data {
     struct ion_handle_data handle_data;
 };
 
-static int map_mdp_pixel_format()
-{
-    int format = MDP_RGB_565;
-#if defined(RECOVERY_BGRA)
-    format = MDP_BGRA_8888;
-#elif defined(RECOVERY_RGBX)
-    format = MDP_RGBA_8888;
-#endif
-    return format;
-}
-
 static int free_ion_mem(struct fb_qcom_overlay_data *data)
 {
     int ret = 0;
@@ -138,7 +127,13 @@ static int allocate_overlay(struct fb_qcom_overlay_data *data, int fd, int width
 
     overlay.src.width  = ALIGN(width, 32);
     overlay.src.height = height;
-    overlay.src.format = map_mdp_pixel_format();
+
+    /* We can't set format here because their IDs are different on aosp and CM kernels.
+     * There is literally just one line different between their headers, and it breaks it.
+     * MDP_FB_FORMAT works because it translates to MDP_IMGTYPE2_START, which is the same
+     * on both. It means it will take the format from the framebuffer. */
+    overlay.src.format = MDP_FB_FORMAT;
+
     overlay.src_rect.w = width;
     overlay.src_rect.h = height;
     overlay.dst_rect.w = width;
