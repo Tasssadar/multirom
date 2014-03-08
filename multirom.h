@@ -103,6 +103,7 @@ struct multirom_status
     int hide_internal;
     char *int_display_name;
     int rotation;
+    int force_generic_fb;
     struct multirom_rom *auto_boot_rom;
     struct multirom_rom *current_rom;
     struct multirom_rom **roms;

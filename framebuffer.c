@@ -51,6 +51,7 @@ int fb_rotation = 0; // in degrees, clockwise
 
 static struct framebuffer fb;
 static int fb_frozen = 0;
+static int fb_force_generic = 0;
 static fb_items_t fb_items = { NULL, NULL, NULL };
 static fb_items_t **inactive_ctx = NULL;
 static uint8_t **fb_rot_helpers = NULL;
@@ -82,27 +83,29 @@ int vt_set_mode(int graphics)
 
 int fb_open_impl(void)
 {
-    extern struct fb_impl fb_impl_generic;
+    struct fb_impl **itr;
+    struct fb_impl *impls[FB_IMPL_CNT];
+
+#define ADD_IMPL(ID, N) \
+    extern struct fb_impl fb_impl_ ## N; \
+    impls[ID] = &fb_impl_ ## N;
+
+    ADD_IMPL(FB_IMPL_GENERIC, generic);
 #ifdef MR_USE_QCOM_OVERLAY
-    extern struct fb_impl fb_impl_qcom_overlay;
+    ADD_IMPL(FB_IMPL_QCOM_OVERLAY, qcom_overlay);
 #endif
 
-    struct fb_impl * const *i;
-    struct fb_impl * const impls[] = {
-#ifdef MR_USE_QCOM_OVERLAY
-        &fb_impl_qcom_overlay,
-#endif
+    if(fb_force_generic)
+        itr = &impls[FB_IMPL_GENERIC];
+    else
+        itr = impls;
 
-        &fb_impl_generic,
-        NULL
-    };
-
-    for(i = impls; *i; ++i)
+    for(; *itr; ++itr)
     {
-        if((*i)->open(&fb) >= 0)
+        if((*itr)->open(&fb) >= 0)
         {
-            INFO("Framebuffer implementation: %s\n", (*i)->name);
-            fb.impl = *i;
+            INFO("Framebuffer implementation: %s\n", (*itr)->name);
+            fb.impl = *itr;
             return 0;
         }
     }
@@ -241,6 +244,11 @@ int fb_get_vi_xres(void)
 int fb_get_vi_yres(void)
 {
     return fb.vi.yres;
+}
+
+void fb_force_generic_impl(int force)
+{
+    fb_force_generic = force;
 }
 
 void fb_update(void)

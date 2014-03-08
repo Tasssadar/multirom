@@ -143,6 +143,7 @@ static void *impl_get_frame_dest(struct framebuffer *fb)
 
 const struct fb_impl fb_impl_generic = {
     .name = "Generic",
+    .impl_id = FB_IMPL_GENERIC,
 
     .open = impl_open,
     .close = impl_close,

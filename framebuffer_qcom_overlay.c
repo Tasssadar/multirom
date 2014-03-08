@@ -261,6 +261,7 @@ static void *impl_get_frame_dest(struct framebuffer *fb)
 
 const struct fb_impl fb_impl_qcom_overlay = {
     .name = "Qualcomm ION overlay",
+    .impl_id = FB_IMPL_QCOM_OVERLAY,
 
     .open = impl_open,
     .close = impl_close,

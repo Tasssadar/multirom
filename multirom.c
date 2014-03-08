@@ -497,6 +497,8 @@ int multirom_load_status(struct multirom_status *s)
             s->int_display_name = strdup(arg);
         else if(strstr(name, "rotation"))
             s->rotation = atoi(arg);
+        else if(strstr(name, "force_generic_fb"))
+            s->force_generic_fb = atoi(arg);
     }
 
     fclose(f);
@@ -553,6 +555,8 @@ int multirom_load_status(struct multirom_status *s)
         strcpy(r->name, s->int_display_name);
     }
 
+    fb_force_generic_impl(s->force_generic_fb);
+
     return 0;
 }
 
@@ -587,6 +591,7 @@ int multirom_save_status(struct multirom_status *s)
     fprintf(f, "hide_internal=%d\n", s->hide_internal);
     fprintf(f, "int_display_name=%s\n", s->int_display_name ? s->int_display_name : "");
     fprintf(f, "rotation=%d\n", s->rotation);
+    fprintf(f, "force_generic_fb=%d\n", s->force_generic_fb);
 
     fclose(f);
     return 0;
@@ -615,6 +620,8 @@ void multirom_dump_status(struct multirom_status *s)
     INFO("  colors=%d\n", s->colors);
     INFO("  brightness=%d\n", s->brightness);
     INFO("  enable_adb=%d\n", s->enable_adb);
+    INFO("  rotation=%d\n", s->rotation);
+    INFO("  force_generic_fb=%d\n", s->force_generic_fb);
     INFO("  hide_internal=%d\n", s->hide_internal);
     INFO("  int_display_name=%s\n", s->int_display_name ? s->int_display_name : "NULL");
     INFO("  auto_boot_seconds=%d\n", s->auto_boot_seconds);

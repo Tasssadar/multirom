@@ -45,11 +45,23 @@ struct framebuffer {
 
 struct fb_impl {
     const char *name;
+    const int impl_id;
 
     int (*open)(struct framebuffer *fb);
     void (*close)(struct framebuffer *fb);
     int (*update)(struct framebuffer *fb);
     void *(*get_frame_dest)(struct framebuffer *fb);
+};
+
+enum
+{
+#ifdef MR_USE_QCOM_OVERLAY
+    FB_IMPL_QCOM_OVERLAY,
+#endif
+
+    FB_IMPL_GENERIC, // must be last
+
+    FB_IMPL_CNT
 };
 
 #define ISO_CHAR_HEIGHT 16
@@ -93,6 +105,7 @@ void fb_update(void);
 void fb_dump_info(void);
 int fb_get_vi_xres(void);
 int fb_get_vi_yres(void);
+void fb_force_generic_impl(int force);
 
 enum 
 {
