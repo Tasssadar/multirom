@@ -56,7 +56,8 @@ static int fb_force_generic = 0;
 static fb_items_t fb_items = { NULL, NULL, NULL };
 static fb_items_t **inactive_ctx = NULL;
 static uint8_t **fb_rot_helpers = NULL;
-static pthread_mutex_t fb_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t fb_items_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t fb_update_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t fb_draw_thread;
 static volatile int fb_draw_requested = 0;
 static volatile int fb_draw_run = 0;
@@ -341,9 +342,9 @@ int fb_clone(char **buff)
     int len = fb.size;
     *buff = malloc(len);
 
-    pthread_mutex_lock(&fb_mutex);
+    pthread_mutex_lock(&fb_items_mutex);
     memcpy(*buff, fb.buffer, len);
-    pthread_mutex_unlock(&fb_mutex);
+    pthread_mutex_unlock(&fb_items_mutex);
 
     return len;
 }
@@ -481,10 +482,10 @@ void fb_draw_rect(fb_rect *r)
 
 int fb_generate_item_id()
 {
-    pthread_mutex_lock(&fb_mutex);
+    pthread_mutex_lock(&fb_items_mutex);
     static int id = 0;
     int res = id++;
-    pthread_mutex_unlock(&fb_mutex);
+    pthread_mutex_unlock(&fb_items_mutex);
 
     return res;
 }
@@ -521,9 +522,9 @@ fb_text *fb_add_text_long(int x, int y, uint32_t color, int size, char *text)
 {
     fb_text *t = fb_create_text_item(x, y, color, size, text);
 
-    pthread_mutex_lock(&fb_mutex);
+    pthread_mutex_lock(&fb_items_mutex);
     list_add(t, &fb_items.texts);
-    pthread_mutex_unlock(&fb_mutex);
+    pthread_mutex_unlock(&fb_items_mutex);
 
     return t;
 }
@@ -540,9 +541,9 @@ fb_rect *fb_add_rect(int x, int y, int w, int h, uint32_t color)
     r->h = h;
     r->color = color;
 
-    pthread_mutex_lock(&fb_mutex);
+    pthread_mutex_lock(&fb_items_mutex);
     list_add(r, &fb_items.rects);
-    pthread_mutex_unlock(&fb_mutex);
+    pthread_mutex_unlock(&fb_items_mutex);
 
     return r;
 }
@@ -572,9 +573,9 @@ void fb_rm_text(fb_text *t)
     if(!t)
         return;
 
-    pthread_mutex_lock(&fb_mutex);
+    pthread_mutex_lock(&fb_items_mutex);
     list_rm_noreorder(t, &fb_items.texts, &fb_destroy_item);
-    pthread_mutex_unlock(&fb_mutex);
+    pthread_mutex_unlock(&fb_items_mutex);
 }
 
 void fb_rm_rect(fb_rect *r)
@@ -582,9 +583,9 @@ void fb_rm_rect(fb_rect *r)
     if(!r)
         return;
 
-    pthread_mutex_lock(&fb_mutex);
+    pthread_mutex_lock(&fb_items_mutex);
     list_rm_noreorder(r, &fb_items.rects, &fb_destroy_item);
-    pthread_mutex_unlock(&fb_mutex);
+    pthread_mutex_unlock(&fb_items_mutex);
 }
 
 #define BOX_BORDER (2*DPI_MUL)
@@ -611,9 +612,9 @@ fb_msgbox *fb_create_msgbox(int w, int h, int bgcolor)
     box->background[2] = fb_add_rect(x+BOX_BORDER, y+BOX_BORDER,
                                      w-BOX_BORDER*2, h-BOX_BORDER*2, bgcolor);
 
-    pthread_mutex_lock(&fb_mutex);
+    pthread_mutex_lock(&fb_items_mutex);
     fb_items.msgbox = box;
-    pthread_mutex_unlock(&fb_mutex);
+    pthread_mutex_unlock(&fb_items_mutex);
     return box;
 }
 
@@ -637,9 +638,9 @@ fb_text *fb_msgbox_add_text(int x, int y, int size, char *fmt, ...)
     y += box->head.y;
 
     fb_text *t = fb_create_text_item(x, y, WHITE, size, txt);
-    pthread_mutex_lock(&fb_mutex);
+    pthread_mutex_lock(&fb_items_mutex);
     list_add(t, &box->texts);
-    pthread_mutex_unlock(&fb_mutex);
+    pthread_mutex_unlock(&fb_items_mutex);
 
     return t;
 }
@@ -649,24 +650,24 @@ void fb_msgbox_rm_text(fb_text *text)
     if(!text)
         return;
 
-    pthread_mutex_lock(&fb_mutex);
+    pthread_mutex_lock(&fb_items_mutex);
     if(fb_items.msgbox)
         list_rm_noreorder(text, &fb_items.msgbox->texts, &fb_destroy_item);
-    pthread_mutex_unlock(&fb_mutex);
+    pthread_mutex_unlock(&fb_items_mutex);
 }
 
 void fb_destroy_msgbox(void)
 {
-    pthread_mutex_lock(&fb_mutex);
+    pthread_mutex_lock(&fb_items_mutex);
     if(!fb_items.msgbox)
     {
-        pthread_mutex_unlock(&fb_mutex);
+        pthread_mutex_unlock(&fb_items_mutex);
         return;
     }
 
     fb_msgbox *box = fb_items.msgbox;
     fb_items.msgbox = NULL;
-    pthread_mutex_unlock(&fb_mutex);
+    pthread_mutex_unlock(&fb_items_mutex);
 
     list_clear(&box->texts, &fb_destroy_item);
 
@@ -679,10 +680,10 @@ void fb_destroy_msgbox(void)
 
 void fb_clear(void)
 {
-    pthread_mutex_lock(&fb_mutex);
+    pthread_mutex_lock(&fb_items_mutex);
     list_clear(&fb_items.texts, &fb_destroy_item);
     list_clear(&fb_items.rects, &fb_destroy_item);
-    pthread_mutex_unlock(&fb_mutex);
+    pthread_mutex_unlock(&fb_items_mutex);
 
     fb_destroy_msgbox();
 }
@@ -746,7 +747,7 @@ void fb_draw_overlay(void)
 static void fb_draw(void)
 {
     uint32_t i;
-    pthread_mutex_lock(&fb_mutex);
+    pthread_mutex_lock(&fb_items_mutex);
 
     fb_fill(BLACK);
 
@@ -772,9 +773,11 @@ static void fb_draw(void)
             fb_draw_text(box->texts[i]);
     }
 
-    fb_update();
+    pthread_mutex_unlock(&fb_items_mutex);
 
-    pthread_mutex_unlock(&fb_mutex);
+    pthread_mutex_lock(&fb_update_mutex);
+    fb_update();
+    pthread_mutex_unlock(&fb_update_mutex);
 }
 
 void fb_freeze(int freeze)
@@ -799,14 +802,14 @@ void fb_push_context(void)
 {
     fb_items_t *ctx = mzalloc(sizeof(fb_items_t));
 
-    pthread_mutex_lock(&fb_mutex);
+    pthread_mutex_lock(&fb_items_mutex);
 
     list_move(&fb_items.texts, &ctx->texts);
     list_move(&fb_items.rects, &ctx->rects);
     ctx->msgbox = fb_items.msgbox;
     fb_items.msgbox = NULL;
 
-    pthread_mutex_unlock(&fb_mutex);
+    pthread_mutex_unlock(&fb_items_mutex);
 
     list_add(ctx, &inactive_ctx);
 }
@@ -821,13 +824,13 @@ void fb_pop_context(void)
     int idx = list_item_count(inactive_ctx)-1;
     fb_items_t *ctx = inactive_ctx[idx];
 
-    pthread_mutex_lock(&fb_mutex);
+    pthread_mutex_lock(&fb_items_mutex);
 
     list_move(&ctx->texts, &fb_items.texts);
     list_move(&ctx->rects, &fb_items.rects);
     fb_items.msgbox = ctx->msgbox;
 
-    pthread_mutex_unlock(&fb_mutex);
+    pthread_mutex_unlock(&fb_items_mutex);
 
     list_rm_noreorder(ctx, &inactive_ctx, &free);
 
@@ -853,9 +856,9 @@ void *fb_draw_thread_work(void *cookie)
 #ifdef MR_CONTINUOUS_FB_UPDATE
         else
         {
-            pthread_mutex_lock(&fb_mutex);
+            pthread_mutex_lock(&fb_update_mutex);
             fb_update();
-            pthread_mutex_unlock(&fb_mutex);
+            pthread_mutex_unlock(&fb_update_mutex);
         }
 #endif
 
