@@ -276,7 +276,7 @@ void multirom_emergency_reboot(void)
 
     fb_add_text_long(0, 395, GRAYISH, 1, ++tail);
 
-    fb_draw();
+    fb_request_draw();
 
     multirom_copy_log(klog);
     free(klog);
@@ -1323,7 +1323,7 @@ void multirom_take_screenshot(void)
     fb_fill(WHITE);
     fb_update();
     usleep(100000);
-    fb_draw();
+    fb_request_draw();
 }
 
 int multirom_get_trampoline_ver(void)

@@ -154,6 +154,10 @@ ifeq ($(MR_USE_QCOM_OVERLAY),true)
     LOCAL_SRC_FILES += framebuffer_qcom_overlay.c
 endif
 
+ifeq ($(MR_CONTINUOUS_FB_UPDATE),true)
+    LOCAL_CFLAGS += -DMR_CONTINUOUS_FB_UPDATE
+endif
+
 include $(BUILD_EXECUTABLE)
 
 # Trampoline

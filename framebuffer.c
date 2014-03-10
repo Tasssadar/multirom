@@ -31,6 +31,7 @@
 #include <linux/kd.h>
 #include <cutils/memory.h>
 #include <pthread.h>
+#include <sys/atomics.h>
 
 #include "log.h"
 #include "framebuffer.h"
@@ -56,7 +57,6 @@ static fb_items_t fb_items = { NULL, NULL, NULL };
 static fb_items_t **inactive_ctx = NULL;
 static uint8_t **fb_rot_helpers = NULL;
 static pthread_mutex_t fb_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t fb_draw_req_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t fb_draw_thread;
 static volatile int fb_draw_requested = 0;
 static volatile int fb_draw_run = 0;
@@ -743,11 +743,8 @@ void fb_draw_overlay(void)
 #endif // MR_DISABLE_ALPHA
 }
 
-void fb_draw(void)
+static void fb_draw(void)
 {
-    if(fb_frozen)
-        return;
-
     uint32_t i;
     pthread_mutex_lock(&fb_mutex);
 
@@ -834,14 +831,12 @@ void fb_pop_context(void)
 
     list_rm_noreorder(ctx, &inactive_ctx, &free);
 
-    fb_draw();
+    fb_request_draw();
 }
 
 #define SLEEP_CONST 16
 void *fb_draw_thread_work(void *cookie)
 {
-    volatile int req = 0;
-
     struct timespec last, curr;
     uint32_t diff = 0, prevSleepTime = 0;
     clock_gettime(CLOCK_MONOTONIC, &last);
@@ -851,13 +846,18 @@ void *fb_draw_thread_work(void *cookie)
         clock_gettime(CLOCK_MONOTONIC, &curr);
         diff = timespec_diff(&last, &curr);
 
-        pthread_mutex_lock(&fb_draw_req_mutex);
-        req = fb_draw_requested;
-        fb_draw_requested = 0;
-        pthread_mutex_unlock(&fb_draw_req_mutex);
-
-        if(req)
+        if(__atomic_cmpxchg(1, 0, &fb_draw_requested) == 0)
+        {
             fb_draw();
+        }
+#ifdef MR_CONTINUOUS_FB_UPDATE
+        else
+        {
+            pthread_mutex_lock(&fb_mutex);
+            fb_update();
+            pthread_mutex_unlock(&fb_mutex);
+        }
+#endif
 
         last = curr;
         if(diff <= SLEEP_CONST+prevSleepTime)
@@ -873,7 +873,6 @@ void *fb_draw_thread_work(void *cookie)
 
 void fb_request_draw(void)
 {
-    pthread_mutex_lock(&fb_draw_req_mutex);
-    fb_draw_requested = 1;
-    pthread_mutex_unlock(&fb_draw_req_mutex);
+    if(!fb_frozen)
+        __atomic_cmpxchg(0, 1, &fb_draw_requested);
 }

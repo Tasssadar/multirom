@@ -176,7 +176,6 @@ void fb_draw_square(int x, int y, px_type color, int size);
 void fb_draw_overlay(void);
 void fb_draw_rect(fb_rect *r);
 void fb_fill(uint32_t color);
-void fb_draw(void);
 void fb_request_draw(void);
 void fb_clear(void);
 void fb_freeze(int freeze);
