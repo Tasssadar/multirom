@@ -4,7 +4,10 @@ include $(CLEAR_VARS)
 
 multirom_local_path := $(LOCAL_PATH)
 
-LOCAL_C_INCLUDES += $(multirom_local_path)
+LOCAL_C_INCLUDES += $(multirom_local_path) \
+    external/libpng \
+    external/zlib
+
 LOCAL_SRC_FILES:= \
     main.c \
     util.c \
@@ -39,7 +42,7 @@ LOCAL_FORCE_STATIC_EXECUTABLE := true
 LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT)
 LOCAL_UNSTRIPPED_PATH := $(TARGET_ROOT_OUT_UNSTRIPPED)
 
-LOCAL_STATIC_LIBRARIES := libcutils libc libm
+LOCAL_STATIC_LIBRARIES := libcutils libc libm libpng libz
 
 # clone libbootimg to /system/extras/ from
 # https://github.com/Tasssadar/libbootimg.git

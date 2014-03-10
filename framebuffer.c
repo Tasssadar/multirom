@@ -31,6 +31,7 @@
 #include <linux/kd.h>
 #include <cutils/memory.h>
 #include <pthread.h>
+#include <png.h>
 
 #include "log.h"
 #include "framebuffer.h"
@@ -52,7 +53,7 @@ int fb_rotation = 0; // in degrees, clockwise
 static struct framebuffer fb;
 static int fb_frozen = 0;
 static int fb_force_generic = 0;
-static fb_items_t fb_items = { NULL, NULL, NULL };
+static fb_items_t fb_items = { NULL, NULL, NULL, NULL };
 static fb_items_t **inactive_ctx = NULL;
 static uint8_t **fb_rot_helpers = NULL;
 static pthread_mutex_t fb_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -461,6 +462,9 @@ void fb_destroy_item(void *item)
             // fb_destroy_msgbox must be used
             assert(0);
             break;
+        case FB_PNG_IMG:
+            free(((fb_png_img*)item)->data);
+            break;
     }
     free(item);
 }
@@ -469,13 +473,53 @@ void fb_draw_rect(fb_rect *r)
 {
     px_type *bits = fb.buffer + (fb.stride*r->head.y) + r->head.x;
     px_type color = fb_convert_color(r->color);
-    int w = r->w*PIXEL_SIZE;
+    const int w = r->w*PIXEL_SIZE;
 
     int i;
     for(i = 0; i < r->h; ++i)
     {
         fb_memset(bits, color, w);
         bits += fb.stride;
+    }
+}
+
+static inline int blend_png(int value1, int value2, int alpha) {
+    int r = (0xFF-alpha)*value1 + alpha*value2;
+    return (r+1 + (r >> 8)) >> 8; // divide by 255
+}
+
+void fb_draw_png_img(fb_png_img *i)
+{
+    int y, x;
+    px_type *bits = fb.buffer + (fb.stride*i->head.y) + i->head.x;
+    px_type *img = i->data;
+    const int w = i->w*PIXEL_SIZE;
+    uint8_t *comps_img, *comps_bits;
+
+    for(y = 0; y < i->h; ++y)
+    {
+        for(x = 0; x < i->w; ++x)
+        {
+            // Colors, 0xAABBGGRR
+            comps_img = (uint8_t*)img;
+            if(comps_img[3] == 0xFF)
+            {
+                *bits = *img;
+                ++bits;
+                ++img;
+            }
+            else
+            {
+                comps_bits = (uint8_t*)bits;
+                comps_bits[0] = blend_png(comps_bits[0], comps_img[0], comps_img[3]);
+                comps_bits[1] = blend_png(comps_bits[1], comps_img[2], comps_img[3]);
+                comps_bits[2] = blend_png(comps_bits[2], comps_img[2], comps_img[3]);
+                comps_bits[3] = 0xFF;
+                ++bits;
+                ++img;
+            }
+        }
+        bits += fb.stride-i->w;
     }
 }
 
@@ -567,6 +611,112 @@ void fb_add_rect_notfilled(int x, int y, int w, int h, uint32_t color, int thick
     list_add(r, list);
 }
 
+// Kanged from TWRP
+double pow(double x, double y) {
+    return x;
+}
+
+fb_png_img* fb_add_png_img(int x, int y, int w, int h, const char *path)
+{
+    fb_png_img *result = NULL;
+    FILE *fp;
+    unsigned char header[8];
+    png_structp png_ptr = NULL;
+    png_infop info_ptr = NULL;
+    uint32_t bytes_per_row;
+    uint8_t *row_buff;
+    px_type *data_dest;
+    int i;
+    int px_per_row;
+
+    fp = fopen(path, "rb");
+    if(!fp)
+        return NULL;
+
+    size_t bytesRead = fread(header, 1, sizeof(header), fp);
+    if (bytesRead != sizeof(header)) {
+        goto exit;
+    }
+
+    if (png_sig_cmp(header, 0, sizeof(header))) {
+        goto exit;
+    }
+
+    png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    if (!png_ptr) {
+        goto exit;
+    }
+
+    info_ptr = png_create_info_struct(png_ptr);
+    if (!info_ptr) {
+        goto exit;
+    }
+
+    if (setjmp(png_jmpbuf(png_ptr))) {
+        goto exit;
+    }
+
+    png_set_packing(png_ptr);
+
+    png_init_io(png_ptr, fp);
+    png_set_sig_bytes(png_ptr, sizeof(header));
+    png_read_info(png_ptr, info_ptr);
+
+    size_t width = info_ptr->width;
+    size_t height = info_ptr->height;
+    size_t stride = 4 * width;
+    size_t pixelSize = stride * height;
+
+    int color_type = info_ptr->color_type;
+    int bit_depth = info_ptr->bit_depth;
+    int channels = info_ptr->channels;
+    if (!(bit_depth == 8 &&
+          ((channels == 3 && color_type == PNG_COLOR_TYPE_RGB) ||
+           (channels == 4 && color_type == PNG_COLOR_TYPE_RGBA) ||
+           (channels == 1 && color_type == PNG_COLOR_TYPE_PALETTE)))) {
+        goto exit;
+    }
+
+    result = mzalloc(sizeof(fb_png_img));
+    result->data = mzalloc(PIXEL_SIZE * width * height);
+    result->head.type = FB_PNG_IMG;
+    result->head.x = x;
+    result->head.y = y;
+    result->w = w;
+    result->h = h;
+
+    if (color_type == PNG_COLOR_TYPE_PALETTE)
+        png_set_palette_to_rgb(png_ptr);
+
+    bytes_per_row = png_get_rowbytes(png_ptr, info_ptr);
+    px_per_row = bytes_per_row/channels;
+    row_buff = malloc(bytes_per_row);
+    data_dest = result->data;
+
+    for (y = 0; y < (int) height; ++y)
+    {
+        png_read_row(png_ptr, row_buff, NULL);
+        if(channels == 4)
+        {
+            for(i = 0; i < width; ++i)
+            {
+                *data_dest = (px_type)fb_convert_color(((uint32_t*)row_buff)[i]);
+                ++data_dest;
+            }
+        }
+    }
+
+    pthread_mutex_lock(&fb_mutex);
+    list_add(result, &fb_items.png_imgs);
+    pthread_mutex_unlock(&fb_mutex);
+
+exit:
+    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+    fclose(fp);
+
+    return result;
+}
+
 void fb_rm_text(fb_text *t)
 {
     if(!t)
@@ -584,6 +734,16 @@ void fb_rm_rect(fb_rect *r)
 
     pthread_mutex_lock(&fb_mutex);
     list_rm_noreorder(r, &fb_items.rects, &fb_destroy_item);
+    pthread_mutex_unlock(&fb_mutex);
+}
+
+void fb_rm_png_img(fb_png_img *i)
+{
+    if(!i)
+        return;
+
+    pthread_mutex_lock(&fb_mutex);
+    list_rm_noreorder(i, &fb_items.png_imgs, &fb_destroy_item);
     pthread_mutex_unlock(&fb_mutex);
 }
 
@@ -760,6 +920,10 @@ void fb_draw(void)
     // texts
     for(i = 0; fb_items.texts && fb_items.texts[i]; ++i)
         fb_draw_text(fb_items.texts[i]);
+
+    // images
+    for(i = 0; fb_items.png_imgs && fb_items.png_imgs[i]; ++i)
+        fb_draw_png_img(fb_items.png_imgs[i]);
 
     // msg box
     if(fb_items.msgbox)
