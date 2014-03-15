@@ -478,6 +478,8 @@ void *multirom_ui_tab_rom_init(int tab_type)
         multirom_ui_fill_rom_list(t->list, MASK_INTERNAL);
 
     listview_update_ui(t->list);
+    if(listview_ensure_selected_visible(t->list))
+        listview_update_ui(t->list);
 
     int has_roms = (int)(t->list->items == NULL);
     multirom_ui_tab_rom_set_empty((void*)t, has_roms);
