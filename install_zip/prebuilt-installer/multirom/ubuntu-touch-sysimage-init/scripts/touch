@@ -117,7 +117,7 @@ process_ubuntu()
 		mount --move /tmpmnt ${rootmnt}/userdata
 
 		# Mount the android system partition to a temporary location
-		mkdir -p /android-system /android-initrd
+		mkdir -p /android-system
 		mount -o loop,ro ${rootmnt}/var/lib/lxc/android/system.img /android-system
 
 		# Get device information
@@ -207,12 +207,15 @@ process_ubuntu()
 		# Extract the fstab from the android initrd
 		# NOTE: we should find a faster way of doing that or cache it
 		OLD_CWD=$(pwd)
-		cd /android-initrd
-		cat /android-system/boot/android-ramdisk.img | gzip -d | cpio -i fstab*
+#		cd /android-initrd
+#		cat /android-system/boot/android-ramdisk.img | gzip -d | cpio -i fstab*
+		mount -n -t tmpfs tmpfs ${rootmnt}/var/lib/lxc/android/rootfs
+		cd ${rootmnt}/var/lib/lxc/android/rootfs
+		cat /android-system/boot/android-ramdisk.img | gzip -d | cpio -i
 		cd $OLD_CWD
 
 		# Mount all the Android partitions
-		cat /android-initrd/fstab.* | while read line; do
+		cat ${rootmnt}/var/lib/lxc/android/rootfs/fstab* | while read line; do
 			set -- $line
 
 			# Skip any unwanted entry
@@ -227,7 +230,7 @@ process_ubuntu()
 
 			echo "initrd: checking mount label $label" >/dev/kmsg || true
 
-			for dir in by-partlabel by-name by-label; do
+			for dir in by-partlabel by-name by-label by-path by-uuid by-partuuid by-id; do
 				path="/dev/disk/$dir/$label"
 				[ -e "$path" ] && break
 			done
