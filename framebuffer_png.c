@@ -264,17 +264,28 @@ void fb_png_release(px_type *data)
     {
         if((*itr)->data == data)
         {
-            if(--(*itr)->refcnt == 0)
-            {
-                PNG_LOG("PNG %s (%dx%d) %p reached refcnt 0, destroying\n", (*itr)->path, (*itr)->width, (*itr)->height, data);
-                list_rm(*itr, &png_cache, &destroy_png_cache_entry);
-            }
-            else
-            {
-                PNG_LOG("PNG %s (%dx%d) %p removed from cache, refcnt is %d\n", (*itr)->path, (*itr)->width, (*itr)->height, data, (*itr)->refcnt);
-            }
+            --(*itr)->refcnt;
+            PNG_LOG("PNG %s (%dx%d) %p released, refcnt is %d\n", (*itr)->path, (*itr)->width, (*itr)->height, data, (*itr)->refcnt);
             return;
         }
     }
     PNG_LOG("PNG %p not found in cache!\n", data);
+}
+
+void fb_png_drop_unused(void)
+{
+    struct png_cache_entry **itr;
+    for(itr = png_cache; itr && *itr;)
+    {
+        if((*itr)->refcnt <= 0)
+        {
+            PNG_LOG("PNG %s (%dx%d) %p removed from cache\n", (*itr)->path, (*itr)->width, (*itr)->height, data);
+            list_rm(*itr, &png_cache, &destroy_png_cache_entry);
+            itr = png_cache;
+        }
+        else
+        {
+            ++itr;
+        }
+    }
 }

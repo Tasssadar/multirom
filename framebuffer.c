@@ -788,6 +788,8 @@ void fb_clear(void)
     pthread_mutex_unlock(&fb_mutex);
 
     fb_destroy_msgbox();
+
+    fb_png_drop_unused();
 }
 
 #if PIXEL_SIZE == 4

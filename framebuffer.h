@@ -225,6 +225,7 @@ void fb_pop_context(void);
 
 px_type *fb_png_get(const char *path, int w, int h);
 void fb_png_release(px_type *data);
+void fb_png_drop_unused(void);
 
 inline int center_x(int x, int width, int size, const char *text);
 inline int center_y(int y, int height, int size);
