@@ -106,7 +106,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
         ERROR("Couldn't find theme for resolution %dx%d!\n", fb_width, fb_height);
         fb_add_text(0, 0, WHITE, SIZE_SMALL, "Couldn't find theme for resolution %dx%d!\nPress POWER to reboot.", fb_width, fb_height);
-        fb_draw();
+        fb_request_draw();
         fb_clear();
         fb_close();
 
@@ -133,7 +133,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     if(s->auto_boot_rom && s->auto_boot_seconds > 0)
         multirom_ui_auto_boot();
     else
-        fb_draw();
+        fb_request_draw();
 
     while(1)
     {
@@ -180,7 +180,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
             multirom_ui_switch(tab);
 
             fb_freeze(0);
-            fb_draw();
+            fb_request_draw();
 
             loop_act &= ~(LOOP_CHANGE_CLR);
         }
@@ -214,7 +214,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
             break;
     }
 
-    fb_draw();
+    fb_request_draw();
     fb_freeze(1);
 
     cur_theme->destroy(themes_info->data);
@@ -319,7 +319,7 @@ void multirom_ui_switch(int tab)
     themes_info->data->selected_tab = tab;
 
     fb_freeze(0);
-    fb_draw();
+    fb_request_draw();
 }
 
 void multirom_ui_fill_rom_list(listview *view, int mask)
@@ -384,7 +384,7 @@ int multirom_ui_destroy_msgbox(void)
     pthread_mutex_lock(&exit_code_mutex);
     fb_destroy_msgbox();
     fb_freeze(0);
-    fb_draw();
+    fb_request_draw();
     active_msgbox = NULL;
     set_touch_handlers_mode(HANDLERS_FIRST);
     pthread_mutex_unlock(&exit_code_mutex);
@@ -402,7 +402,7 @@ void multirom_ui_auto_boot(void)
 
     fb_text *sec_text = fb_msgbox_add_text(-1, -1, SIZE_BIG, "%d", seconds/1000);
 
-    fb_draw();
+    fb_request_draw();
     fb_freeze(1);
     set_touch_handlers_mode(HANDLERS_ALL);
 
@@ -432,7 +432,7 @@ void multirom_ui_auto_boot(void)
         {
             sprintf(sec_text->text, "%d", seconds/1000);
             fb_freeze(0);
-            fb_draw();
+            fb_request_draw();
             fb_freeze(1);
         }
         usleep(50000);
@@ -478,6 +478,8 @@ void *multirom_ui_tab_rom_init(int tab_type)
         multirom_ui_fill_rom_list(t->list, MASK_INTERNAL);
 
     listview_update_ui(t->list);
+    if(listview_ensure_selected_visible(t->list))
+        listview_update_ui(t->list);
 
     int has_roms = (int)(t->list->items == NULL);
     multirom_ui_tab_rom_set_empty((void*)t, has_roms);
@@ -527,7 +529,7 @@ void multirom_ui_tab_rom_selected(listview_item *prev, listview_item *now)
 
     cur_theme->center_rom_name(t, rom->name);
 
-    fb_draw();
+    fb_request_draw();
 }
 
 void multirom_ui_tab_rom_confirmed(listview_item *it)
@@ -557,7 +559,7 @@ void multirom_ui_tab_rom_boot_btn(int action)
         fb_msgbox_add_text(-1, 180*DPI_MUL, SIZE_NORMAL, "See XDA thread for more info.");
         fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to close");
 
-        fb_draw();
+        fb_request_draw();
         fb_freeze(1);
         set_touch_handlers_mode(HANDLERS_ALL);
         return;
@@ -574,7 +576,7 @@ void multirom_ui_tab_rom_boot_btn(int action)
         fb_msgbox_add_text(-1, 215*DPI_MUL, SIZE_NORMAL, "kexec-hardboot support.");
         fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to close");
 
-        fb_draw();
+        fb_request_draw();
         fb_freeze(1);
         set_touch_handlers_mode(HANDLERS_ALL);
         return;
@@ -588,7 +590,7 @@ void multirom_ui_tab_rom_boot_btn(int action)
         fb_msgbox_add_text(-1, 180*DPI_MUL, SIZE_NORMAL, "Remove spaces from ROM's name");
         fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to close");
 
-        fb_draw();
+        fb_request_draw();
         fb_freeze(1);
         set_touch_handlers_mode(HANDLERS_ALL);
         return;
@@ -612,7 +614,7 @@ void multirom_ui_tab_rom_update_usb(void *data)
     listview_update_ui(t->list);
 
     multirom_ui_tab_rom_set_empty(data, (int)(t->list->items == NULL));
-    fb_draw();
+    fb_request_draw();
 }
 
 void multirom_ui_tab_rom_refresh_usb(int action)
@@ -706,7 +708,7 @@ void multirom_ui_tab_misc_copy_log(int action)
         fb_msgbox_add_text(-1, -1, SIZE_NORMAL, "/sdcard/multirom/error.txt");
     fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to close");
 
-    fb_draw();
+    fb_request_draw();
     fb_freeze(1);
     set_touch_handlers_mode(HANDLERS_ALL);
 }

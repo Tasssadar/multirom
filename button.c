@@ -95,7 +95,7 @@ void button_set_hover(button *b, int hover)
     if(b->text)
     {
         button_update_colors(b);
-        fb_draw();
+        fb_request_draw();
     }
 }
 
@@ -181,7 +181,7 @@ void button_set_checked(button *b, int checked)
         b->flags &= ~(BTN_CHECKED);
 
     button_update_colors(b);
-    fb_draw();
+    fb_request_draw();
 }
 
 int button_keyaction_call(void *data, int act)

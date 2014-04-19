@@ -313,10 +313,10 @@ void listview_scroll_to(listview *view, int pct)
     listview_update_ui(view);
 }
 
-void listview_ensure_visible(listview *view, listview_item *it)
+int listview_ensure_visible(listview *view, listview_item *it)
 {
     if(!view->scroll_mark)
-        return;
+        return 0;
 
     int i;
     int y = 0;
@@ -333,6 +333,17 @@ void listview_ensure_visible(listview *view, listview_item *it)
         view->pos = (y + last_h) - view->h;
     else if(y - view->pos < 0)
         view->pos = y;
+    else
+        return 0;
+    return 1;
+}
+
+int listview_ensure_selected_visible(listview *view)
+{
+    if(view->selected)
+        return listview_ensure_visible(view, view->selected);
+    else
+        return 0;
 }
 
 listview_item *listview_item_at(listview *view, int y_pos)

@@ -123,7 +123,7 @@ int checkbox_touch_handler(touch_event *ev, void *data)
 
         box->touch_id = ev->id;
         box->hover = fb_add_rect(box->x-TOUCH, box->y-TOUCH, CHECKBOX_SIZE+TOUCH*2, CHECKBOX_SIZE+TOUCH*2, CLR_SECONDARY);
-        fb_draw();
+        fb_request_draw();
     }
 
     if(box->touch_id != ev->id)
@@ -141,7 +141,7 @@ int checkbox_touch_handler(touch_event *ev, void *data)
         box->hover = NULL;
         box->touch_id = -1;
 
-        fb_draw();
+        fb_request_draw();
     }
     return 0;
 }

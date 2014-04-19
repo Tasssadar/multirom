@@ -58,7 +58,7 @@ progdots *progdots_create(int x, int y)
 
     workers_add(progdots_animate, p);
 
-    fb_draw();
+    fb_request_draw();
     return p;
 }
 
