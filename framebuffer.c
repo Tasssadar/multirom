@@ -685,9 +685,9 @@ void fb_rm_png_img(fb_png_img *i)
     if(!i)
         return;
 
-    pthread_mutex_lock(&fb_mutex);
+    pthread_mutex_lock(&fb_items_mutex);
     list_rm_noreorder(i, &fb_items.png_imgs, &fb_destroy_item);
-    pthread_mutex_unlock(&fb_mutex);
+    pthread_mutex_unlock(&fb_items_mutex);
 }
 
 #define BOX_BORDER (2*DPI_MUL)
