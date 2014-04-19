@@ -2095,12 +2095,14 @@ int multirom_update_partitions(struct multirom_status *s)
 
     list_clear(&s->partitions, &multirom_destroy_partition);
 
+    int exit_code = 0;
     char *cmd[] = { busybox_path, "blkid", NULL };
-    char *res = run_get_stdout(cmd);
-    if(!res)
+    char *res = run_get_stdout_with_exit(cmd, &exit_code);
+    if(exit_code != 0 || res == NULL)
     {
+        free(res);
         pthread_mutex_unlock(&parts_mutex);
-        return -1;
+        return exit_code == 0 ? 0 : -1;
     }
 
     char *tok;

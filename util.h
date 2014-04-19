@@ -37,6 +37,7 @@ int write_file(const char *path, const char *value);
 int remove_dir(const char *dir);
 int run_cmd(char **cmd);
 char *run_get_stdout(char **cmd);
+char *run_get_stdout_with_exit(char **cmd, int *exit_code);
 char *readlink_recursive(const char *link);
 void stdio_to_null();
 char *parse_string(char *src);

@@ -360,7 +360,14 @@ int run_cmd(char **cmd)
     }
 }
 
+
 char *run_get_stdout(char **cmd)
+{
+    int exit_code;
+    return run_get_stdout_with_exit(cmd, &exit_code);
+}
+
+char *run_get_stdout_with_exit(char **cmd, int *exit_code)
 {
    int fd[2];
    if(pipe(fd) < 0)
@@ -404,6 +411,9 @@ char *run_get_stdout(char **cmd)
         }
 
         close(fd[0]);
+
+        waitpid(pid, exit_code, 0);
+        *exit_code = WEXITSTATUS(*exit_code);
 
         if(written == 0)
         {
