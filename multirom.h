@@ -87,6 +87,7 @@ struct multirom_rom
     int id;
     char *name;
     char *base_path;
+    char *icon_path;
     int type;
     int has_bootimg;
     struct usb_partition *partition;
@@ -166,5 +167,6 @@ void multirom_set_brightness(int val);
 int multirom_run_scripts(const char *type, struct multirom_rom *rom);
 int multirom_update_rd_trampoline(const char *path);
 char *multirom_find_fstab_in_rc(const char *rcfile);
+void multirom_find_rom_icon(struct multirom_rom *rom);
 
 #endif

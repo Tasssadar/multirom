@@ -32,6 +32,31 @@ typedef uint32_t px_type;
 typedef uint16_t px_type;
 #endif
 
+#ifdef RECOVERY_BGRA
+#define PX_IDX_A 0
+#define PX_IDX_R 1
+#define PX_IDX_G 2
+#define PX_IDX_B 3
+#define PX_GET_R(px) ((px & 0xFF00) >> 8)
+#define PX_GET_G(px) ((px & 0xFF0000) >> 16)
+#define PX_GET_B(px) ((px & 0xFF000000) >> 24)
+#define PX_GET_A(px) (px & 0xFF)
+#elif defined(RECOVERY_RGBX)
+#define PX_IDX_A 3
+#define PX_IDX_R 0
+#define PX_IDX_G 1
+#define PX_IDX_B 2
+#define PX_GET_R(px) (px & 0xFF)
+#define PX_GET_G(px) ((px & 0xFF00) >> 8)
+#define PX_GET_B(px) ((px & 0xFF0000) >> 16)
+#define PX_GET_A(px) ((px & 0xFF000000) >> 24)
+#elif defined(RECOVERY_RGB_565)
+#define PX_GET_R(px) (((((px & 0x1F)*100)/31)*0xFF)/100)
+#define PX_GET_G(px) ((((((px & 0x7E0) >> 5)*100)/63)*0xFF)/100)
+#define PX_GET_B(px) ((((((px & 0xF800) >> 11)*100)/31)*0xFF)/100)
+#define PX_GET_A(px) (0xFF)
+#endif
+
 struct framebuffer {
     px_type *buffer;
     uint32_t size;
@@ -197,6 +222,9 @@ int fb_clone(char **buff);
 
 void fb_push_context(void);
 void fb_pop_context(void);
+
+px_type *fb_png_get(const char *path, int w, int h);
+void fb_png_release(px_type *data);
 
 inline int center_x(int x, int width, int size, const char *text);
 inline int center_y(int y, int height, int size);

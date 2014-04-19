@@ -463,7 +463,7 @@ void fb_destroy_item(void *item)
             assert(0);
             break;
         case FB_PNG_IMG:
-            free(((fb_png_img*)item)->data);
+            fb_png_release(((fb_png_img*)item)->data);
             break;
     }
     free(item);
@@ -494,30 +494,57 @@ void fb_draw_png_img(fb_png_img *i)
     px_type *bits = fb.buffer + (fb.stride*i->head.y) + i->head.x;
     px_type *img = i->data;
     const int w = i->w*PIXEL_SIZE;
+    uint8_t alpha;
     uint8_t *comps_img, *comps_bits;
+
+#if PIXEL_SIZE == 4
+    const uint8_t max_alpha = 0xFF;
+#elif PIXEL_SIZE == 2
+    const uint8_t max_alpha = 31;
+#endif
 
     for(y = 0; y < i->h; ++y)
     {
         for(x = 0; x < i->w; ++x)
         {
             // Colors, 0xAABBGGRR
-            comps_img = (uint8_t*)img;
-            if(comps_img[3] == 0xFF)
+#if PIXEL_SIZE == 4
+            alpha = PX_GET_A(*img);
+#elif PIXEL_SIZE == 2
+            alpha = ((uint8_t*)img)[2];
+#endif
+            // fully opaque
+            if(alpha == max_alpha)
             {
                 *bits = *img;
-                ++bits;
-                ++img;
             }
-            else
+            // do the blending
+            else if(alpha != 0x00)
             {
+#ifndef MR_DISABLE_ALPHA
+ #if PIXEL_SIZE == 4
                 comps_bits = (uint8_t*)bits;
-                comps_bits[0] = blend_png(comps_bits[0], comps_img[0], comps_img[3]);
-                comps_bits[1] = blend_png(comps_bits[1], comps_img[2], comps_img[3]);
-                comps_bits[2] = blend_png(comps_bits[2], comps_img[2], comps_img[3]);
-                comps_bits[3] = 0xFF;
-                ++bits;
-                ++img;
+                comps_img = (uint8_t*)img;
+                comps_bits[PX_IDX_R] = blend_png(comps_bits[PX_IDX_R], comps_img[PX_IDX_R], comps_img[PX_IDX_A]);
+                comps_bits[PX_IDX_G] = blend_png(comps_bits[PX_IDX_G], comps_img[PX_IDX_G], comps_img[PX_IDX_A]);
+                comps_bits[PX_IDX_B] = blend_png(comps_bits[PX_IDX_B], comps_img[PX_IDX_B], comps_img[PX_IDX_A]);
+                comps_bits[PX_IDX_A] = 0xFF;
+ #else
+                const uint8_t alpha5b = alpha;
+                const uint8_t alpha6b = ((uint8_t*)img)[3];
+                *bits = (((31-alpha5b)*(*bits & 0x1F)            + (alpha5b*(*img & 0x1F))) / 31) |
+                        ((((63-alpha6b)*((*bits & 0x7E0) >> 5)   + (alpha6b*((*img & 0x7E0) >> 5))) / 63) << 5) |
+                        ((((31-alpha5b)*((*bits & 0xF800) >> 11) + (alpha5b*((*img & 0xF800) >> 11))) / 31) << 11);
+ #endif // PIXEL_SIZE
+#endif // MR_DISABLE_ALPHA
             }
+
+            ++bits;
+#if PIXEL_SIZE == 4
+            ++img;
+#elif PIXEL_SIZE == 2
+            img += 2;
+#endif
         }
         bits += fb.stride-i->w;
     }
@@ -611,108 +638,23 @@ void fb_add_rect_notfilled(int x, int y, int w, int h, uint32_t color, int thick
     list_add(r, list);
 }
 
-// Kanged from TWRP
-double pow(double x, double y) {
-    return x;
-}
-
 fb_png_img* fb_add_png_img(int x, int y, int w, int h, const char *path)
 {
-    fb_png_img *result = NULL;
-    FILE *fp;
-    unsigned char header[8];
-    png_structp png_ptr = NULL;
-    png_infop info_ptr = NULL;
-    uint32_t bytes_per_row;
-    uint8_t *row_buff;
-    px_type *data_dest;
-    int i;
-    int px_per_row;
-
-    fp = fopen(path, "rb");
-    if(!fp)
+    px_type *data = fb_png_get(path, w, h);
+    if(!data)
         return NULL;
 
-    size_t bytesRead = fread(header, 1, sizeof(header), fp);
-    if (bytesRead != sizeof(header)) {
-        goto exit;
-    }
-
-    if (png_sig_cmp(header, 0, sizeof(header))) {
-        goto exit;
-    }
-
-    png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!png_ptr) {
-        goto exit;
-    }
-
-    info_ptr = png_create_info_struct(png_ptr);
-    if (!info_ptr) {
-        goto exit;
-    }
-
-    if (setjmp(png_jmpbuf(png_ptr))) {
-        goto exit;
-    }
-
-    png_set_packing(png_ptr);
-
-    png_init_io(png_ptr, fp);
-    png_set_sig_bytes(png_ptr, sizeof(header));
-    png_read_info(png_ptr, info_ptr);
-
-    size_t width = info_ptr->width;
-    size_t height = info_ptr->height;
-    size_t stride = 4 * width;
-    size_t pixelSize = stride * height;
-
-    int color_type = info_ptr->color_type;
-    int bit_depth = info_ptr->bit_depth;
-    int channels = info_ptr->channels;
-    if (!(bit_depth == 8 &&
-          ((channels == 3 && color_type == PNG_COLOR_TYPE_RGB) ||
-           (channels == 4 && color_type == PNG_COLOR_TYPE_RGBA) ||
-           (channels == 1 && color_type == PNG_COLOR_TYPE_PALETTE)))) {
-        goto exit;
-    }
-
-    result = mzalloc(sizeof(fb_png_img));
-    result->data = mzalloc(PIXEL_SIZE * width * height);
+    fb_png_img *result = mzalloc(sizeof(fb_png_img));
     result->head.type = FB_PNG_IMG;
     result->head.x = x;
     result->head.y = y;
+    result->data = data;
     result->w = w;
     result->h = h;
-
-    if (color_type == PNG_COLOR_TYPE_PALETTE)
-        png_set_palette_to_rgb(png_ptr);
-
-    bytes_per_row = png_get_rowbytes(png_ptr, info_ptr);
-    px_per_row = bytes_per_row/channels;
-    row_buff = malloc(bytes_per_row);
-    data_dest = result->data;
-
-    for (y = 0; y < (int) height; ++y)
-    {
-        png_read_row(png_ptr, row_buff, NULL);
-        if(channels == 4)
-        {
-            for(i = 0; i < width; ++i)
-            {
-                *data_dest = (px_type)fb_convert_color(((uint32_t*)row_buff)[i]);
-                ++data_dest;
-            }
-        }
-    }
 
     pthread_mutex_lock(&fb_mutex);
     list_add(result, &fb_items.png_imgs);
     pthread_mutex_unlock(&fb_mutex);
-
-exit:
-    png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-    fclose(fp);
 
     return result;
 }
@@ -842,6 +784,7 @@ void fb_clear(void)
     pthread_mutex_lock(&fb_mutex);
     list_clear(&fb_items.texts, &fb_destroy_item);
     list_clear(&fb_items.rects, &fb_destroy_item);
+    list_clear(&fb_items.png_imgs, &fb_destroy_item);
     pthread_mutex_unlock(&fb_mutex);
 
     fb_destroy_msgbox();

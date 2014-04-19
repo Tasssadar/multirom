@@ -412,6 +412,8 @@ int multirom_default_status(struct multirom_status *s)
         sprintf(path, "%s/boot.img", rom->base_path);
         rom->has_bootimg = access(path, R_OK) == 0 ? 1 : 0;
 
+        multirom_find_rom_icon(rom);
+
         list_add(rom, &add_roms);
     }
 
@@ -635,6 +637,7 @@ void multirom_dump_status(struct multirom_status *s)
     {
         INFO("  ROM: %s\n", s->roms[i]->name);
         INFO("    base_path: %s\n", s->roms[i]->base_path);
+        INFO("    icon_path: %s\n", s->roms[i]->icon_path);
         INFO("    type: %d\n", s->roms[i]->type);
         INFO("    has_bootimg: %d\n", s->roms[i]->has_bootimg);
         if(s->roms[i]->partition)
@@ -655,6 +658,7 @@ void multirom_free_rom(void *rom)
 {
     free(((struct multirom_rom*)rom)->name);
     free(((struct multirom_rom*)rom)->base_path);
+    free(((struct multirom_rom*)rom)->icon_path);
     free(rom);
 }
 
@@ -2546,4 +2550,79 @@ success:
 fail:
     remove_dir("/mrom_rd");
     return result;
+}
+
+#define IC_TYPE_PREDEF 0
+#define IC_TYPE_USER   1
+#define USER_IC_PATH "../Android/data/com.tassadar.multirommgr/files"
+#define USER_IC_PATH_LEN 46
+#define DEFAULT_ICON "/icons/romic_default.png"
+#define DEFAULT_ICON_LEN 24
+
+void multirom_find_rom_icon(struct multirom_rom *rom)
+{
+    FILE *f;
+    int type = 0, len;
+    char buff[256];
+
+    snprintf(buff, sizeof(buff), "%s/.icon_data", rom->base_path);
+
+    f = fopen(buff, "r");
+    if(!f)
+        goto fail;
+
+    if(!fgets(buff, sizeof(buff), f))
+        goto fail;
+
+    if(strcmp(buff, "predef_set\n") == 0)
+        type = IC_TYPE_PREDEF;
+    else if(strcmp(buff, "user_defined\n") == 0)
+        type = IC_TYPE_USER;
+    else
+        goto fail;
+
+    if(!fgets(buff, sizeof(buff), f))
+        goto fail;
+    fclose(f);
+    f = NULL;
+
+    len = strlen(buff);
+    if(len < 2)
+        goto fail;
+
+    buff[--len] = 0; // remove \n
+
+    switch(type)
+    {
+        case IC_TYPE_PREDEF:
+        {
+            char *ic_name = strrchr(buff, '/');
+            if(!ic_name)
+                goto fail;
+
+            len = strlen(multirom_dir) + 6 + strlen(ic_name)+4+1; // + /icons + .png + \0
+            rom->icon_path = malloc(len);
+            snprintf(rom->icon_path, len, "%s/icons%s.png", multirom_dir, ic_name);
+            break;
+        }
+        case IC_TYPE_USER:
+        {
+            len = strlen(multirom_dir) + 1 + USER_IC_PATH_LEN + 1 + len + 4 + 1; // + / + / + .png + \0
+            rom->icon_path = malloc(len);
+            snprintf(rom->icon_path, len, "%s/%s/%s.png", multirom_dir, USER_IC_PATH, buff);
+            break;
+        }
+    }
+
+    if(access(rom->icon_path, F_OK) < 0)
+        goto fail;
+
+    return;
+fail:
+    if(f)
+        fclose(f);
+
+    len = strlen(multirom_dir) + DEFAULT_ICON_LEN + 1;
+    rom->icon_path = realloc(rom->icon_path, len);
+    snprintf(rom->icon_path, len, "%s%s", multirom_dir, DEFAULT_ICON);
 }

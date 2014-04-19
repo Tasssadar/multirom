@@ -342,7 +342,7 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
         if(rom->type == ROM_DEFAULT && mrom_status->hide_internal)
             continue;
 
-        data = rom_item_create(rom->name, rom->partition ? part_desc : NULL);
+        data = rom_item_create(rom->name, rom->partition ? part_desc : NULL, rom->icon_path);
         it = listview_add_item(view, rom->id, data);
 
         if ((mrom_status->auto_boot_rom && rom == mrom_status->auto_boot_rom) ||

@@ -93,9 +93,6 @@ static void init_header(multirom_theme_data *t)
         x += TAB_BTN_WIDTH;
     }
 
-    fb_add_rect(40, HEADER_HEIGHT-10, 84, 84, GRAY);
-    fb_add_png_img(50, HEADER_HEIGHT, 64, 64, "/sdcard/multirom/romic_default.png");
-
     fb_add_rect(0, HEADER_HEIGHT, fb_width, 2, WHITE);
 }
 
