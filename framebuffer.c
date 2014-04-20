@@ -62,6 +62,7 @@ static pthread_mutex_t fb_update_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t fb_draw_thread;
 static volatile int fb_draw_requested = 0;
 static volatile int fb_draw_run = 0;
+static volatile int fb_draw_futex = 0;
 static void *fb_draw_thread_work(void*);
 
 static void fb_destroy_item(void *item); // private!
@@ -815,9 +816,7 @@ extern void scanline_col32cb16blend_neon(uint16_t *dst, uint32_t *col, size_t ct
 
 void fb_draw_overlay(void)
 {
-#ifdef MR_DISABLE_ALPHA
-    fb_fill(0xFF1B1B1B);
-#else
+#ifndef MR_DISABLE_ALPHA
  #if PIXEL_SIZE == 4
     int i;
     uint8_t *bits = (uint8_t*)fb.buffer;
@@ -965,6 +964,7 @@ void *fb_draw_thread_work(void *cookie)
         if(__atomic_cmpxchg(1, 0, &fb_draw_requested) == 0)
         {
             fb_draw();
+            __futex_wake(&fb_draw_futex, INT_MAX);
         }
 #ifdef MR_CONTINUOUS_FB_UPDATE
         else
@@ -991,4 +991,10 @@ void fb_request_draw(void)
 {
     if(!fb_frozen)
         __atomic_cmpxchg(0, 1, &fb_draw_requested);
+}
+
+void fb_force_draw(void)
+{
+    __atomic_swap(1, &fb_draw_requested);
+    __futex_wait(&fb_draw_futex, 0, NULL);
 }

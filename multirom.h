@@ -151,7 +151,7 @@ void multirom_set_usb_refresh_thread(struct multirom_status *s, int run);
 void multirom_set_usb_refresh_handler(void (*handler)(void));
 int multirom_mount_usb(struct usb_partition *part);
 int multirom_mount_loop(const char *src, const char *dst, const char *fs, int flags, const void *data);
-int multirom_copy_log(char *klog);
+int multirom_copy_log(char *klog, const char *dest_path_relative);
 int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_partition *p);
 struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uuid);
 int multirom_path_exists(char *base, char *filename);

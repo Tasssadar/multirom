@@ -215,6 +215,7 @@ void fb_draw_rect(fb_rect *r);
 void fb_draw_png_img(fb_png_img *i);
 void fb_fill(uint32_t color);
 void fb_request_draw(void);
+void fb_force_draw(void);
 void fb_clear(void);
 void fb_freeze(int freeze);
 int fb_clone(char **buff);
