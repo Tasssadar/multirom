@@ -747,6 +747,8 @@ int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_parti
         sprintf(path, "%s/boot.img", rom->base_path);
         rom->has_bootimg = access(path, R_OK) == 0 ? 1 : 0;
 
+        multirom_find_rom_icon(rom);
+
         list_add(rom, &add_roms);
     }
     closedir(d);
