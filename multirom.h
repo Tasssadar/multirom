@@ -87,6 +87,7 @@ struct multirom_rom
     int id;
     char *name;
     char *base_path;
+    char *icon_path;
     int type;
     int has_bootimg;
     struct usb_partition *partition;
@@ -150,7 +151,7 @@ void multirom_set_usb_refresh_thread(struct multirom_status *s, int run);
 void multirom_set_usb_refresh_handler(void (*handler)(void));
 int multirom_mount_usb(struct usb_partition *part);
 int multirom_mount_loop(const char *src, const char *dst, const char *fs, int flags, const void *data);
-int multirom_copy_log(char *klog);
+int multirom_copy_log(char *klog, const char *dest_path_relative);
 int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_partition *p);
 struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uuid);
 int multirom_path_exists(char *base, char *filename);
@@ -166,5 +167,6 @@ void multirom_set_brightness(int val);
 int multirom_run_scripts(const char *type, struct multirom_rom *rom);
 int multirom_update_rd_trampoline(const char *path);
 char *multirom_find_fstab_in_rc(const char *rcfile);
+void multirom_find_rom_icon(struct multirom_rom *rom);
 
 #endif

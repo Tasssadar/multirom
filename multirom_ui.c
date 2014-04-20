@@ -46,6 +46,8 @@ static fb_msgbox *active_msgbox = NULL;
 static volatile int loop_act = 0;
 static multirom_themes_info *themes_info = NULL;
 static multirom_theme *cur_theme = NULL;
+static int last_selected_int_rom = -1;
+static int last_int_listview_pos = -1;
 
 static pthread_mutex_t exit_code_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -97,6 +99,8 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     exit_ui_code = -1;
     selected_rom = NULL;
     active_msgbox = NULL;
+    last_selected_int_rom = -1;
+    last_int_listview_pos = -1;
 
     multirom_ui_setup_colors(s->colors, &CLR_PRIMARY, &CLR_SECONDARY);
     themes_info = multirom_ui_init_themes();
@@ -106,13 +110,14 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
         ERROR("Couldn't find theme for resolution %dx%d!\n", fb_width, fb_height);
         fb_add_text(0, 0, WHITE, SIZE_SMALL, "Couldn't find theme for resolution %dx%d!\nPress POWER to reboot.", fb_width, fb_height);
-        fb_request_draw();
-        fb_clear();
-        fb_close();
+        fb_force_draw();
 
         start_input_thread();
         while(wait_for_key() != KEY_POWER);
         stop_input_thread();
+
+        fb_clear();
+        fb_close();
         return UI_EXIT_REBOOT;
     }
 
@@ -327,7 +332,7 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
     int i;
     struct multirom_rom *rom;
     void *data;
-    listview_item *it;
+    listview_item *it, *select = NULL;
     char part_desc[64];
     for(i = 0; mrom_status->roms && mrom_status->roms[i]; ++i)
     {
@@ -342,17 +347,23 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
         if(rom->type == ROM_DEFAULT && mrom_status->hide_internal)
             continue;
 
-        data = rom_item_create(rom->name, rom->partition ? part_desc : NULL);
+        data = rom_item_create(rom->name, rom->partition ? part_desc : NULL, rom->icon_path);
         it = listview_add_item(view, rom->id, data);
 
-        if ((mrom_status->auto_boot_rom && rom == mrom_status->auto_boot_rom) ||
-            (!mrom_status->auto_boot_rom && rom == mrom_status->current_rom))
+        if (!select &&
+            ((mrom_status->auto_boot_rom && rom == mrom_status->auto_boot_rom) ||
+            (!mrom_status->auto_boot_rom && rom == mrom_status->current_rom)))
         {
-            listview_select_item(view, it);
+            select = it;
         }
+
+        if(rom->id == last_selected_int_rom)
+            select = it;
     }
 
-    if(view->items != NULL && view->selected == NULL)
+    if(select)
+        listview_select_item(view, select);
+    else if(view->items != NULL)
         listview_select_item(view, view->items[0]);
 }
 
@@ -478,7 +489,13 @@ void *multirom_ui_tab_rom_init(int tab_type)
         multirom_ui_fill_rom_list(t->list, MASK_INTERNAL);
 
     listview_update_ui(t->list);
-    if(listview_ensure_selected_visible(t->list))
+
+    if(tab_type == TAB_INTERNAL && last_int_listview_pos != -1)
+    {
+        t->list->pos = last_int_listview_pos;
+        listview_update_ui(t->list);
+    }
+    else if(listview_ensure_selected_visible(t->list))
         listview_update_ui(t->list);
 
     int has_roms = (int)(t->list->items == NULL);
@@ -505,6 +522,9 @@ void multirom_ui_tab_rom_destroy(void *data)
     list_clear(&t->buttons, &button_destroy);
     list_clear(&t->ui_elements, &fb_remove_item);
 
+    if(themes_info->data->selected_tab == TAB_INTERNAL)
+        last_int_listview_pos = t->list->pos;
+
     listview_destroy(t->list);
 
     fb_rm_text(t->rom_name);
@@ -530,6 +550,9 @@ void multirom_ui_tab_rom_selected(listview_item *prev, listview_item *now)
     cur_theme->center_rom_name(t, rom->name);
 
     fb_request_draw();
+
+    if(M(rom->type) & MASK_INTERNAL)
+        last_selected_int_rom = now->id;
 }
 
 void multirom_ui_tab_rom_confirmed(listview_item *it)
@@ -698,14 +721,14 @@ void multirom_ui_tab_misc_copy_log(int action)
 {
     multirom_dump_status(mrom_status);
 
-    int res = multirom_copy_log(NULL);
+    int res = multirom_copy_log(NULL, "../multirom_log.txt");
 
     static const char *text[] = { "Failed to copy log to sdcard!", "Successfully copied error log!" };
 
     active_msgbox = fb_create_msgbox(550*DPI_MUL, 260*DPI_MUL, res ? DRED : CLR_PRIMARY);
     fb_msgbox_add_text(-1, 50*DPI_MUL, SIZE_NORMAL, (char*)text[res+1]);
     if(res == 0)
-        fb_msgbox_add_text(-1, -1, SIZE_NORMAL, "/sdcard/multirom/error.txt");
+        fb_msgbox_add_text(-1, -1, SIZE_NORMAL, "/sdcard/multirom_log.txt");
     fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to close");
 
     fb_request_draw();
