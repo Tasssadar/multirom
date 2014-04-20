@@ -708,9 +708,7 @@ extern void scanline_col32cb16blend_neon(uint16_t *dst, uint32_t *col, size_t ct
 
 void fb_draw_overlay(void)
 {
-#ifdef MR_DISABLE_ALPHA
-    fb_fill(0xFF1B1B1B);
-#else
+#ifndef MR_DISABLE_ALPHA
  #if PIXEL_SIZE == 4
     int i;
     uint8_t *bits = (uint8_t*)fb.buffer;
