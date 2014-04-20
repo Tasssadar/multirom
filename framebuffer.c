@@ -522,7 +522,9 @@ void fb_draw_png_img(fb_png_img *i)
             // do the blending
             else if(alpha != 0x00)
             {
-#ifndef MR_DISABLE_ALPHA
+#ifdef MR_DISABLE_ALPHA
+                *bits = *img;
+#else
  #if PIXEL_SIZE == 4
                 comps_bits = (uint8_t*)bits;
                 comps_img = (uint8_t*)img;
