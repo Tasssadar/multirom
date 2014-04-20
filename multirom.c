@@ -267,7 +267,8 @@ void multirom_emergency_reboot(void)
 
     char *tail = klog+strlen(klog);
     int count = 0;
-    while(tail > klog && count < 50)
+    const int max = (fb_height - 395)/ISO_CHAR_HEIGHT;
+    while(tail > klog && count < max)
     {
         --tail;
         if(*tail == '\n')
