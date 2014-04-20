@@ -276,7 +276,7 @@ void multirom_emergency_reboot(void)
 
     fb_add_text_long(0, 395, GRAYISH, 1, ++tail);
 
-    fb_request_draw();
+    fb_force_draw();
 
     multirom_copy_log(klog);
     free(klog);

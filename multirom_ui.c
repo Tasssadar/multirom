@@ -106,13 +106,14 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
         ERROR("Couldn't find theme for resolution %dx%d!\n", fb_width, fb_height);
         fb_add_text(0, 0, WHITE, SIZE_SMALL, "Couldn't find theme for resolution %dx%d!\nPress POWER to reboot.", fb_width, fb_height);
-        fb_request_draw();
-        fb_clear();
-        fb_close();
+        fb_force_draw();
 
         start_input_thread();
         while(wait_for_key() != KEY_POWER);
         stop_input_thread();
+
+        fb_clear();
+        fb_close();
         return UI_EXIT_REBOOT;
     }
 
