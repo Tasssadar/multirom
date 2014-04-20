@@ -915,6 +915,7 @@ void fb_push_context(void)
 
     list_move(&fb_items.texts, &ctx->texts);
     list_move(&fb_items.rects, &ctx->rects);
+    list_move(&fb_items.png_imgs, &ctx->png_imgs);
     ctx->msgbox = fb_items.msgbox;
     fb_items.msgbox = NULL;
 
@@ -937,6 +938,7 @@ void fb_pop_context(void)
 
     list_move(&ctx->texts, &fb_items.texts);
     list_move(&ctx->rects, &fb_items.rects);
+    list_move(&ctx->png_imgs, &fb_items.png_imgs);
     fb_items.msgbox = ctx->msgbox;
 
     pthread_mutex_unlock(&fb_items_mutex);
