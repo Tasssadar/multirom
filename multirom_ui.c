@@ -699,14 +699,14 @@ void multirom_ui_tab_misc_copy_log(int action)
 {
     multirom_dump_status(mrom_status);
 
-    int res = multirom_copy_log(NULL);
+    int res = multirom_copy_log(NULL, "../multirom_log.txt");
 
     static const char *text[] = { "Failed to copy log to sdcard!", "Successfully copied error log!" };
 
     active_msgbox = fb_create_msgbox(550*DPI_MUL, 260*DPI_MUL, res ? DRED : CLR_PRIMARY);
     fb_msgbox_add_text(-1, 50*DPI_MUL, SIZE_NORMAL, (char*)text[res+1]);
     if(res == 0)
-        fb_msgbox_add_text(-1, -1, SIZE_NORMAL, "/sdcard/multirom/error.txt");
+        fb_msgbox_add_text(-1, -1, SIZE_NORMAL, "/sdcard/multirom_log.txt");
     fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to close");
 
     fb_request_draw();

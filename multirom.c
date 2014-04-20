@@ -259,7 +259,7 @@ void multirom_emergency_reboot(void)
 
     fb_add_text(0, 120, WHITE, 2,
                 "An error occured.\nShutting down MultiROM to avoid data corruption.\n"
-                "Report this error to the developer!\nDebug info: /sdcard/multirom/error.txt\n\n"
+                "Report this error to the developer!\nDebug info: /sdcard/multirom_log.txt\n\n"
                 "Press POWER button to reboot.");
 
     fb_add_text(0, 370, GRAYISH, 1, "Last lines from klog:");
@@ -278,7 +278,7 @@ void multirom_emergency_reboot(void)
 
     fb_force_draw();
 
-    multirom_copy_log(klog);
+    multirom_copy_log(klog, "../multirom_log.txt");
     free(klog);
 
     // Wait for power key
@@ -1535,7 +1535,7 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
     if(loop_mounted)
         umount("/mnt/image");
 
-    multirom_copy_log(NULL);
+    multirom_copy_log(NULL, "last_kexec_log.txt");
 
 exit:
     kexec_destroy(&kexec);
@@ -2321,7 +2321,7 @@ char *multirom_get_klog(void)
     return buff;
 }
 
-int multirom_copy_log(char *klog)
+int multirom_copy_log(char *klog, const char *dest_path_relative)
 {
     int res = 0;
     int freeLog = (klog == NULL);
@@ -2332,13 +2332,14 @@ int multirom_copy_log(char *klog)
     if(klog)
     {
         char path[256];
-        sprintf(path, "%s/error.txt", multirom_dir);
+        snprintf(path, sizeof(path), "%s/%s", multirom_dir, dest_path_relative);
         FILE *f = fopen(path, "w");
+
         if(f)
         {
             fwrite(klog, 1, strlen(klog), f);
             fclose(f);
-            chmod(REALDATA"/media/multirom/error.txt", 0777);
+            chmod(path, 0777);
         }
         else
         {
