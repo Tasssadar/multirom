@@ -852,12 +852,24 @@ void multirom_import_internal(void)
     mkdir(multirom_dir, 0777); 
 
     // roms
-    sprintf(path, "%s/roms", multirom_dir);
+    snprintf(path, sizeof(path), "%s/roms", multirom_dir);
     mkdir(path, 0777);
 
     // internal rom
-    sprintf(path, "%s/roms/%s", multirom_dir, INTERNAL_ROM_NAME);
+    snprintf(path, sizeof(path), "%s/roms/%s", multirom_dir, INTERNAL_ROM_NAME);
     mkdir(path, 0777);
+
+    // set default icon if it doesn't exist yet
+    snprintf(path, sizeof(path), "%s/roms/%s/.icon_data", multirom_dir, INTERNAL_ROM_NAME);
+    if(access(path, F_OK) < 0)
+    {
+        FILE *f = fopen(path, "w");
+        if(f)
+        {
+            fputs("predef_set\ncom.tassadar.multirommgr:drawable/romic_android\n", f);
+            fclose(f);
+        }
+    }
 }
 
 struct multirom_rom *multirom_get_internal(struct multirom_status *s)
