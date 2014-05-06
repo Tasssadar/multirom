@@ -1717,6 +1717,7 @@ int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *ro
             char *img_fs = map_get_val(info->str_vals, "root_img_fs");
 
             // mount the image file
+            mkdir("/mnt", 0777);
             mkdir("/mnt/image", 0777);
             if(multirom_mount_loop(path, "/mnt/image", img_fs ? img_fs : "ext4", MS_NOATIME, NULL) < 0)
                 goto exit;
