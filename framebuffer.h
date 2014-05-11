@@ -137,7 +137,13 @@ enum
     FB_TEXT = 0,
     FB_RECT = 1,
     FB_BOX  = 2,
-    FB_PNG_IMG = 3,
+    FB_IMG  = 3,
+};
+
+enum
+{
+    FB_IMG_TYPE_GENERIC,
+    FB_IMG_TYPE_PNG,
 };
 
 typedef struct
@@ -166,13 +172,28 @@ typedef struct
     uint32_t color;
 } fb_rect;
 
+/*
+ * fb_img element draws pre-rendered image data, which can come for
+ * example from a PNG file.
+ * For RECOVERY_BGRA and RECOVERY_BGRX (4 bytes per px), data is just
+ * array of pixels in selected px format.
+ * For RECOVERY_RGB_565 (2 bytes per px), another 2 bytes with
+ * alpha values are added after each pixel. So, one pixel is two uint16_t
+ * entries in the result uint16_t array:
+ * [0]: (R | (G << 5) | (B << 11))
+ * [1]: (alphaForRB | (alphaForG << 8))
+ * [2]: (R | (G << 5) | (B << 11))
+ * [3]: (alphaForRB | (alphaForG << 8))
+ * ...
+ */
 typedef struct
 {
     fb_item_header head;
     int w;
     int h;
+    int img_type;
     px_type *data;
-} fb_png_img;
+} fb_img;
 
 typedef struct
 {
@@ -187,7 +208,7 @@ typedef struct
 {
     fb_text **texts;
     fb_rect **rects;
-    fb_png_img **png_imgs;
+    fb_img **imgs;
     fb_msgbox *msgbox;
 } fb_items_t;
 
@@ -196,7 +217,8 @@ int fb_generate_item_id();
 fb_text *fb_add_text(int x, int y, uint32_t color, int size, const char *fmt, ...);
 fb_text *fb_add_text_long(int x, int y, uint32_t color, int size, char *text);
 fb_rect *fb_add_rect(int x, int y, int w, int h, uint32_t color);
-fb_png_img* fb_add_png_img(int x, int y, int w, int h, const char *path);
+fb_img *fb_add_img(int x, int y, int w, int h, int img_type, px_type *data);
+fb_img *fb_add_png_img(int x, int y, int w, int h, const char *path);
 void fb_add_rect_notfilled(int x, int y, int w, int h, uint32_t color, int thickness, fb_rect ***list);
 fb_msgbox *fb_create_msgbox(int w, int h, int bgcolor);
 fb_text *fb_msgbox_add_text(int x, int y, int size, char *txt, ...);
@@ -204,7 +226,7 @@ void fb_msgbox_rm_text(fb_text *text);
 void fb_destroy_msgbox(void);
 void fb_rm_text(fb_text *t);
 void fb_rm_rect(fb_rect *r);
-void fb_rm_png_img(fb_png_img *i);
+void fb_rm_img(fb_img *i);
 px_type fb_convert_color(uint32_t c);
 
 void fb_draw_text(fb_text *t);
@@ -212,7 +234,7 @@ void fb_draw_char(int x, int y, char c, px_type color, int size);
 void fb_draw_square(int x, int y, px_type color, int size);
 void fb_draw_overlay(void);
 void fb_draw_rect(fb_rect *r);
-void fb_draw_png_img(fb_png_img *i);
+void fb_draw_img(fb_img *i);
 void fb_fill(uint32_t color);
 void fb_request_draw(void);
 void fb_force_draw(void);

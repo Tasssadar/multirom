@@ -462,7 +462,7 @@ typedef struct
     fb_rect *bottom_line;
     fb_rect *hover_rect;
     fb_rect *sel_rect;
-    fb_png_img *icon;
+    fb_img *icon;
 } rom_item_data;
 
 void *rom_item_create(const char *text, const char *partition, const char *icon)
@@ -538,7 +538,7 @@ void rom_item_hide(void *data)
     fb_rm_rect(d->bottom_line);
     fb_rm_rect(d->hover_rect);
     fb_rm_rect(d->sel_rect);
-    fb_rm_png_img(d->icon);
+    fb_rm_img(d->icon);
 
     d->text_it = NULL;
     d->part_it = NULL;

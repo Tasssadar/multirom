@@ -100,19 +100,6 @@ double pow(double x, double y) {
     return x;
 }
 
-/*
- * Load data from png image into an array of pixels and resize it.
- * For RECOVERY_BGRA and RECOVERY_BGRX (4 bytes per px), it is just
- * array of pixels in selected px format.
- * For RECOVERY_RGB_565 (2 bytes per px), another 2 bytes with
- * alpha values are added after each pixel. So, one pixel is two uint16_t
- * entries in the result uint16_t array:
- * [0]: (R | (G << 5) | (B << 11))
- * [1]: (alphaForRB | (alphaForG << 8))
- * [2]: (R | (G << 5) | (B << 11))
- * [3]: (alphaForRB | (alphaForG << 8))
- * ...
- */
 static px_type *load_png(const char *path, int destW, int destH)
 {
     FILE *fp;

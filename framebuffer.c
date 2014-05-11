@@ -448,6 +448,9 @@ void fb_remove_item(void *item)
             // fb_destroy_msgbox must be used
             assert(0);
             break;
+        case FB_IMG:
+            fb_rm_img((fb_img*)item);
+            break;
     }
 }
 
@@ -464,9 +467,24 @@ void fb_destroy_item(void *item)
             // fb_destroy_msgbox must be used
             assert(0);
             break;
-        case FB_PNG_IMG:
-            fb_png_release(((fb_png_img*)item)->data);
+        case FB_IMG:
+        {
+            fb_img *i = (fb_img*)item;
+            switch(i->img_type)
+            {
+                case FB_IMG_TYPE_PNG:
+                    fb_png_release(i->data);
+                    break;
+                case FB_IMG_TYPE_GENERIC:
+                    free(i->data);
+                    break;
+                default:
+                    ERROR("fb_destroy_item(): unknown fb_img type %d\n", i->img_type);
+                    assert(0);
+                    break;
+            }
             break;
+        }
     }
     free(item);
 }
@@ -490,7 +508,7 @@ static inline int blend_png(int value1, int value2, int alpha) {
     return (r+1 + (r >> 8)) >> 8; // divide by 255
 }
 
-void fb_draw_png_img(fb_png_img *i)
+void fb_draw_img(fb_img *i)
 {
     int y, x;
     px_type *bits = fb.buffer + (fb.stride*i->head.y) + i->head.x;
@@ -526,20 +544,20 @@ void fb_draw_png_img(fb_png_img *i)
 #ifdef MR_DISABLE_ALPHA
                 *bits = *img;
 #else
- #if PIXEL_SIZE == 4
+  #if PIXEL_SIZE == 4
                 comps_bits = (uint8_t*)bits;
                 comps_img = (uint8_t*)img;
                 comps_bits[PX_IDX_R] = blend_png(comps_bits[PX_IDX_R], comps_img[PX_IDX_R], comps_img[PX_IDX_A]);
                 comps_bits[PX_IDX_G] = blend_png(comps_bits[PX_IDX_G], comps_img[PX_IDX_G], comps_img[PX_IDX_A]);
                 comps_bits[PX_IDX_B] = blend_png(comps_bits[PX_IDX_B], comps_img[PX_IDX_B], comps_img[PX_IDX_A]);
                 comps_bits[PX_IDX_A] = 0xFF;
- #else
+  #else
                 const uint8_t alpha5b = alpha;
                 const uint8_t alpha6b = ((uint8_t*)img)[3];
                 *bits = (((31-alpha5b)*(*bits & 0x1F)            + (alpha5b*(*img & 0x1F))) / 31) |
                         ((((63-alpha6b)*((*bits & 0x7E0) >> 5)   + (alpha6b*((*img & 0x7E0) >> 5))) / 63) << 5) |
                         ((((31-alpha5b)*((*bits & 0xF800) >> 11) + (alpha5b*((*img & 0xF800) >> 11))) / 31) << 11);
- #endif // PIXEL_SIZE
+  #endif // PIXEL_SIZE
 #endif // MR_DISABLE_ALPHA
             }
 
@@ -642,25 +660,31 @@ void fb_add_rect_notfilled(int x, int y, int w, int h, uint32_t color, int thick
     list_add(r, list);
 }
 
-fb_png_img* fb_add_png_img(int x, int y, int w, int h, const char *path)
+fb_img *fb_add_img(int x, int y, int w, int h, int img_type, px_type *data)
 {
-    px_type *data = fb_png_get(path, w, h);
-    if(!data)
-        return NULL;
-
-    fb_png_img *result = mzalloc(sizeof(fb_png_img));
-    result->head.type = FB_PNG_IMG;
+    fb_img *result = mzalloc(sizeof(fb_img));
+    result->head.type = FB_IMG;
     result->head.x = x;
     result->head.y = y;
+    result->img_type = img_type;
     result->data = data;
     result->w = w;
     result->h = h;
 
     pthread_mutex_lock(&fb_items_mutex);
-    list_add(result, &fb_items.png_imgs);
+    list_add(result, &fb_items.imgs);
     pthread_mutex_unlock(&fb_items_mutex);
 
     return result;
+}
+
+fb_img* fb_add_png_img(int x, int y, int w, int h, const char *path)
+{
+    px_type *data = fb_png_get(path, w, h);
+    if(!data)
+        return NULL;
+
+    return fb_add_img(x, y, w, h, FB_IMG_TYPE_PNG, data);
 }
 
 void fb_rm_text(fb_text *t)
@@ -683,13 +707,13 @@ void fb_rm_rect(fb_rect *r)
     pthread_mutex_unlock(&fb_items_mutex);
 }
 
-void fb_rm_png_img(fb_png_img *i)
+void fb_rm_img(fb_img *i)
 {
     if(!i)
         return;
 
     pthread_mutex_lock(&fb_items_mutex);
-    list_rm_noreorder(i, &fb_items.png_imgs, &fb_destroy_item);
+    list_rm_noreorder(i, &fb_items.imgs, &fb_destroy_item);
     pthread_mutex_unlock(&fb_items_mutex);
 }
 
@@ -788,7 +812,7 @@ void fb_clear(void)
     pthread_mutex_lock(&fb_items_mutex);
     list_clear(&fb_items.texts, &fb_destroy_item);
     list_clear(&fb_items.rects, &fb_destroy_item);
-    list_clear(&fb_items.png_imgs, &fb_destroy_item);
+    list_clear(&fb_items.imgs, &fb_destroy_item);
     pthread_mutex_unlock(&fb_items_mutex);
 
     fb_destroy_msgbox();
@@ -866,8 +890,8 @@ static void fb_draw(void)
         fb_draw_text(fb_items.texts[i]);
 
     // images
-    for(i = 0; fb_items.png_imgs && fb_items.png_imgs[i]; ++i)
-        fb_draw_png_img(fb_items.png_imgs[i]);
+    for(i = 0; fb_items.imgs && fb_items.imgs[i]; ++i)
+        fb_draw_img(fb_items.imgs[i]);
 
     // msg box
     if(fb_items.msgbox)
@@ -916,7 +940,7 @@ void fb_push_context(void)
 
     list_move(&fb_items.texts, &ctx->texts);
     list_move(&fb_items.rects, &ctx->rects);
-    list_move(&fb_items.png_imgs, &ctx->png_imgs);
+    list_move(&fb_items.imgs, &ctx->imgs);
     ctx->msgbox = fb_items.msgbox;
     fb_items.msgbox = NULL;
 
@@ -939,7 +963,7 @@ void fb_pop_context(void)
 
     list_move(&ctx->texts, &fb_items.texts);
     list_move(&ctx->rects, &fb_items.rects);
-    list_move(&ctx->png_imgs, &fb_items.png_imgs);
+    list_move(&ctx->imgs, &fb_items.imgs);
     fb_items.msgbox = ctx->msgbox;
 
     pthread_mutex_unlock(&fb_items_mutex);
