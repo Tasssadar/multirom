@@ -134,10 +134,10 @@ void fb_force_generic_impl(int force);
 
 enum 
 {
-    FB_TEXT = 0,
-    FB_RECT = 1,
-    FB_BOX  = 2,
-    FB_IMG  = 3,
+    FB_IT_TEXT,
+    FB_IT_RECT,
+    FB_IT_BOX,
+    FB_IT_IMG,
 };
 
 enum

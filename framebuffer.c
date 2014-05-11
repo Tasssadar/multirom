@@ -438,17 +438,17 @@ void fb_remove_item(void *item)
 {
     switch(((fb_item_header*)item)->type)
     {
-        case FB_TEXT:
+        case FB_IT_TEXT:
             fb_rm_text((fb_text*)item);
             break;
-        case FB_RECT:
+        case FB_IT_RECT:
             fb_rm_rect((fb_rect*)item);
             break;
-        case FB_BOX:
+        case FB_IT_BOX:
             // fb_destroy_msgbox must be used
             assert(0);
             break;
-        case FB_IMG:
+        case FB_IT_IMG:
             fb_rm_img((fb_img*)item);
             break;
     }
@@ -458,16 +458,16 @@ void fb_destroy_item(void *item)
 {
     switch(((fb_item_header*)item)->type)
     {
-        case FB_TEXT:
+        case FB_IT_TEXT:
             free(((fb_text*)item)->text);
             break;
-        case FB_RECT:
+        case FB_IT_RECT:
             break;
-        case FB_BOX:
+        case FB_IT_BOX:
             // fb_destroy_msgbox must be used
             assert(0);
             break;
-        case FB_IMG:
+        case FB_IT_IMG:
         {
             fb_img *i = (fb_img*)item;
             switch(i->img_type)
@@ -586,7 +586,7 @@ static fb_text *fb_create_text_item(int x, int y, uint32_t color, int size, cons
 {
     fb_text *t = malloc(sizeof(fb_text));
     t->head.id = fb_generate_item_id();
-    t->head.type = FB_TEXT;
+    t->head.type = FB_IT_TEXT;
     t->head.x = x;
     t->head.y = y;
 
@@ -625,7 +625,7 @@ fb_rect *fb_add_rect(int x, int y, int w, int h, uint32_t color)
 {
     fb_rect *r = malloc(sizeof(fb_rect));
     r->head.id = fb_generate_item_id();
-    r->head.type = FB_RECT;
+    r->head.type = FB_IT_RECT;
     r->head.x = x;
     r->head.y = y;
 
@@ -663,7 +663,7 @@ void fb_add_rect_notfilled(int x, int y, int w, int h, uint32_t color, int thick
 fb_img *fb_add_img(int x, int y, int w, int h, int img_type, px_type *data)
 {
     fb_img *result = mzalloc(sizeof(fb_img));
-    result->head.type = FB_IMG;
+    result->head.type = FB_IT_IMG;
     result->head.x = x;
     result->head.y = y;
     result->img_type = img_type;
@@ -730,7 +730,7 @@ fb_msgbox *fb_create_msgbox(int w, int h, int bgcolor)
     int y = fb_height/2 - h/2;
 
     box->head.id = fb_generate_item_id();
-    box->head.type = FB_BOX;
+    box->head.type = FB_IT_BOX;
     box->head.x = x;
     box->head.y = y;
     box->w = w;
