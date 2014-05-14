@@ -125,8 +125,34 @@ static void mount_and_run(struct fstab *fstab)
     mkdir(REALDATA, 0755);
     if (mount(p->device, REALDATA, p->type, p->mountflags, p->options) < 0)
     {
-        ERROR("Failed to mount /realdata %d\n", errno);
-        return;
+        ERROR("Failed to mount /realdata, err %d, trying all filesystems\n", errno);
+
+        const char *fs_types[] = { "ext4", "f2fs", "ext3", "ext2" };
+        const char *fs_opts [] = {
+            "barrier=1,data=ordered,nomblk_io_submit,noauto_da_alloc,errors=panic", // ext4
+            "inline_xattr,flush_merge,errors=recover", // f2fs
+            "", // ext3
+            "" // ext2
+        };
+
+        int mounted = 0;
+        size_t i;
+        for(i = 0; i < ARRAY_SIZE(fs_types); ++i)
+        {
+            ERROR("Trying to mount %s with fs %s\n", p->device, fs_types[i]);
+            if(mount(p->device, REALDATA, fs_types[i], p->mountflags, fs_opts[i]) >= 0)
+            {
+                ERROR("/realdata successfuly mounted with fs %s\n", fs_types[i]);
+                mounted = 1;
+                break;
+            }
+        }
+
+        if(!mounted)
+        {
+            ERROR("Failed to mount /realdata with all possible filesystems!");
+            return;
+        }
     }
 
     if(find_multirom() == -1)
