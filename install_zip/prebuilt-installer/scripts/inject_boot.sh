@@ -52,11 +52,12 @@ cp /tmp/multirom/trampoline /tmp/boot/init
 chmod 750 /tmp/boot/init
 
 # create ueventd and watchdogd symlink
+# older versions were changing these to ../main_init, we need to change it back
 if [ -L /tmp/boot/sbin/ueventd ] ; then
-    ln -sf ../main_init /tmp/boot/sbin/ueventd
+    ln -sf ../init /tmp/boot/sbin/ueventd
 fi
 if [ -L /tmp/boot/sbin/watchdogd ] ; then
-    ln -sf ../main_init /tmp/boot/sbin/watchdogd
+    ln -sf ../init /tmp/boot/sbin/watchdogd
 fi
 
 # copy MultiROM's fstab if needed, remove old one if disabled

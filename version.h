@@ -18,7 +18,7 @@
 #ifndef VERSION_H
 #define VERSION_H
     #define VERSION_MULTIROM 24
-    #define VERSION_TRAMPOLINE 13
+    #define VERSION_TRAMPOLINE 14
 
     // For device-specific fixes. Use letters, the version will then be like "12a"
     #define VERSION_DEV_FIX ""

@@ -166,7 +166,7 @@ static void mount_and_run(struct fstab *fstab)
     adb_quit();
 }
 
-static int is_charger_mode()
+static int is_charger_mode(void)
 {
     char buff[2048] = { 0 };
 
@@ -180,10 +180,42 @@ static int is_charger_mode()
     return (strstr(buff, "androidboot.mode=charger") != NULL);
 }
 
+static void fixup_symlinks(void)
+{
+    static const char *init_links[] = { "/sbin/ueventd", "/sbin/watchdogd" };
+
+    size_t i;
+    ssize_t len;
+    char buff[64];
+    struct stat info;
+
+    for(i = 0; i < ARRAY_SIZE(init_links); ++i)
+    {
+        if(lstat(init_links[i], &info) < 0 || !S_ISLNK(info.st_mode))
+            continue;
+
+        if (info.st_size < sizeof(buff)-1)
+        {
+            len = readlink(init_links[i], buff, sizeof(buff)-1);
+            if(len >= 0)
+            {
+                buff[len] = 0;
+                // if the symlink already points to ../init, skip it.
+                if(strcmp(buff, "../init") == 0)
+                    continue;
+            }
+        }
+
+        ERROR("Fixing up symlink '%s' -> '%s' to '%s' -> '../init')\n", init_links[i], buff, init_links[i]);
+        unlink(init_links[i]);
+        symlink("../init", init_links[i]);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     int i, res;
-    static char *const cmd[] = { "/main_init", NULL };
+    static char *const cmd[] = { "/init", NULL };
     struct fstab *fstab = NULL;
 
     for(i = 1; i < argc; ++i)
@@ -268,10 +300,13 @@ run_main_init:
     rmdir("/proc");
     rmdir("/sys");
 
-    chmod("/main_init", EXEC_MASK);
-
     ERROR("Running main_init\n");
-    // run the main init
+
+    fixup_symlinks();
+
+    chmod("/main_init", EXEC_MASK);
+    rename("/main_init", "/init");
+
     res = execve(cmd[0], cmd, NULL);
     ERROR("execve returned %d %d %s\n", res, errno, strerror(errno));
     return 0;
