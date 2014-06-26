@@ -1285,6 +1285,8 @@ int multirom_create_media_link(void)
         fclose(f);
         chmod(LAYOUT_VERSION, 0600);
     }
+
+    rom_quirks_on_android_media_link_created();
     return 0;
 }
 
