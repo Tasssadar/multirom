@@ -599,26 +599,27 @@ static fb_text *fb_create_text_item(int x, int y, uint32_t color, int size, cons
     return t;
 }
 
-fb_text *fb_add_text(int x, int y, uint32_t color, int size, const char *fmt, ...)
+fb_img *fb_add_text(int x, int y, uint32_t color, int size, const char *fmt, ...)
 {
+    int ret;
+    fb_img *res;
     char txt[512];
     va_list ap;
+    char *buff = txt;
+
     va_start(ap, fmt);
-    vsnprintf(txt, sizeof(txt), fmt, ap);
+    ret = vsnprintf(txt, sizeof(txt), fmt, ap);
+    if(ret >= (int)sizeof(txt))
+    {
+        char *buff = malloc(ret+1);
+        vsnprintf(buff, ret+1, fmt, ap);
+    }
     va_end(ap);
 
-    return fb_add_text_long(x, y, color, size, txt);
-}
-
-fb_text *fb_add_text_long(int x, int y, uint32_t color, int size, char *text)
-{
-    fb_text *t = fb_create_text_item(x, y, color, size, text);
-
-    pthread_mutex_lock(&fb_items_mutex);
-    list_add(t, &fb_items.texts);
-    pthread_mutex_unlock(&fb_items_mutex);
-
-    return t;
+    res = fb_add_text_long(x, y, color, size, buff);
+    if(ret >= (int)sizeof(txt))
+        free(buff);
+    return res;
 }
 
 fb_rect *fb_add_rect(int x, int y, int w, int h, uint32_t color)

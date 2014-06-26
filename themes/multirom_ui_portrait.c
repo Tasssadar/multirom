@@ -143,6 +143,27 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
 {
     int x = fb_width/2 - MISCBTN_W/2;
     int y = 270*DPI_MUL;
+    fb_img *line;
+
+    y = HEADER_HEIGHT + 100;
+    fb_rect *bg = fb_add_rect(0, HEADER_HEIGHT, fb_width, fb_height-HEADER_HEIGHT, WHITE);
+
+    line = fb_add_truetype(5, y, BLACK, 16*SIZE_NORMAL, "The quick brown fox jumps over the lazy dog.");
+    y += line->h*1.2;
+    line = fb_add_truetype(5, y, BLACK, 16*SIZE_SMALL, "THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG.");
+    y += line->h*1.2;
+    line = fb_add_truetype(5, y, BLACK, 16*SIZE_EXTRA, "ijijijijixyxy");
+    y += line->h*1.2;
+    line = fb_add_truetype(5, y, DRED, 16*SIZE_BIG, "Hello world!");
+    y += line->h*1.2;
+    line = fb_add_truetype(5, y, BLACK, 16*SIZE_EXTRA, "Hello world!");
+    y += line->h*1.2;
+    line = fb_add_truetype(5, y, LBLUE, 16*8, "Hello world!");
+    y += line->h*1.2;
+    line = fb_add_truetype(5, y, GRAY, 16*12, "Hello world!");
+    y += line->h*1.2;
+
+    return;
 
     button *b = mzalloc(sizeof(button));
     b->x = x;
