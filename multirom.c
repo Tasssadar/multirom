@@ -1285,6 +1285,8 @@ int multirom_create_media_link(void)
         fclose(f);
         chmod(LAYOUT_VERSION, 0600);
     }
+
+    rom_quirks_on_android_media_link_created();
     return 0;
 }
 
@@ -1352,12 +1354,26 @@ int multirom_get_trampoline_ver(void)
     {
         ver = -1;
 
-        char *cmd[] = { "/init", "-v", NULL };
+        char buff[sizeof(multirom_dir) + 16];
+        char *cmd[] = { buff, "-v", NULL };
+
+        // If we are booting into another ROM from already running system,
+        // /main_init was moved to /init and we have to use trampoline from
+        // /data/media
+        if(access("/main_init", F_OK) >= 0)
+            snprintf(buff, sizeof(buff), "/init");
+        else
+            snprintf(buff, sizeof(buff), "%s/trampoline", multirom_dir);
+
         char *res = run_get_stdout(cmd);
         if(res)
         {
             ver = atoi(res);
             free(res);
+        }
+        else
+        {
+            ERROR("Failed to get trampoline version, run_get_stdout returned NULL!\n");
         }
     }
     return ver;
