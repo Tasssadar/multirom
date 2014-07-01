@@ -24,6 +24,7 @@
 #include "../version.h"
 #include "../input.h"
 #include "../log.h"
+#include "../animation.h"
 
 #define HEADER_HEIGHT (75*DPI_MUL)
 
@@ -138,10 +139,51 @@ static void tab_rom_init(multirom_theme_data *t, tab_data_roms *d, int tab_type)
     keyaction_add(d->boot_btn->x, d->boot_btn->y, button_keyaction_call, d->boot_btn);
 }
 
+static void animation_finished(void *data)
+{
+    fb_img *t = fb_add_text(50, HEADER_HEIGHT, CLR_PRIMARY, SIZE_BIG, "Finished!");
+    tab_data_misc *d = data;
+    list_add(t, &d->ui_elements);
+    fb_request_draw();
+
+    item_anim *anim = item_anim_create(t, 3000, INTERPOLATOR_LINEAR);
+    anim->targetY = fb_height - t->h - 20;
+    anim->targetX = fb_width - t->w;
+    item_anim_add(anim);
+}
+
 static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_scheme)
 {
     int x = fb_width/2 - MISCBTN_W/2;
     int y = 270*DPI_MUL;
+
+    fb_rect *rt = fb_add_rect(20*DPI_MUL, y, 0, 0, WHITE);
+
+    list_add(rt, &d->ui_elements);
+
+    item_anim *anim = item_anim_create(rt, 200, INTERPOLATOR_DECELERATE);
+    anim->targetW = fb_width - 40*DPI_MUL;
+    item_anim_add(anim);
+
+    anim = item_anim_create(rt, 400, INTERPOLATOR_OVERSHOOT);
+    anim->start_offset = 200;
+    anim->targetH = fb_height - y - 200*DPI_MUL;
+    item_anim_add(anim);
+
+    anim = item_anim_create(rt, 200, INTERPOLATOR_ACCELERATE);
+    anim->start_offset = 3000;
+    anim->targetH = 10*DPI_MUL;
+    item_anim_add(anim);
+
+    anim = item_anim_create(rt, 500, INTERPOLATOR_ACCELERATE);
+    anim->start_offset = 3200;
+    anim->targetX = 20*DPI_MUL + (fb_width - 40*DPI_MUL);
+    anim->targetW = 0;
+    anim->on_finished_data = d;
+    anim->on_finished_call = animation_finished;
+    item_anim_add(anim);
+
+    return;
 
     button *b = mzalloc(sizeof(button));
     b->x = x;

@@ -143,3 +143,8 @@ void workers_remove(worker_call call, void *data)
     }
     pthread_mutex_unlock(&worker_thread.mutex);
 }
+
+pthread_t workers_get_thread_id(void)
+{
+    return worker_thread.thread;
+}

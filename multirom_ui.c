@@ -38,6 +38,7 @@
 #include "workers.h"
 #include "hooks.h"
 #include "containers.h"
+#include "animation.h"
 
 static struct multirom_status *mrom_status = NULL;
 static struct multirom_rom *selected_rom = NULL;
@@ -122,6 +123,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     }
 
     workers_start();
+    anim_init();
 
     multirom_ui_init_header();
     multirom_ui_switch(TAB_INTERNAL);
@@ -162,11 +164,13 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
             loop_act &= ~(LOOP_START_PONG);
             keyaction_enable(0);
             input_push_context();
+            anim_push_context();
             fb_push_context();
 
             pong();
 
             fb_pop_context();
+            anim_pop_context();
             input_pop_context();
             keyaction_enable(1);
         }
@@ -232,6 +236,8 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     }
 
     stop_input_thread();
+
+    anim_stop();
 
     multirom_ui_destroy_tab(themes_info->data->selected_tab);
     multirom_ui_free_themes(themes_info);

@@ -38,6 +38,7 @@
 #include "framebuffer.h"
 #include "util.h"
 #include "containers.h"
+#include "animation.h"
 
 #if PIXEL_SIZE == 4
 #define fb_memset(dst, what, len) android_memset32(dst, what, len)
@@ -389,6 +390,8 @@ void fb_remove_item(void *item)
 
 void fb_destroy_item(void *item)
 {
+    anim_fb_item_removed(item);
+
     switch(((fb_item_header*)item)->type)
     {
         case FB_IT_RECT:

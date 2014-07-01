@@ -19,6 +19,7 @@
 #define WORKERS_H
 
 #include <stdint.h>
+#include <pthread.h>
 
 typedef void (*worker_call)(uint32_t, void *); // ms_diff, data
 
@@ -26,5 +27,6 @@ void workers_start(void);
 void workers_stop(void);
 void workers_add(worker_call call, void *data);
 void workers_remove(worker_call call, void *data);
+pthread_t workers_get_thread_id(void);
 
 #endif
