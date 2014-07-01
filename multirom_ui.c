@@ -441,9 +441,11 @@ void multirom_ui_auto_boot(void)
         }
         else if((seconds+50)/1000 != seconds/1000)
         {
-            sprintf(sec_text->text, "%d", seconds/1000);
+            fb_msgbox_rm_text(sec_text);
+            sec_text = fb_msgbox_add_text(-1, -1, SIZE_BIG, "%d", seconds/1000);
+
             fb_freeze(0);
-            fb_request_draw();
+            fb_force_draw();
             fb_freeze(1);
         }
         usleep(50000);
@@ -542,12 +544,7 @@ void multirom_ui_tab_rom_selected(listview_item *prev, listview_item *now)
         return;
 
     tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data;
-
-    free(t->rom_name->text);
-    t->rom_name->text = malloc(strlen(rom->name)+1);
-    strcpy(t->rom_name->text, rom->name);
-
-    cur_theme->center_rom_name(t, rom->name);
+    cur_theme->set_rom_name(t, rom->name);
 
     fb_request_draw();
 
@@ -630,8 +627,8 @@ void multirom_ui_tab_rom_update_usb(void *data)
     tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data;
     listview_clear(t->list);
 
-    t->rom_name->text = realloc(t->rom_name->text, 1);
-    t->rom_name->text[0] = 0;
+    fb_rm_text(t->rom_name);
+    t->rom_name = NULL;
 
     multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
     listview_update_ui(t->list);
@@ -653,9 +650,8 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
     int width = cur_theme->get_tab_width(themes_info->data);
 
     static const char *str[] = { "Select ROM to boot:", "No ROMs in this location!" };
-    t->title_text->head.x = center_x(t->list->x, width, SIZE_BIG, str[empty]);
-    t->title_text->text = realloc(t->title_text->text, strlen(str[empty])+1);
-    strcpy(t->title_text->text, str[empty]);
+    fb_text_set_content(t->title_text, str[empty]);
+    center_text(t->title_text, t->list->x, -1, width, -1);
 
     if(t->boot_btn)
         button_enable(t->boot_btn, !empty);
@@ -663,14 +659,14 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
     if(empty && !t->usb_text)
     {
         const int line_len = 37;
-        static const char *txt = "This list is refreshed automagically,\njust plug in the USB drive and  wait.";
-        int x = t->list->x + (width/2 - (line_len*ISO_CHAR_WIDTH*SIZE_NORMAL)/2);
-        int y = center_y(t->list->y, t->list->h, SIZE_NORMAL);
-        t->usb_text = fb_add_text(x, y, WHITE, SIZE_NORMAL, txt);
+        static const char *txt = "This list is refreshed automagically,\njust plug in the USB drive and wait.";
+        t->usb_text = fb_add_text_justified(0, 0, WHITE, SIZE_NORMAL, JUSTIFY_CENTER, txt);
         list_add(t->usb_text, &t->ui_elements);
 
-        x = t->list->x + ((width/2) - (PROGDOTS_W/2));
-        t->usb_prog = progdots_create(x, y+100*DPI_MUL);
+        center_text(t->usb_text, t->list->x, t->list->y, width, t->list->h);
+
+        int x = t->list->x + ((width/2) - (PROGDOTS_W/2));
+        t->usb_prog = progdots_create(x, t->usb_text->head.y+100*DPI_MUL);
     }
     else if(!empty && t->usb_text)
     {

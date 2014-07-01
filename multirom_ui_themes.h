@@ -67,7 +67,7 @@ struct multirom_theme
     void (*tab_misc_init)(multirom_theme_data *t, tab_data_misc *d, int color_scheme);
     int (*get_tab_width)(multirom_theme_data *t);
     int (*get_tab_height)(multirom_theme_data *t);
-    void (*center_rom_name)(tab_data_roms *d, const char *rom_name);
+    void (*set_rom_name)(tab_data_roms *d, const char *rom_name);
 };
 typedef struct multirom_theme multirom_theme;
 

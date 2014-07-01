@@ -63,8 +63,8 @@
 
 #define T_FOLDER 4
 
+char multirom_dir[64] = { 0 };
 static char busybox_path[64] = { 0 };
-static char multirom_dir[64] = { 0 };
 static char kexec_path[64] = { 0 };
 static char ntfs_path[64] = { 0 };
 static char exfat_path[64] = { 0 };
@@ -257,25 +257,35 @@ void multirom_emergency_reboot(void)
 
     char *klog = multirom_get_klog();
 
-    fb_add_text(0, 120, WHITE, 2,
+    fb_img *t = fb_add_text(0, 120, WHITE, SIZE_NORMAL,
                 "An error occured.\nShutting down MultiROM to avoid data corruption.\n"
                 "Report this error to the developer!\nDebug info: /sdcard/multirom_log.txt\n\n"
                 "Press POWER button to reboot.");
 
-    fb_add_text(0, 370, GRAYISH, 1, "Last lines from klog:");
-    fb_add_rect(0, 390, fb_width, 1, GRAYISH);
+    t = fb_add_text(0, t->head.y + t->h + 100*DPI_MUL, GRAYISH, SIZE_SMALL, "Last lines from klog:");
+    fb_add_rect(0, t->head.y + t->h + 5*DPI_MUL, fb_width, 1, GRAYISH);
 
     char *tail = klog+strlen(klog);
-    int count = 0;
-    const int max = (fb_height - 395)/ISO_CHAR_HEIGHT;
-    while(tail > klog && count < max)
+
+    const int start_y = (t->head.y + t->h + 2);
+    int cur_y = fb_height;
+    while(tail > klog)
     {
         --tail;
         if(*tail == '\n')
-            ++count;
-    }
+        {
+            *tail = 0;
+            t = fb_add_text(0, cur_y, GRAYISH, SIZE_SMALL, tail+1);
+            cur_y -= t->h;
+            t->head.y = cur_y;
 
-    fb_add_text_long(0, 395, GRAYISH, 1, ++tail);
+            if(cur_y < start_y)
+            {
+                fb_rm_text(t);
+                break;
+            }
+        }
+    }
 
     fb_force_draw();
 

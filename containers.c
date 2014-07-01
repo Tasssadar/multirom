@@ -232,7 +232,7 @@ void map_destroy(map *m, void (*destroy_callback)(void*))
     free(m);
 }
 
-void map_add(map *m, char *key, void *val, void (*destroy_callback)(void*))
+void map_add(map *m, const char *key, void *val, void (*destroy_callback)(void*))
 {
     int idx = map_find(m, key);
     if(idx >= 0)
@@ -245,13 +245,14 @@ void map_add(map *m, char *key, void *val, void (*destroy_callback)(void*))
         map_add_not_exist(m, key, val);
 }
 
-void map_add_not_exist(map *m, char *key, void *val)
+void map_add_not_exist(map *m, const char *key, void *val)
 {
     list_add(strdup(key), &m->keys);
     list_add(val, &m->values);
+    ++m->size;
 }
 
-void map_rm(map *m, char *key, void (*destroy_callback)(void*))
+void map_rm(map *m, const char *key, void (*destroy_callback)(void*))
 {
     int idx = map_find(m, key);
     if(idx < 0)
@@ -259,9 +260,10 @@ void map_rm(map *m, char *key, void (*destroy_callback)(void*))
 
     list_rm_at(idx, &m->keys, &free);
     list_rm_at(idx, &m->values, destroy_callback);
+    --m->size;
 }
 
-int map_find(map *m, char *key)
+int map_find(map *m, const char *key)
 {
     int i;
     for(i = 0; m->keys && m->keys[i]; ++i)
@@ -270,7 +272,7 @@ int map_find(map *m, char *key)
     return -1; 
 }
 
-void *map_get_val(map *m, char *key)
+void *map_get_val(map *m, const char *key)
 {
     int idx = map_find(m, key);
     if(idx < 0)
@@ -278,7 +280,7 @@ void *map_get_val(map *m, char *key)
     return m->values[idx];
 }
 
-void *map_get_ref(map *m, char *key)
+void *map_get_ref(map *m, const char *key)
 {
     int idx = map_find(m, key);
     if(idx < 0)
@@ -318,8 +320,9 @@ void imap_add(imap *m, int key, void *val, void (*destroy_callback)(void*))
 
 void imap_add_not_exist(imap *m, int key, void *val)
 {
-    ++m->size;
-    m->keys = realloc(m->keys, sizeof(int)*m->size);
+    m->keys = realloc(m->keys, sizeof(int)*(m->size+1));
+    m->keys[m->size++] = key;
+
     list_add(val, &m->values);
 }
 

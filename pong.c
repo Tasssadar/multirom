@@ -49,6 +49,7 @@ static fb_rect *paddles[2] = { NULL, NULL };
 static fb_rect *ball = NULL;
 static int paddle_last_x[2] = { -1, -1 };
 static int paddle_touch_id[2] = { -1, -1 };
+static int score_val[2];
 static int ball_speed = DEFAULT_BALL_SPEED;
 static int enable_computer = 1;
 
@@ -81,11 +82,15 @@ void pong(void)
     paddle_touch_id[L] = -1;
     paddle_touch_id[R] = -1;
 
+    score_val[L] = 0;
+    score_val[R] = 0;
+
     // middle line
     fb_add_rect(0, fb_height/2 - 1, fb_width, 1, WHITE);
 
-    score[L] = fb_add_text(0, fb_height/2 - SIZE_EXTRA*16 - 20, WHITE, SIZE_EXTRA, "0");
-    score[R] = fb_add_text(0, fb_height/2 + 20, WHITE, SIZE_EXTRA, "0");
+    score[L] = fb_add_text(0, 0, WHITE, SIZE_EXTRA, "0");
+    score[L]->head.y = fb_height/2 - score[L]->h - 20*DPI_MUL;
+    score[R] = fb_add_text(0, fb_height/2 + 20*DPI_MUL, WHITE, SIZE_EXTRA, "0");
 
     paddles[L] = fb_add_rect(100, PADDLE_Y, PADDLE_W, PADDLE_H, WHITE);
     paddles[R] = fb_add_rect(100, fb_height-PADDLE_Y-PADDLE_H, PADDLE_W, PADDLE_H, WHITE);
@@ -282,12 +287,9 @@ int pong_get_collision(int x, int y)
 
 void pong_add_score(int side)
 {
-    char buff[16];
-    int curr = atoi(score[side]->text);
-
-    sprintf(buff, "%d", ++curr);
-    score[side]->text = realloc(score[side]->text, strlen(buff)+1);
-    strcpy(score[side]->text, buff);
+    char buff[8];
+    snprintf(buff, sizeof(buff), "%d", ++score_val[side]);
+    fb_text_set_content(score[side], buff);
 }
 
 void pong_handle_ai(void)

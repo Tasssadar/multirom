@@ -113,6 +113,8 @@ struct multirom_status
     struct fstab *fstab;
 };
 
+extern char multirom_dir[64];
+
 int multirom(const char *rom_to_boot);
 int multirom_find_base_dir(void);
 void multirom_emergency_reboot(void);

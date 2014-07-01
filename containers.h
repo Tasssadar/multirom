@@ -41,16 +41,17 @@ typedef struct
 {
     char **keys;
     void **values;
+    size_t size;
 } map;
 
 map *map_create(void);
 void map_destroy(map *m, void (*destroy_callback)(void*));
-void map_add(map *m, char *key, void *val, void (*destroy_callback)(void*));
-void map_add_not_exist(map *m, char *key, void *val);
-void map_rm(map *m, char *key, void (*destroy_callback)(void*));
-int map_find(map *m, char *key);
-void *map_get_val(map *m, char *key);
-void *map_get_ref(map *m, char *key);
+void map_add(map *m, const char *key, void *val, void (*destroy_callback)(void*));
+void map_add_not_exist(map *m, const char *key, void *val);
+void map_rm(map *m, const char *key, void (*destroy_callback)(void*));
+int map_find(map *m, const char *key);
+void *map_get_val(map *m, const char *key);
+void *map_get_ref(map *m, const char *key);
 
 typedef struct
 {

@@ -39,10 +39,8 @@ void button_init_ui(button *b, const char *text, int size)
         b->c[CLR_CHECK][1] = WHITE;
 
         b->rect = fb_add_rect(b->x, b->y, b->w, b->h, b->c[CLR_NORMAL][0]);
-
-        int text_x = center_x(b->x, b->w, size, text);
-        int text_y = center_y(b->y, b->h, size);
-        b->text = fb_add_text(text_x, text_y, b->c[CLR_NORMAL][1], size, text);
+        b->text = fb_add_text(0, 0, b->c[CLR_NORMAL][1], size, text);
+        center_text(b->text, b->x, b->y, b->w, b->h);
     }
     else
     {
@@ -77,8 +75,7 @@ void button_move(button *b, int x, int y)
         b->rect->head.x = x;
         b->rect->head.y = y;
 
-        b->text->head.x = center_x(x, b->w, b->text->size, b->text->text);
-        b->text->head.y = center_y(y, b->h, b->text->size);
+        center_text(b->text, b->x, b->y, b->w, b->h);
     }
 }
 
@@ -166,7 +163,7 @@ void button_update_colors(button *b)
     if(b->text)
     {
         b->rect->color = b->c[state][0];
-        b->text->color = b->c[state][1];
+        fb_text_set_color(b->text, b->c[state][1]);
     }
 }
 

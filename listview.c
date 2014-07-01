@@ -493,7 +493,7 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
             d->part_it = fb_add_text(x+ROM_TEXT_PADDING, 0, GRAY, SIZE_SMALL, d->partition);
     }
 
-    d->text_it->head.y = center_y(y, ROM_ITEM_H, SIZE_BIG);
+    center_text(d->text_it, -1, y, -1, ROM_ITEM_H);
     d->bottom_line->head.y = y+ROM_ITEM_H-2;
 
     if(d->icon)

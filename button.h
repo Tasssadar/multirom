@@ -42,7 +42,7 @@ typedef struct
 {
     int x, y;
     int w, h;
-    fb_text *text;
+    fb_img *text;
     fb_rect *rect;
     fb_rect **keyact_frame;
 

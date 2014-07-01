@@ -53,19 +53,18 @@ static void init_header(multirom_theme_data *t)
     button **tab_btns = t->tab_btns;
     fb_text **tab_texts = t->tab_texts;
 
-    int i, text_x, text_y;
+    int i;
     int y = TAB_BTN_HEIGHT;
 
     static const char *str[] = { "Internal", "USB", "Misc", "MultiROM" };
 
-    text_x = center_x(0, HEADER_WIDTH, SIZE_EXTRA, str[3]);
-    fb_add_text(text_x, 5, WHITE, SIZE_EXTRA, str[3]);
+    fb_img *title = fb_add_text(0, 0, WHITE, SIZE_EXTRA, str[3]);
+    center_text(title, 0, 0, HEADER_WIDTH, TAB_BTN_HEIGHT);
 
     for(i = 0; i < TAB_COUNT; ++i)
     {
-        text_x = center_x(0, HEADER_WIDTH, SIZE_NORMAL, str[i]);
-        text_y = center_y(y, TAB_BTN_HEIGHT, SIZE_NORMAL);
-        tab_texts[i] = fb_add_text(text_x, text_y, WHITE, SIZE_NORMAL, str[i]);
+        tab_texts[i] = fb_add_text(0, 0, WHITE, SIZE_NORMAL, str[i]);
+        center_text(tab_texts[i], 0, y, HEADER_WIDTH, TAB_BTN_HEIGHT);
 
         fb_add_rect(0, y, HEADER_WIDTH, 2, WHITE);
 
@@ -91,7 +90,7 @@ static void header_select(multirom_theme_data *t, int tab)
 {
     int i;
     for(i = 0; i < TAB_COUNT; ++i)
-        t->tab_texts[i]->color = (i == tab) ? BLACK : WHITE;
+        fb_text_set_color(t->tab_texts[i], (i == tab) ? BLACK : WHITE);
 
     if(!t->selected_tab_rect)
         t->selected_tab_rect = fb_add_rect(0, 0, HEADER_WIDTH, TAB_BTN_HEIGHT, WHITE);
@@ -103,8 +102,7 @@ static void tab_rom_init(multirom_theme_data *t, tab_data_roms *d, int tab_type)
 {
     int base_y = fb_height-ROMS_FOOTER_H;
 
-    d->rom_name = fb_add_text(HEADER_WIDTH, center_y(base_y, ROMS_FOOTER_H, SIZE_NORMAL),
-                              WHITE, SIZE_NORMAL, "");
+    d->rom_name = fb_add_text(0, 0, WHITE, SIZE_NORMAL, "");
 
     d->list->x = HEADER_WIDTH;
     d->list->y = ROMS_HEADER_H;
@@ -112,8 +110,8 @@ static void tab_rom_init(multirom_theme_data *t, tab_data_roms *d, int tab_type)
     d->list->h = fb_height - d->list->y - ROMS_FOOTER_H-20;
 
     // header
-    int y = center_y(0, ROMS_HEADER_H, SIZE_BIG);
-    d->title_text = fb_add_text(HEADER_WIDTH, y, CLR_PRIMARY, SIZE_BIG, "");
+    d->title_text = fb_add_text(HEADER_WIDTH, 0, CLR_PRIMARY, SIZE_BIG, "W");
+    center_text(d->title_text, -1, 0, -1, ROMS_HEADER_H);
     list_add(d->title_text, &d->ui_elements);
 
     // footer
@@ -180,13 +178,16 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
             y += MISCBTN_H+20*DPI_MUL;
     }
 
-    fb_text *text = fb_add_text(HEADER_WIDTH+5, fb_height-16*SIZE_SMALL, WHITE, SIZE_SMALL, "MultiROM v%d"VERSION_DEV_FIX" with trampoline v%d.",
+    fb_text *text = fb_add_text(HEADER_WIDTH+5, 0, WHITE, SIZE_SMALL, "MultiROM v%d"VERSION_DEV_FIX" with trampoline v%d.",
                                VERSION_MULTIROM, multirom_get_trampoline_ver());
+    text->head.y = fb_height - text->h;
     list_add(text, &d->ui_elements);
 
     char bat_text[16];
-    sprintf(bat_text, "Battery: %d%%", multirom_get_battery());
-    text = fb_add_text_long(fb_width-strlen(bat_text)*8*SIZE_SMALL, fb_height-16*SIZE_SMALL, WHITE, SIZE_SMALL, bat_text);
+    snprintf(bat_text, sizeof(bat_text), "Battery: %d%%", multirom_get_battery());
+    text = fb_add_text_long(0, 0, WHITE, SIZE_SMALL, bat_text);
+    text->head.x = fb_width - text->w;
+    text->head.y = fb_height - text->h;
     list_add(text, &d->ui_elements);
 
     x =  HEADER_WIDTH + ((fb_width - HEADER_WIDTH)/2 - (CLRS_MAX*CLRBTN_TOTAL)/2);
@@ -232,9 +233,10 @@ static int get_tab_height(multirom_theme_data *t)
     return fb_height;
 }
 
-static void center_rom_name(tab_data_roms *d, const char *name)
+static void set_rom_name(tab_data_roms *d, const char *name)
 {
-    d->rom_name->head.x = center_x(HEADER_WIDTH, fb_width-BOOTBTN_W-HEADER_WIDTH-20, SIZE_NORMAL, name);
+    fb_text_set_content(d->rom_name, name);
+    center_text(d->rom_name, HEADER_WIDTH, fb_height-ROMS_FOOTER_H, fb_width-HEADER_WIDTH-BOOTBTN_W-20, ROMS_FOOTER_H);
 }
 
 const struct multirom_theme theme_info_landscape = {
@@ -248,5 +250,5 @@ const struct multirom_theme theme_info_landscape = {
     .tab_misc_init = &tab_misc_init,
     .get_tab_width = &get_tab_width,
     .get_tab_height = &get_tab_height,
-    .center_rom_name = &center_rom_name
+    .set_rom_name = &set_rom_name
 };

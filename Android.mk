@@ -38,6 +38,8 @@ ifeq ($(ARCH_ARM_HAVE_NEON),true)
     LOCAL_CFLAGS += -DHAS_NEON_BLEND
 endif
 
+#LOCAL_CFLAGS += -D_FORTIFY_SOURCE=2 -fstack-protector-all -O0 -g -fno-omit-frame-pointer
+
 LOCAL_MODULE:= multirom
 LOCAL_MODULE_TAGS := eng
 
@@ -114,13 +116,17 @@ else ifeq ($(MR_DPI),hdpi)
 ifeq ($(MR_DPI_MUL),)
     MR_DPI_MUL := 1
 endif
-    LOCAL_CFLAGS += -DMR_HDPI
 else ifeq ($(MR_DPI),xhdpi)
 ifeq ($(MR_DPI_MUL),)
     MR_DPI_MUL := 1.5
 endif
-    LOCAL_CFLAGS += -DMR_XHDPI
 endif
+
+ifeq ($(MR_DPI_FONT),)
+    MR_DPI_FONT := 96
+endif
+
+LOCAL_CFLAGS += -DMR_DPI_FONT=$(MR_DPI_FONT)
 
 ifneq ($(MR_DPI_MUL),)
     LOCAL_CFLAGS += -DDPI_MUL=$(MR_DPI_MUL)
