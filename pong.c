@@ -89,7 +89,7 @@ void pong(void)
     fb_add_rect(0, fb_height/2 - 1, fb_width, 1, WHITE);
 
     score[L] = fb_add_text(0, 0, WHITE, SIZE_EXTRA, "0");
-    score[L]->head.y = fb_height/2 - score[L]->h - 20*DPI_MUL;
+    score[L]->y = fb_height/2 - score[L]->h - 20*DPI_MUL;
     score[R] = fb_add_text(0, fb_height/2 + 20*DPI_MUL, WHITE, SIZE_EXTRA, "0");
 
     paddles[L] = fb_add_rect(100, PADDLE_Y, PADDLE_W, PADDLE_H, WHITE);
@@ -148,8 +148,8 @@ int pong_do_movement(int step)
     int col = movement_steps[step]->collision;
     if(col == COL_NONE || col == COL_LEFT || col == COL_RIGHT)
     {
-        ball->head.x = movement_steps[step]->x;
-        ball->head.y = movement_steps[step]->y;
+        ball->x = movement_steps[step]->x;
+        ball->y = movement_steps[step]->y;
         if(enable_computer)
             pong_handle_ai();
     }
@@ -166,10 +166,10 @@ int pong_do_movement(int step)
         case COL_RIGHT:
         {
             int s = col - 1;
-            if(ball->head.x+BALL_W >= paddles[s]->head.x && ball->head.x <= paddles[s]->head.x+PADDLE_W)
+            if(ball->x+BALL_W >= paddles[s]->x && ball->x <= paddles[s]->x+PADDLE_W)
             {
                 // Increase X speed according to distance from center of paddle.
-                ball_speed_x = (float)((ball->head.x + BALL_W/2) - (paddles[s]->head.x + PADDLE_W/2))/BALL_SPEED_MOD;
+                ball_speed_x = (float)((ball->x + BALL_W/2) - (paddles[s]->x + PADDLE_W/2))/BALL_SPEED_MOD;
                 ball_speed_y = -ball_speed_y;
             }
             else
@@ -196,7 +196,7 @@ int pong_touch_handler(touch_event *ev, void *data)
     for(; i < 2; ++i)
     {
         if (paddle_touch_id[i] == -1 && (ev->changed & TCHNG_ADDED) &&
-            in_rect(ev->x, ev->y, paddles[i]->head.x, paddles[i]->head.y, paddles[i]->w, paddles[i]->h))
+            in_rect(ev->x, ev->y, paddles[i]->x, paddles[i]->y, paddles[i]->w, paddles[i]->h))
         {
             paddle_touch_id[i] = ev->id;
             paddle_last_x[i] = ev->x;
@@ -214,11 +214,11 @@ int pong_touch_handler(touch_event *ev, void *data)
             return 0;
         }
 
-        int newX = paddles[i]->head.x + (ev->x - paddle_last_x[i]);
+        int newX = paddles[i]->x + (ev->x - paddle_last_x[i]);
         paddle_last_x[i] = ev->x;
 
         if(newX > 0 && newX < (int)fb_width-PADDLE_W)
-            paddles[i]->head.x = newX;
+            paddles[i]->x = newX;
         return 0;
     }
     return -1;
@@ -235,8 +235,8 @@ void pong_spawn_ball(int side)
     ball_speed_x = cos(angle)*ball_speed;
     ball_speed_y = sin(angle)*ball_speed;
 
-    ball->head.x = rand()%(int)(fb_width-BALL_W);
-    ball->head.y = fb_height/2 - BALL_W/2;
+    ball->x = rand()%(int)(fb_width-BALL_W);
+    ball->y = fb_height/2 - BALL_W/2;
 }
 
 void pong_calc_movement(void)
@@ -244,8 +244,8 @@ void pong_calc_movement(void)
     list_clear(&movement_steps, &free);
 
     ball_step *step = NULL;
-    float x = ball->head.x;
-    float y = ball->head.y;
+    float x = ball->x;
+    float y = ball->y;
 
     if(y < PADDLE_Y+PADDLE_H)
         y = PADDLE_Y+PADDLE_H;
@@ -294,7 +294,7 @@ void pong_add_score(int side)
 
 void pong_handle_ai(void)
 {
-    int ball_center = (ball->head.x + BALL_W/2);
+    int ball_center = (ball->x + BALL_W/2);
 
     if(ai_last_speed != ball_speed_x)
     {
@@ -306,13 +306,13 @@ void pong_handle_ai(void)
     switch(ai_hit_pos)
     {
         case 0:
-            computer_x = paddles[COMPUTER]->head.x + PADDLE_W/2;
+            computer_x = paddles[COMPUTER]->x + PADDLE_W/2;
             break;
         case 1:
-            computer_x = paddles[COMPUTER]->head.x;
+            computer_x = paddles[COMPUTER]->x;
             break;
         case 2:
-            computer_x = paddles[COMPUTER]->head.x + PADDLE_W;
+            computer_x = paddles[COMPUTER]->x + PADDLE_W;
             break;
     }
 
@@ -322,12 +322,12 @@ void pong_handle_ai(void)
 
     if(ball_center > computer_x)
     {
-        if(paddles[COMPUTER]->head.x + PADDLE_W + COMPUTER_SPEED <= (int)fb_width)
-            paddles[COMPUTER]->head.x += move_dist;
+        if(paddles[COMPUTER]->x + PADDLE_W + COMPUTER_SPEED <= (int)fb_width)
+            paddles[COMPUTER]->x += move_dist;
     }
     else
     {
-        if(paddles[COMPUTER]->head.x - COMPUTER_SPEED >= 0)
-            paddles[COMPUTER]->head.x -= move_dist;
+        if(paddles[COMPUTER]->x - COMPUTER_SPEED >= 0)
+            paddles[COMPUTER]->x -= move_dist;
     }
 }

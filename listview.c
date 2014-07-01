@@ -194,14 +194,14 @@ void listview_update_scroll_mark(listview *view)
 
     int pct = (pos*100)/(view->fullH-view->h);
     int y = view->y + ((view->h - MARK_H)*pct)/100;
-    view->scroll_mark->head.y = y;
+    view->scroll_mark->y = y;
 }
 
 void listview_update_overscroll_mark(listview *v, int side, float overscroll)
 {
     int w = v->w * (overscroll / OVERSCROLL_H);
     v->overscroll_marks[side]->w = w;
-    v->overscroll_marks[side]->head.x = v->x + (v->w >> 1) - (w >> 1);
+    v->overscroll_marks[side]->x = v->x + (v->w >> 1) - (w >> 1);
 }
 
 int listview_touch_handler(touch_event *ev, void *data)
@@ -433,14 +433,14 @@ void listview_update_keyact_frame(listview *view)
     y -= view->pos;
 
     // top
-    view->keyact_frame[0]->head.y = y;
+    view->keyact_frame[0]->y = y;
     // right
-    view->keyact_frame[1]->head.y = y;
+    view->keyact_frame[1]->y = y;
     view->keyact_frame[1]->h = h;
     // bottom
-    view->keyact_frame[2]->head.y = y+h-KEYACT_FRAME_W;
+    view->keyact_frame[2]->y = y+h-KEYACT_FRAME_W;
     // left
-    view->keyact_frame[3]->head.y = y;
+    view->keyact_frame[3]->y = y;
     view->keyact_frame[3]->h = h;
 
     listview_select_item(view, it);
@@ -494,19 +494,19 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
     }
 
     center_text(d->text_it, -1, y, -1, ROM_ITEM_H);
-    d->bottom_line->head.y = y+ROM_ITEM_H-2;
+    d->bottom_line->y = y+ROM_ITEM_H-2;
 
     if(d->icon)
-        d->icon->head.y = y + (ROM_ITEM_H/2 - ROM_ICON_H/2);
+        d->icon->y = y + (ROM_ITEM_H/2 - ROM_ICON_H/2);
 
     if(d->part_it)
-        d->part_it->head.y = d->text_it->head.y + SIZE_BIG*16 + 2;
+        d->part_it->y = d->text_it->y + SIZE_BIG*16 + 2;
 
     if(it->flags & IT_HOVER)
     {
         if(!d->hover_rect)
             d->hover_rect = fb_add_rect(x, 0, w, rom_item_height(it->data), CLR_SECONDARY);
-        d->hover_rect->head.y = y;
+        d->hover_rect->y = y;
     }
     else if(d->hover_rect)
     {
@@ -518,7 +518,7 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
     {
         if(!d->sel_rect)
             d->sel_rect = fb_add_rect(x, 0, ROM_ITEM_SEL_W, ROM_ITEM_H, CLR_PRIMARY);
-        d->sel_rect->head.y = y;
+        d->sel_rect->y = y;
     }
     else if(d->sel_rect)
     {

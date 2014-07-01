@@ -262,12 +262,12 @@ void multirom_emergency_reboot(void)
                 "Report this error to the developer!\nDebug info: /sdcard/multirom_log.txt\n\n"
                 "Press POWER button to reboot.");
 
-    t = fb_add_text(0, t->head.y + t->h + 100*DPI_MUL, GRAYISH, SIZE_SMALL, "Last lines from klog:");
-    fb_add_rect(0, t->head.y + t->h + 5*DPI_MUL, fb_width, 1, GRAYISH);
+    t = fb_add_text(0, t->y + t->h + 100*DPI_MUL, GRAYISH, SIZE_SMALL, "Last lines from klog:");
+    fb_add_rect(0, t->y + t->h + 5*DPI_MUL, fb_width, 1, GRAYISH);
 
     char *tail = klog+strlen(klog);
 
-    const int start_y = (t->head.y + t->h + 2);
+    const int start_y = (t->y + t->h + 2);
     int cur_y = fb_height;
     while(tail > klog)
     {
@@ -277,7 +277,7 @@ void multirom_emergency_reboot(void)
             *tail = 0;
             t = fb_add_text(0, cur_y, GRAYISH, SIZE_SMALL, tail+1);
             cur_y -= t->h;
-            t->head.y = cur_y;
+            t->y = cur_y;
 
             if(cur_y < start_y)
             {

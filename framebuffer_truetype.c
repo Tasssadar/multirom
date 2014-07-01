@@ -298,9 +298,9 @@ typedef struct
 fb_img *fb_text_create_item(int x, int y, uint32_t color, int size, int justify, const char *text)
 {
     fb_img *result = mzalloc(sizeof(fb_img));
-    result->head.type = FB_IT_IMG;
-    result->head.x = x;
-    result->head.y = y;
+    result->type = FB_IT_IMG;
+    result->x = x;
+    result->y = y;
     result->img_type = FB_IMG_TYPE_TEXT;
     result->data = NULL;
     result->extra = mzalloc(sizeof(text_extra));
@@ -463,10 +463,10 @@ inline void center_text(fb_img *text, int targetX, int targetY, int targetW, int
     text_extra *ex = text->extra;
 
     if(targetX != -1)
-        text->head.x = targetX + (targetW/2 - text->w/2);
+        text->x = targetX + (targetW/2 - text->w/2);
 
     if(targetY != -1)
-        text->head.y = targetY + (targetH/2 - ex->baseline/2);
+        text->y = targetY + (targetH/2 - ex->baseline/2);
 }
 
 void fb_text_set_color(fb_img *img, uint32_t color)

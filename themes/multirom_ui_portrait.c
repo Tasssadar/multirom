@@ -107,7 +107,7 @@ static void header_select(multirom_theme_data *t, int tab)
     if(!t->selected_tab_rect)
         t->selected_tab_rect = fb_add_rect(0, 0, TAB_BTN_WIDTH, HEADER_HEIGHT, WHITE);
 
-    t->selected_tab_rect->head.x = fb_width - (TAB_BTN_WIDTH * (TAB_COUNT - tab));
+    t->selected_tab_rect->x = fb_width - (TAB_BTN_WIDTH * (TAB_COUNT - tab));
 }
 
 static void tab_rom_init(multirom_theme_data *t, tab_data_roms *d, int tab_type)
@@ -188,14 +188,14 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
 
     fb_text *text = fb_add_text(0, 0, WHITE, SIZE_SMALL, "MultiROM v%d"VERSION_DEV_FIX" with trampoline v%d.",
                                VERSION_MULTIROM, multirom_get_trampoline_ver());
-    text->head.y = fb_height - text->h;
+    text->y = fb_height - text->h;
     list_add(text, &d->ui_elements);
 
     char bat_text[16];
     snprintf(bat_text, sizeof(bat_text), "Battery: %d%%", multirom_get_battery());
     text = fb_add_text_long(0, 0, WHITE, SIZE_SMALL, bat_text);
-    text->head.x = fb_width - text->w;
-    text->head.y = fb_height - text->h;
+    text->x = fb_width - text->w;
+    text->y = fb_height - text->h;
     list_add(text, &d->ui_elements);
 
     x = fb_width/2 - (CLRS_MAX*CLRBTN_TOTAL)/2;

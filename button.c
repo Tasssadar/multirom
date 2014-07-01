@@ -72,8 +72,8 @@ void button_move(button *b, int x, int y)
 
     if(b->text)
     {
-        b->rect->head.x = x;
-        b->rect->head.y = y;
+        b->rect->x = x;
+        b->rect->y = y;
 
         center_text(b->text, b->x, b->y, b->w, b->h);
     }

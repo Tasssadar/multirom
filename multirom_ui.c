@@ -666,7 +666,7 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
         center_text(t->usb_text, t->list->x, t->list->y, width, t->list->h);
 
         int x = t->list->x + ((width/2) - (PROGDOTS_W/2));
-        t->usb_prog = progdots_create(x, t->usb_text->head.y+100*DPI_MUL);
+        t->usb_prog = progdots_create(x, t->usb_text->y+100*DPI_MUL);
     }
     else if(!empty && t->usb_text)
     {

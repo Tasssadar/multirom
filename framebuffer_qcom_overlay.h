@@ -420,7 +420,7 @@ enum {
 
     /* This one is defined in CM (caf?), but not AOSP. This changes IDs of
      * all following types. Bloody hell.
-     * /
+     */
 //    MDP_YCBYCR_H2V1,  /* YCbYCr interleave */
 
     MDP_YCRYCB_H2V1,  /* YCrYCb interleave */

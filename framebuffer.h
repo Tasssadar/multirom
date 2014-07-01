@@ -140,17 +140,19 @@ enum
     JUSTIFY_RIGHT,
 };
 
-typedef struct
+#define FB_ITEM_HEAD \
+    int id; \
+    int type; \
+    int x, y;
+
+typedef struct 
 {
-    int id;
-    int type;
-    int x;
-    int y;
+    FB_ITEM_HEAD
 } fb_item_header;
 
 typedef struct
 {
-    fb_item_header head;
+    FB_ITEM_HEAD
 
     int w;
     int h;
@@ -173,7 +175,8 @@ typedef struct
  */
 typedef struct
 {
-    fb_item_header head;
+    FB_ITEM_HEAD
+
     int w;
     int h;
     int img_type;
@@ -185,7 +188,8 @@ typedef fb_img fb_text;
 
 typedef struct
 {
-    fb_item_header head;
+    FB_ITEM_HEAD
+
     int w, h;
 
     fb_img **imgs;

@@ -424,7 +424,7 @@ void fb_destroy_item(void *item)
 
 void fb_draw_rect(fb_rect *r)
 {
-    px_type *bits = fb.buffer + (fb.stride*r->head.y) + r->head.x;
+    px_type *bits = fb.buffer + (fb.stride*r->y) + r->x;
     px_type color = fb_convert_color(r->color);
     const int w = r->w*PIXEL_SIZE;
 
@@ -444,7 +444,7 @@ static inline int blend_png(int value1, int value2, int alpha) {
 void fb_draw_img(fb_img *i)
 {
     int y, x;
-    px_type *bits = fb.buffer + (fb.stride*i->head.y) + i->head.x;
+    px_type *bits = fb.buffer + (fb.stride*i->y) + i->x;
     px_type *img = i->data;
     const int w = i->w*PIXEL_SIZE;
     uint8_t alpha;
@@ -456,10 +456,10 @@ void fb_draw_img(fb_img *i)
     const uint8_t max_alpha = 31;
 #endif
 
-    const int min_x = i->head.x >= 0 ? 0 : i->head.x + i->w;
-    const int min_y = i->head.y >= 0 ? 0 : i->head.y + i->h;
-    const int max_x = imin(i->w, fb_width - i->head.x);
-    const int max_y = imin(i->h, fb_height - i->head.y);
+    const int min_x = i->x >= 0 ? 0 : i->x + i->w;
+    const int min_y = i->y >= 0 ? 0 : i->y + i->h;
+    const int max_x = imin(i->w, fb_width - i->x);
+    const int max_y = imin(i->h, fb_height - i->y);
     const int rendered_w = max_x - min_x;
 
     img = (px_type*)(((uint32_t*)img) + min_y * i->w);
@@ -589,10 +589,10 @@ fb_img *fb_add_text_long_justified(int x, int y, uint32_t color, int size, int j
 fb_rect *fb_add_rect(int x, int y, int w, int h, uint32_t color)
 {
     fb_rect *r = malloc(sizeof(fb_rect));
-    r->head.id = fb_generate_item_id();
-    r->head.type = FB_IT_RECT;
-    r->head.x = x;
-    r->head.y = y;
+    r->id = fb_generate_item_id();
+    r->type = FB_IT_RECT;
+    r->x = x;
+    r->y = y;
 
     r->w = w;
     r->h = h;
@@ -628,9 +628,9 @@ void fb_add_rect_notfilled(int x, int y, int w, int h, uint32_t color, int thick
 fb_img *fb_add_img(int x, int y, int w, int h, int img_type, px_type *data)
 {
     fb_img *result = mzalloc(sizeof(fb_img));
-    result->head.type = FB_IT_IMG;
-    result->head.x = x;
-    result->head.y = y;
+    result->type = FB_IT_IMG;
+    result->x = x;
+    result->y = y;
     result->img_type = img_type;
     result->data = data;
     result->w = w;
@@ -689,10 +689,10 @@ fb_msgbox *fb_create_msgbox(int w, int h, int bgcolor)
     int x = fb_width/2 - w/2;
     int y = fb_height/2 - h/2;
 
-    box->head.id = fb_generate_item_id();
-    box->head.type = FB_IT_BOX;
-    box->head.x = x;
-    box->head.y = y;
+    box->id = fb_generate_item_id();
+    box->type = FB_IT_BOX;
+    box->x = x;
+    box->y = y;
     box->w = w;
     box->h = h;
 
@@ -721,13 +721,13 @@ fb_img *fb_msgbox_add_text(int x, int y, int size, char *fmt, ...)
     fb_img *t = fb_text_create_item(x, y, WHITE, size, JUSTIFY_LEFT, txt);
 
     if(x == -1)
-        t->head.x = box->w/2 - t->w/2;
+        t->x = box->w/2 - t->w/2;
 
     if(y == -1)
-        t->head.y = box->h/2 - t->h/2;
+        t->y = box->h/2 - t->h/2;
 
-    t->head.x += box->head.x;
-    t->head.y += box->head.y;
+    t->x += box->x;
+    t->y += box->y;
 
     pthread_mutex_lock(&fb_items_mutex);
     list_add(t, &box->imgs);

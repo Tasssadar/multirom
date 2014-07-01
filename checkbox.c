@@ -84,14 +84,14 @@ void checkbox_set_pos(checkbox *c, int x, int y)
     int i;
     for(i = 0; i < BORDER_MAX; ++i)
     {
-        c->borders[i]->head.x = pos[i][0];
-        c->borders[i]->head.y = pos[i][1];
+        c->borders[i]->x = pos[i][0];
+        c->borders[i]->y = pos[i][1];
     }
 
     if(c->selected)
     {
-        c->selected->head.x = x + SELECTED_PADDING;
-        c->selected->head.y = y + SELECTED_PADDING;
+        c->selected->x = x + SELECTED_PADDING;
+        c->selected->y = y + SELECTED_PADDING;
     }
 }
 
