@@ -68,20 +68,27 @@ static int mt_handlers_mode = HANDLERS_FIRST;
 
 static void get_abs_min_max(int fd)
 {
-    int abs[5];
-    if(ioctl(fd, EVIOCGABS(ABS_MT_POSITION_X), abs) >= 0)
-        memcpy(mt_range_x, abs+1, 2*sizeof(int));
+    struct input_absinfo absinfo;
 
-    if(ioctl(fd, EVIOCGABS(ABS_MT_POSITION_Y), abs) >= 0)
-        memcpy(mt_range_y, abs+1, 2*sizeof(int));
+    if(ioctl(fd, EVIOCGABS(ABS_MT_POSITION_X), &absinfo) >= 0)
+    {
+        mt_range_x[0] = absinfo.minimum;
+        mt_range_x[1] = absinfo.maximum;
+    }
 
+    if(ioctl(fd, EVIOCGABS(ABS_MT_POSITION_Y), &absinfo) >= 0)
+    {
+        mt_range_y[0] = absinfo.minimum;
+        mt_range_y[1] = absinfo.maximum;
+    }
 
     mt_switch_xy = (mt_range_x[1] > mt_range_y[1]);
     if(mt_switch_xy)
     {
-        memcpy(abs, mt_range_x, 2*sizeof(int));
+        int tmp[2];
+        memcpy(tmp, mt_range_x, 2*sizeof(int));
         memcpy(mt_range_x, mt_range_y, 2*sizeof(int));
-        memcpy(mt_range_y, abs, 2*sizeof(int));
+        memcpy(mt_range_y, tmp, 2*sizeof(int));
     }
 }
 
