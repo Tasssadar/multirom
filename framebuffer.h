@@ -143,7 +143,8 @@ enum
 #define FB_ITEM_HEAD \
     int id; \
     int type; \
-    int x, y;
+    int x, y; \
+    int w, h;
 
 typedef struct 
 {
@@ -154,8 +155,6 @@ typedef struct
 {
     FB_ITEM_HEAD
 
-    int w;
-    int h;
     uint32_t color;
 } fb_rect;
 
@@ -177,8 +176,6 @@ typedef struct
 {
     FB_ITEM_HEAD
 
-    int w;
-    int h;
     int img_type;
     px_type *data;
     void *extra;
@@ -189,8 +186,6 @@ typedef fb_img fb_text;
 typedef struct
 {
     FB_ITEM_HEAD
-
-    int w, h;
 
     fb_img **imgs;
     fb_rect *background[3];
