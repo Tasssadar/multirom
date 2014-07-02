@@ -46,6 +46,7 @@ static char * const ENV[] = {
     "ANDROID_DATA=/data",
     "EXTERNAL_STORAGE=/sdcard",
     "ANDROID_PROPERTY_WORKSPACE=8,49152",
+    "SHELL=/mrom_bin/sh",
 
     NULL
 };
