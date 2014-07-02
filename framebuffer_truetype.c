@@ -337,9 +337,6 @@ void fb_text_set_content(fb_img *img, const char *text)
 
     if(ex->text)
     {
-        if(strcmp(ex->text, text) == 0)
-            return;
-
         old_sen = get_cache_for_string(ex->color, ex->size, ex->text);
     }
     else
@@ -362,12 +359,15 @@ void fb_text_set_content(fb_img *img, const char *text)
         img->h = sen->h;
         img->data = sen->data;
         ex->baseline = sen->baseline;
-        ex->text = realloc(ex->text, strlen(text)+1);
-        strcpy(ex->text, text);
+        if(ex->text != text)
+        {
+            ex->text = realloc(ex->text, strlen(text)+1);
+            strcpy(ex->text, text);
+        }
         ++sen->refcnt;
 
         TT_LOG("CACHE: use %02d 0x%08X\n", ex->size, (uint32_t)sen->data);
-        TT_LOG("Getting string %dx%d %s from cache\n", img->w, img->h, text);
+        TT_LOG("Getting string %dx%d %s from cache\n", img->w, img->h, ex->text);
         return;
     }
 
@@ -445,8 +445,6 @@ void fb_text_set_content(fb_img *img, const char *text)
     memset(img->data, 0, maxW*totalH*4);
     img->w = maxW;
     img->h = totalH;
-    ex->text = realloc(ex->text, strlen(text)+1);
-    strcpy(ex->text, text);
 
     for(i = 0; i < lines_cnt; ++i)
         render_line(lines[i], en, img->data, img->w, ex->color);
@@ -454,6 +452,12 @@ void fb_text_set_content(fb_img *img, const char *text)
     add_to_string_cache(ex->color, ex->baseline, ex->size, text, img->w, img->h, img->data);
 
     list_clear(&lines, &destroy_line);
+
+    if(ex->text != text)
+    {
+        ex->text = realloc(ex->text, strlen(text)+1);
+        strcpy(ex->text, text);
+    }
 }
 
 inline void center_text(fb_img *text, int targetX, int targetY, int targetW, int targetH)
@@ -514,6 +518,15 @@ void fb_text_set_color(fb_img *img, uint32_t color)
         itr += 2;
 #endif
     }
+}
+
+void fb_text_set_size(fb_img *img, int size)
+{
+    text_extra *ex = img->extra;
+    if(ex->size == size)
+        return;
+    ex->size = size;
+    fb_text_set_content(img, ex->text);
 }
 
 void fb_text_destroy(fb_img *i)

@@ -30,6 +30,7 @@ enum
     INTERPOLATOR_DECELERATE,
     INTERPOLATOR_ACCELERATE,
     INTERPOLATOR_OVERSHOOT,
+    INTERPOLATOR_ACCEL_DECEL,
 };
 
 typedef void (*animation_callback)(void*); // data
@@ -56,8 +57,8 @@ typedef struct
 
     int destroy_item_when_finished;
 
-    int startX, startY;
-    int startW, startH;
+    int start[4];
+    int last[4];
 
     int targetX, targetY;
     int targetW, targetH;

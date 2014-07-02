@@ -39,7 +39,7 @@ ifeq ($(ARCH_ARM_HAVE_NEON),true)
     LOCAL_CFLAGS += -DHAS_NEON_BLEND
 endif
 
-#LOCAL_CFLAGS += -D_FORTIFY_SOURCE=2 -fstack-protector-all -O0 -g -fno-omit-frame-pointer
+#LOCAL_CFLAGS += -D_FORTIFY_SOURCE=2 -fstack-protector-all -O0 -g -fno-omit-frame-pointer -Wall
 
 LOCAL_MODULE:= multirom
 LOCAL_MODULE_TAGS := eng

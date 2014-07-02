@@ -218,9 +218,12 @@ typedef struct
 
 typedef struct
 {
+    uint32_t background_color;
     fb_item_header *first_item;
     fb_msgbox *msgbox;
     pthread_mutex_t mutex;
+    volatile int batch_started;
+    volatile pthread_t batch_thread;
 } fb_context_t;
 
 void fb_remove_item(void *item);
@@ -237,6 +240,7 @@ fb_img *fb_add_text_long_lvl_justified(int level, int x, int y, uint32_t color, 
 fb_img *fb_text_create_item(int x, int y, uint32_t color, int size, int justify, const char *txt);
 void fb_text_set_content(fb_img *img, const char *text);
 void fb_text_set_color(fb_img *img, uint32_t color);
+void fb_text_set_size(fb_img *img, int size);
 void fb_text_drop_cache_unused(void);
 void fb_text_destroy(fb_img *i);
 
@@ -268,8 +272,12 @@ int fb_clone(char **buff);
 void fb_push_context(void);
 void fb_pop_context(void);
 
+void fb_batch_start(void);
+void fb_batch_end(void);
+
 void fb_ctx_add_item(fb_context_t *ctx, void *item);
 void fb_ctx_rm_item(fb_context_t *ctx, void *item);
+void fb_set_background(uint32_t color);
 
 px_type *fb_png_get(const char *path, int w, int h);
 void fb_png_release(px_type *data);

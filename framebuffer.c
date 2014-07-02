@@ -66,6 +66,8 @@ static int fb_force_generic = 0;
 static fb_context_t fb_ctx = { 
     .first_item = NULL,
     .msgbox = NULL,
+    .batch_started = 0,
+    .background_color = BLACK,
     .mutex = PTHREAD_MUTEX_INITIALIZER
 };
 
@@ -387,6 +389,36 @@ px_type fb_convert_color(uint32_t c)
 #endif
 }
 
+void fb_set_background(uint32_t color)
+{
+    fb_ctx.background_color = color;
+}
+
+void fb_batch_start(void)
+{
+    pthread_mutex_lock(&fb_ctx.mutex);
+    fb_ctx.batch_thread = pthread_self();
+    fb_ctx.batch_started = 1;
+}
+
+void fb_batch_end(void)
+{
+    fb_ctx.batch_started = 0;
+    pthread_mutex_unlock(&fb_ctx.mutex);
+}
+
+static inline void fb_items_lock(fb_context_t *ctx)
+{
+    if(!ctx->batch_started || !pthread_equal(ctx->batch_thread, pthread_self()))
+        pthread_mutex_lock(&ctx->mutex);
+}
+
+static inline void fb_items_unlock(fb_context_t *ctx)
+{
+    if(!ctx->batch_started || !pthread_equal(ctx->batch_thread, pthread_self()))
+        pthread_mutex_unlock(&ctx->mutex);
+}
+
 static void fb_ctx_put_it_before(fb_item_header *new_it, fb_item_header *next_it)
 {
     if(next_it->prev)
@@ -412,7 +444,8 @@ static void fb_ctx_put_it_after(fb_item_header *new_it, fb_item_header *prev_it)
 void fb_ctx_add_item(fb_context_t *ctx, void *item)
 {
     fb_item_header *h = item;
-    pthread_mutex_lock(&ctx->mutex);
+
+    fb_items_lock(ctx);
 
     if(!ctx->first_item)
         ctx->first_item = item;
@@ -437,14 +470,16 @@ void fb_ctx_add_item(fb_context_t *ctx, void *item)
         if(itr)
             fb_ctx_put_it_after(h, itr);
     }
-    pthread_mutex_unlock(&ctx->mutex);
+
+    fb_items_unlock(ctx);
 }
 
 void fb_ctx_rm_item(fb_context_t *ctx, void *item)
 {
     fb_item_header *h = item;
 
-    pthread_mutex_lock(&ctx->mutex);
+    fb_items_lock(ctx);
+
     if(!h->prev)
         ctx->first_item = h->next;
     else
@@ -453,7 +488,7 @@ void fb_ctx_rm_item(fb_context_t *ctx, void *item)
     if(h->next)
         h->next->prev = h->prev;
 
-    pthread_mutex_unlock(&ctx->mutex);
+    fb_items_unlock(ctx);
 }
 
 void fb_remove_item(void *item)
@@ -659,10 +694,10 @@ void fb_draw_img(fb_img *i)
 
 int fb_generate_item_id(void)
 {
-    pthread_mutex_lock(&fb_ctx.mutex);
+    fb_items_lock(&fb_ctx);
     static int id = 0;
     int res = id++;
-    pthread_mutex_unlock(&fb_ctx.mutex);
+    fb_items_unlock(&fb_ctx);
 
     return res;
 }
@@ -959,7 +994,7 @@ static void fb_draw(void)
     fb_item_header *it;
     pthread_mutex_lock(&fb_ctx.mutex);
 
-    fb_fill(0xFFE0E0E0);
+    fb_fill(fb_ctx.background_color);
 
     // rectangles
     for(it = fb_ctx.first_item; it; it = it->next)
@@ -1012,6 +1047,7 @@ void fb_push_context(void)
 
     ctx->first_item = fb_ctx.first_item;
     ctx->msgbox = fb_ctx.msgbox;
+    ctx->background_color = fb_ctx.background_color;
     fb_ctx.first_item = NULL;
     fb_ctx.msgbox = NULL;
 
@@ -1034,6 +1070,7 @@ void fb_pop_context(void)
 
     fb_ctx.first_item = ctx->first_item;
     fb_ctx.msgbox = ctx->msgbox;
+    fb_ctx.background_color = ctx->background_color;
 
     pthread_mutex_unlock(&fb_ctx.mutex);
 

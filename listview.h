@@ -33,7 +33,7 @@ typedef struct
     int id;
     void *data;
     int flags;
-    fb_item_header *parent_rect;
+    fb_item_pos *parent_rect;
     int touchX, touchY;
 } listview_item;
 
@@ -65,7 +65,6 @@ typedef struct
     void (*item_confirmed)(listview_item *); // item - confirmed by keyaction
 
     fb_item_header **ui_items;
-    fb_rect *bg_rect;
     fb_rect *scroll_mark;
     fb_rect *overscroll_marks[2];
     fb_rect **keyact_frame;

@@ -44,7 +44,7 @@ static struct worker_thread worker_thread = {
     .run = 0,
 };
 
-#define SLEEP_CONST 16
+#define SLEEP_CONST 10
 static void *worker_thread_work(void *data)
 {
     struct worker_thread *t = (struct worker_thread*)data;

@@ -127,6 +127,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     multirom_ui_init_header();
     multirom_ui_switch(TAB_INTERNAL);
+    fb_set_background(0xFFDCDCDC);
 
     add_touch_handler(&multirom_ui_touch_handler, NULL);
     start_input_thread();
@@ -536,6 +537,9 @@ void multirom_ui_tab_rom_destroy(void *data)
 
 void multirom_ui_tab_rom_selected(listview_item *prev, listview_item *now)
 {
+    if(!now)
+        return;
+
     struct multirom_rom *rom = multirom_get_rom_by_id(mrom_status, now->id);
     if(!rom || !themes_info->data->tab_data)
         return;

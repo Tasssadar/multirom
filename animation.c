@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <math.h>
 
 #include "log.h"
 #include "workers.h"
@@ -118,32 +119,48 @@ static float anim_interpolate(int type, float input)
         case INTERPOLATOR_OVERSHOOT:
             input -= 1.f;
             return (input * input * ((OVERSHOOT_TENSION+1.f) * input + OVERSHOOT_TENSION) + 1.f);
+        case INTERPOLATOR_ACCEL_DECEL:
+            return (float)(cos((input + 1) * M_PI) / 2.0f) + 0.5f;
     }
 }
 
-static inline void anim_int_step(int *prop, int start, int target, float interpolated)
+static inline void anim_int_step(int *prop, int *start, int *last, int *target, float interpolated)
 {
-    if(target != -1)
-        *prop = start + (int)((target - start) * interpolated);
+    if(*target != -1)
+    {
+        const int diff = *prop - *last;
+        *start += diff;
+        *prop = *start + (int)((*target) * interpolated);
+        *last = *prop;
+    }
 }
 
 static void item_anim_step(item_anim *anim, float interpolated)
 {
     fb_item_header *fb_it = anim->item;
-    anim_int_step(&fb_it->x, anim->startX, anim->targetX, interpolated);
-    anim_int_step(&fb_it->y, anim->startY, anim->targetY, interpolated);
-    anim_int_step(&fb_it->w, anim->startW, anim->targetW, interpolated);
-    anim_int_step(&fb_it->h, anim->startH, anim->targetH, interpolated);
+    anim_int_step(&fb_it->x, &anim->start[0], &anim->last[0], &anim->targetX, interpolated);
+    anim_int_step(&fb_it->y, &anim->start[1], &anim->last[1], &anim->targetY, interpolated);
+    anim_int_step(&fb_it->w, &anim->start[2], &anim->last[2], &anim->targetW, interpolated);
+    anim_int_step(&fb_it->h, &anim->start[3], &anim->last[3], &anim->targetH, interpolated);
     fb_request_draw();
 }
 
 static void item_anim_on_start(item_anim *anim)
 {
     fb_item_header *fb_it = anim->item;
-    anim->startX = fb_it->x;
-    anim->startY = fb_it->y;
-    anim->startW = fb_it->w;
-    anim->startH = fb_it->h;
+    anim->start[0] = anim->last[0] = fb_it->x;
+    anim->start[1] = anim->last[1] = fb_it->y;
+    anim->start[2] = anim->last[2] = fb_it->w;
+    anim->start[3] = anim->last[3] = fb_it->h;
+
+    if(anim->targetX != -1)
+        anim->targetX -= fb_it->x;
+    if(anim->targetY != -1)
+        anim->targetY -= fb_it->y;
+    if(anim->targetW != -1)
+        anim->targetW -= fb_it->w;
+    if(anim->targetH != -1)
+        anim->targetH -= fb_it->h;
 }
 
 static void item_anim_on_finished(item_anim *anim)
@@ -178,15 +195,7 @@ static void anim_update(uint32_t diff, void *data)
             if(anim->start_offset > diff)
                 anim->start_offset -= diff;
             else
-            {
                 anim->start_offset = 0;
-                switch(it->anim_type)
-                {
-                    case ANIM_TYPE_ITEM:
-                        item_anim_on_start((item_anim*)anim);
-                        break;
-                }
-            }
             it = it->next;
             continue;
         }
@@ -357,8 +366,7 @@ item_anim *item_anim_create(void *fb_item, int duration, int interpolator)
 
 void item_anim_add(item_anim *anim)
 {
-    if(!anim->start_offset)
-        item_anim_on_start(anim);
+    item_anim_on_start(anim);
 
     struct anim_list_it *it = mzalloc(sizeof(struct anim_list_it));
     it->anim_type = ANIM_TYPE_ITEM;

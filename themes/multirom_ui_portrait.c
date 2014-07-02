@@ -139,7 +139,7 @@ static void tab_rom_init(multirom_theme_data *t, tab_data_roms *d, int tab_type)
 {
     d->list->x = ROMS_HEADER_H;
     d->list->y = HEADER_HEIGHT+ROMS_HEADER_H;
-    d->list->w = fb_width - ROMS_HEADER_H*2;
+    d->list->w = fb_width - ROMS_HEADER_H;
     d->list->h = fb_height - d->list->y - ROMS_HEADER_H;
 }
 
