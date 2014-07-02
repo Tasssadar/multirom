@@ -258,7 +258,7 @@ void multirom_ui_setup_colors(int clr, uint32_t *primary, uint32_t *secondary)
 {
     static const int clrs[][2] = {
         // Primary,   Secondary - OxAAGGBBRR
-        { LBLUE,      LBLUE2 },     // CLRS_BLUE
+        { 0xFF2F2FF7,     0xFF2F2FF7},     // CLRS_BLUE
         { 0xFFCC66AA, 0xFFCC89B6 }, // CLRS_PURPLE
         { 0xFF00BD8A, 0xFF51F2C9 }, // CLRS_GREEN
         { 0xFF008AFF, 0xFF51AEFF }, // CLRS_ORANGE
@@ -367,10 +367,10 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
             select = it;
     }
 
-    if(select)
+/*    if(select)
         listview_select_item(view, select);
     else if(view->items != NULL)
-        listview_select_item(view, view->items[0]);
+        listview_select_item(view, view->items[0]);*/
 }
 
 int multirom_ui_touch_handler(touch_event *ev, void *data)
@@ -486,9 +486,6 @@ void *multirom_ui_tab_rom_init(int tab_type)
     t->list->item_selected = &multirom_ui_tab_rom_selected;
     t->list->item_confirmed = &multirom_ui_tab_rom_confirmed;
 
-    t->boot_btn = mzalloc(sizeof(button));
-    list_add(t->boot_btn, &t->buttons);
-
     cur_theme->tab_rom_init(themes_info->data, t, tab_type);
 
     listview_init_ui(t->list);
@@ -508,10 +505,6 @@ void *multirom_ui_tab_rom_init(int tab_type)
 
     int has_roms = (int)(t->list->items == NULL);
     multirom_ui_tab_rom_set_empty((void*)t, has_roms);
-
-    t->boot_btn->clicked = &multirom_ui_tab_rom_boot_btn;
-    button_init_ui(t->boot_btn, "Boot", SIZE_BIG);
-    button_enable(t->boot_btn, !has_roms);
 
     if(tab_type == TAB_USB)
     {
@@ -534,8 +527,6 @@ void multirom_ui_tab_rom_destroy(void *data)
         last_int_listview_pos = t->list->pos;
 
     listview_destroy(t->list);
-
-    fb_rm_text(t->rom_name);
 
     if(t->usb_prog)
         progdots_destroy(t->usb_prog);
@@ -654,10 +645,6 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
 
     tab_data_roms *t = (tab_data_roms*)data;
     int width = cur_theme->get_tab_width(themes_info->data);
-
-    static const char *str[] = { "Select ROM to boot:", "No ROMs in this location!" };
-    fb_text_set_content(t->title_text, str[empty]);
-    center_text(t->title_text, t->list->x, -1, width, -1);
 
     if(t->boot_btn)
         button_enable(t->boot_btn, !empty);

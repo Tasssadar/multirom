@@ -25,10 +25,11 @@
 #include "multirom_ui.h"
 #include "workers.h"
 #include "input.h"
+#include "animation.h"
 
 #define MARK_W (10*DPI_MUL)
 #define MARK_H (50*DPI_MUL)
-#define PADDING (20*DPI_MUL)
+#define PADDING (25*DPI_MUL)
 #define LINE_W (2*DPI_MUL)
 #define SCROLL_DIST (20*DPI_MUL)
 #define OVERSCROLL_H (130*DPI_MUL)
@@ -68,13 +69,20 @@ void listview_init_ui(listview *view)
 {
     int x = view->x + view->w - PADDING/2 - LINE_W/2;
 
-    fb_rect *scroll_line = fb_add_rect(x, view->y, LINE_W, view->h, GRAYISH);
+    fb_rect *scroll_line = fb_add_rect(x, view->y, LINE_W, view->h, GRAY);
+    scroll_line->parent = view;
     list_add(scroll_line, &view->ui_items);
 
     view->keyact_item_selected = -1;
 
     view->touch.id = -1;
     view->touch.last_y = -1;
+
+    if(!view->bg_rect)
+    {
+        view->bg_rect = fb_add_rect(view->x, view->y, view->w - PADDING, view->h, 0xFFE0E0E0);
+        view->bg_rect->parent = view;
+    }
 
     add_touch_handler(&listview_touch_handler, view);
 }
@@ -91,6 +99,7 @@ void listview_destroy(listview *view)
     fb_rm_rect(view->scroll_mark);
     fb_rm_rect(view->overscroll_marks[0]);
     fb_rm_rect(view->overscroll_marks[1]);
+    fb_rm_rect(view->bg_rect);
 
     free(view);
 }
@@ -101,6 +110,7 @@ listview_item *listview_add_item(listview *view, int id, void *data)
     it->id = id;
     it->data = data;
     it->flags = 0;
+    it->parent_rect = view;
 
     if(!view->items)
         keyaction_add(view->x, view->y, listview_keyaction_call, view);
@@ -126,9 +136,9 @@ void listview_update_ui(listview *view)
     for(i = 0; view->items && view->items[i]; ++i)
     {
         it = view->items[i];
-        it_h = (*view->item_height)(it->data);
+        it_h = (*view->item_height)(it);
 
-        visible = (int)(view->pos <= y && y+it_h-view->pos <= view->h);
+        visible = (int)(view->pos <= y+it_h && y-view->pos <= view->h);
 
         if(!visible && (it->flags & IT_VISIBLE))
             (*view->item_hide)(it->data);
@@ -160,11 +170,14 @@ void listview_enable_scroll(listview *view, int enable)
     if(enable)
     {
         int x = view->x + view->w - PADDING/2 - MARK_W/2;
-        view->scroll_mark = fb_add_rect(x, view->y, MARK_W, MARK_H, GRAYISH);
+        view->scroll_mark = fb_add_rect(x, view->y, MARK_W, MARK_H, GRAY);
+        view->scroll_mark->parent = view;
 
         view->overscroll_marks[0] = fb_add_rect(view->x, view->y, 0, OVERSCROLL_MARK_H, CLR_SECONDARY);
+        view->overscroll_marks[0]->parent = view;
         view->overscroll_marks[1] = fb_add_rect(view->x, view->y+view->h-OVERSCROLL_MARK_H,
                                                 0, OVERSCROLL_MARK_H, CLR_SECONDARY);
+        view->overscroll_marks[1]->parent = view;
         workers_add(listview_bounceback, view);
     }
     else
@@ -223,6 +236,8 @@ int listview_touch_handler(touch_event *ev, void *data)
         if(view->touch.hover)
         {
             view->touch.hover->flags |= IT_HOVER;
+            view->touch.hover->touchX = ev->x;
+            view->touch.hover->touchY = ev->y;
             listview_update_ui(view);
         }
         listview_keyaction_call(view, KEYACT_CLEAR);
@@ -280,6 +295,8 @@ void listview_select_item(listview *view, listview_item *it)
         view->selected->flags &= ~(IT_SELECTED);
     it->flags |= IT_SELECTED;
 
+    view->bg_rect->color = 0xFFE0E0E0;
+
     view->selected = it;
 }
 
@@ -324,10 +341,10 @@ int listview_ensure_visible(listview *view, listview_item *it)
     {
         if(it == view->items[i])
             break;
-        y += view->item_height(view->items[i]->data);
+        y += view->item_height(view->items[i]);
     }
 
-    int last_h = view->items[i] ? view->item_height(view->items[i]->data) : 0;
+    int last_h = view->items[i] ? view->item_height(view->items[i]) : 0;
 
     if((y + last_h) - view->pos > view->h)
         view->pos = (y + last_h) - view->h;
@@ -355,7 +372,7 @@ listview_item *listview_item_at(listview *view, int y_pos)
     for(i = 0; view->items && view->items[i]; ++i)
     {
         it = view->items[i];
-        it_h = (*view->item_height)(it->data);
+        it_h = (*view->item_height)(it);
 
         if(y < y_pos && y+it_h > y_pos)
             return it;
@@ -427,9 +444,9 @@ void listview_update_keyact_frame(listview *view)
     int i;
     int y = view->y;
     for(i = 0; i < view->keyact_item_selected && view->items[i]; ++i)
-        y += view->item_height(view->items[i]->data);
+        y += view->item_height(view->items[i]);
 
-    int h = view->item_height(view->items[i]->data);
+    int h = view->item_height(view->items[i]);
     y -= view->pos;
 
     // top
@@ -447,11 +464,13 @@ void listview_update_keyact_frame(listview *view)
     listview_update_ui(view);
 }
 
-#define ROM_ITEM_H (100*DPI_MUL)
+#define ROM_ITEM_H (110*DPI_MUL)
+#define ROM_ITEM_GROW (40*DPI_MUL)
+#define ROM_BOX_PADDING (5*DPI_MUL)
 #define ROM_ITEM_SEL_W (8*DPI_MUL)
-#define ROM_ICON_PADDING (12*DPI_MUL)
+#define ROM_ICON_PADDING (20*DPI_MUL)
 #define ROM_ICON_H (ROM_ITEM_H-(ROM_ICON_PADDING*2))
-#define ROM_TEXT_PADDING (100*DPI_MUL)
+#define ROM_TEXT_PADDING (130*DPI_MUL)
 typedef struct
 {
     char *text;
@@ -459,10 +478,14 @@ typedef struct
     char *icon_path;
     fb_text *text_it;
     fb_text *part_it;
-    fb_rect *bottom_line;
     fb_rect *hover_rect;
     fb_rect *sel_rect;
+    fb_rect *sel_rect_sh;
+    fb_text *click_text;
+    fb_rect *click_text_rect;
     fb_img *icon;
+    int hover_removed;
+    int it_sel_size;
 } rom_item_data;
 
 void *rom_item_create(const char *text, const char *partition, const char *icon)
@@ -471,6 +494,7 @@ void *rom_item_create(const char *text, const char *partition, const char *icon)
     memset(data, 0, sizeof(rom_item_data));
 
     data->text = strdup(text);
+    data->it_sel_size = ROM_ITEM_H;
     if(partition)
         data->partition = strdup(partition);
     if(icon)
@@ -478,52 +502,205 @@ void *rom_item_create(const char *text, const char *partition, const char *icon)
     return data;
 }
 
+static void rom_item_null_rect(void *data)
+{
+    fb_rect **rect = data;
+    *rect = NULL;
+}
+
+static void rom_item_grow(void *it_v)
+{
+    listview_item *it = it_v;
+    rom_item_data *d = (rom_item_data*)it->data;
+    d->sel_rect_sh->x = d->sel_rect->x+5;
+    d->sel_rect_sh->y = d->sel_rect->y+5;
+    d->sel_rect_sh->w = d->sel_rect->w;
+    d->sel_rect_sh->h = d->sel_rect->h;
+    //d->it_sel_size = d->sel_rect->h;
+    //listview_update_ui((listview*)it->parent_rect);
+}
+
+static void rom_item_shrink(void *it_v, float interpolated)
+{
+    listview_item *it = it_v;
+    rom_item_data *d = (rom_item_data*)it->data;
+    if(d->sel_rect_sh)
+    {
+        d->sel_rect_sh->h = d->sel_rect->h;
+        d->sel_rect_sh->y = d->sel_rect->y+5;
+    }
+    d->it_sel_size = (ROM_ITEM_H + ROM_ITEM_GROW) - ROM_ITEM_GROW*interpolated;
+    listview_update_ui((listview*)it->parent_rect);
+}
+
+static void rom_item_shrink_finished(void *it_v)
+{
+    listview_item *it = it_v;
+    rom_item_data *d = (rom_item_data*)it->data;
+
+    fb_rm_rect(d->sel_rect);
+    fb_rm_rect(d->sel_rect_sh);
+    fb_rm_text(d->click_text);
+    fb_rm_rect(d->click_text_rect);
+    d->sel_rect = NULL;
+    d->sel_rect_sh = NULL;
+    d->click_text = NULL;
+    d->click_text_rect = NULL;
+}
+
+static void rom_item_alpha(void *it_v, float interpolated)
+{
+    listview_item *it = it_v;
+    rom_item_data *d = (rom_item_data*)it->data;
+
+    uint32_t alpha = 0xFF*interpolated;
+    if(d->hover_removed)
+        alpha = 0xFF - alpha;
+    alpha <<= 24;
+    d->sel_rect->color = (d->sel_rect->color & ~(0xFF << 24)) | alpha;
+    d->sel_rect_sh->color = (d->sel_rect_sh->color & ~(0xFF << 24)) | alpha;
+}
+
+static void rom_item_alpha_finished(void *it_v)
+{
+    listview_item *it = it_v;
+    rom_item_data *d = (rom_item_data*)it->data;
+
+    d->sel_rect_sh->color = (d->sel_rect_sh->color & ~(0xFF << 24)) | (0xFF << 24);
+}
+
 void rom_item_draw(int x, int y, int w, listview_item *it)
 {
     rom_item_data *d = (rom_item_data*)it->data;
+    const int item_h = rom_item_height(it);
     if(!d->text_it)
     {
-        d->text_it = fb_add_text(x+ROM_TEXT_PADDING, 0, WHITE, SIZE_BIG, d->text);
-        d->bottom_line = fb_add_rect(x, 0, w, 1, 0xFF1B1B1B);
+        d->text_it = fb_add_text(x+ROM_TEXT_PADDING, 0, BLACK, SIZE_BIG, d->text);
+        d->text_it->parent = it->parent_rect;
 
         if(d->icon_path)
+        {
             d->icon = fb_add_png_img(x+ROM_ICON_PADDING, 0, ROM_ICON_H, ROM_ICON_H, d->icon_path);
+            d->icon->parent = it->parent_rect;
+        }
 
         if(d->partition)
+        {
             d->part_it = fb_add_text(x+ROM_TEXT_PADDING, 0, GRAY, SIZE_SMALL, d->partition);
+            d->part_it->parent = it->parent_rect;
+        }
     }
 
-    center_text(d->text_it, -1, y, -1, ROM_ITEM_H);
-    d->bottom_line->y = y+ROM_ITEM_H-2;
+    center_text(d->text_it, -1, y, -1, item_h);
 
     if(d->icon)
-        d->icon->y = y + (ROM_ITEM_H/2 - ROM_ICON_H/2);
+        d->icon->y = y + (item_h/2 - ROM_ICON_H/2);
 
     if(d->part_it)
         d->part_it->y = d->text_it->y + SIZE_BIG*16 + 2;
 
-    if(it->flags & IT_HOVER)
+   /* if(it->flags & IT_HOVER)
     {
         if(!d->hover_rect)
-            d->hover_rect = fb_add_rect(x, 0, w, rom_item_height(it->data), CLR_SECONDARY);
-        d->hover_rect->y = y;
+        {
+            d->hover_rect = fb_add_rect(it->touchX, it->touchY, 1, 1, 0xFFE0E0E0);
+            INFO("touch %dx%d\n", it->touchX, it->touchY);
+            d->hover_rect->parent = it->parent_rect;
+
+            item_anim *anim = item_anim_create(d->hover_rect, 300, INTERPOLATOR_DECELERATE);
+            anim->start_offset = 150;
+            anim->targetX = x;
+            anim->targetY = y;
+            anim->targetW = w;
+            anim->targetH = item_h;
+            item_anim_add(anim);
+            d->hover_removed = 0;
+        }
+        else
+            d->hover_rect->y = y;
     }
     else if(d->hover_rect)
     {
-        fb_rm_rect(d->hover_rect);
-        d->hover_rect = NULL;
-    }
+        if(!d->hover_removed)
+        {
+            anim_cancel_for(d->hover_rect, 1);
+
+            item_anim *anim = item_anim_create(d->hover_rect, 100, INTERPOLATOR_ACCELERATE);
+            anim->targetX = it->touchX;
+            anim->targetY = it->touchY;
+            anim->targetW = 0;
+            anim->targetH = 0;
+            anim->destroy_item_when_finished = 1;
+            anim->on_finished_data = &d->hover_rect;
+            anim->on_finished_call = rom_item_null_rect;
+            item_anim_add_after(anim);
+            d->hover_removed = 1;
+        }
+        else
+        {
+            d->hover_rect->y = y;
+        }
+    }*/
 
     if(it->flags & IT_SELECTED)
     {
         if(!d->sel_rect)
-            d->sel_rect = fb_add_rect(x, 0, ROM_ITEM_SEL_W, ROM_ITEM_H, CLR_PRIMARY);
-        d->sel_rect->y = y;
+        {
+            d->sel_rect_sh = fb_add_rect(x+7, y+7, w, item_h, GRAYISH & ~(0xFF << 24));
+            d->sel_rect = fb_add_rect(x+7, y+7, w, item_h, WHITE & ~(0xFF << 24));
+            d->sel_rect->parent = it->parent_rect;
+
+            call_anim *canim = call_anim_create(it, rom_item_alpha, 300, INTERPOLATOR_DECELERATE);
+            call_anim_add(canim);
+
+            item_anim *anim = item_anim_create(d->sel_rect, 150, INTERPOLATOR_DECELERATE);
+            anim->start_offset = 0;
+            anim->targetX = d->sel_rect->x-7;
+            anim->targetY = d->sel_rect->y-7;
+            item_anim_add(anim);
+
+            d->click_text = fb_add_text_lvl(11, 0, fb_height, BLACK, SIZE_EXTRA, "Tap again to boot this system");
+            center_text(d->click_text, 0, -1, fb_width, -1);
+            d->click_text->y += d->click_text->h;
+
+            d->click_text_rect = fb_add_rect_lvl(10, 0, fb_height, fb_width-80, d->click_text->h+200, WHITE);
+            d->click_text_rect->x = fb_width/2 - d->click_text_rect->w/2;
+
+            anim = item_anim_create(d->click_text, 400, INTERPOLATOR_DECELERATE);
+            anim->targetY = fb_height - d->click_text->h*1.5 - 40;
+            item_anim_add(anim);
+
+            anim = item_anim_create(d->click_text_rect, 400, INTERPOLATOR_DECELERATE);
+            anim->targetY = fb_height - d->click_text->h*2.5 - 40;
+            item_anim_add(anim);
+
+            d->hover_removed = 0;
+        }
+        else
+        {
+            /*d->sel_rect_sh->y = y+5;
+            d->sel_rect->y = y;*/
+        }
+        //d->click_text->y = d->text_it->y + d->text_it->h + 15;
     }
-    else if(d->sel_rect)
+    else if(d->sel_rect && !d->hover_removed)
     {
-        fb_rm_rect(d->sel_rect);
-        d->sel_rect = NULL;
+        d->hover_removed = 1;
+
+
+        call_anim *canim = call_anim_create(it, rom_item_alpha, 200, INTERPOLATOR_ACCELERATE);
+        canim->on_finished_data = it;
+        canim->on_finished_call = rom_item_shrink_finished;
+        call_anim_add(canim);
+
+        item_anim *anim = item_anim_create(d->sel_rect, 200, INTERPOLATOR_ACCELERATE);
+        anim->targetX = d->sel_rect->x+7;
+        anim->targetY = d->sel_rect->y+7;
+        item_anim_add(anim);
+
+        anim = item_anim_create(d->click_text, 200, INTERPOLATOR_DECELERATE);
+        anim->targetY = fb_height;
+        item_anim_add(anim);
     }
 }
 
@@ -535,20 +712,20 @@ void rom_item_hide(void *data)
 
     fb_rm_text(d->text_it);
     fb_rm_text(d->part_it);
-    fb_rm_rect(d->bottom_line);
     fb_rm_rect(d->hover_rect);
     fb_rm_rect(d->sel_rect);
+    fb_rm_rect(d->sel_rect_sh);
     fb_rm_img(d->icon);
 
     d->text_it = NULL;
     d->part_it = NULL;
-    d->bottom_line = NULL;
     d->hover_rect = NULL;
     d->sel_rect = NULL;
+    d->sel_rect_sh = NULL;
     d->icon = NULL;
 }
 
-int rom_item_height(void *data)
+int rom_item_height(listview_item *it)
 {
     return ROM_ITEM_H;
 }

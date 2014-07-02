@@ -281,11 +281,6 @@ static void destroy_line(struct text_line *line)
     free(line);
 }
 
-fb_img *fb_add_text_long(int x, int y, uint32_t color, int size, const char *text)
-{
-    return fb_add_text_long_justified(x, y, color, size, JUSTIFY_LEFT, text);
-}
-
 typedef struct 
 {
     char *text;
@@ -298,7 +293,10 @@ typedef struct
 fb_img *fb_text_create_item(int x, int y, uint32_t color, int size, int justify, const char *text)
 {
     fb_img *result = mzalloc(sizeof(fb_img));
+    result->id = fb_generate_item_id();
+    result->parent = &DEFAULT_FB_PARENT;
     result->type = FB_IT_IMG;
+    result->level = LEVEL_TEXT;
     result->x = x;
     result->y = y;
     result->img_type = FB_IMG_TYPE_TEXT;

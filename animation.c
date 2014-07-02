@@ -152,6 +152,12 @@ static void item_anim_on_finished(item_anim *anim)
         fb_remove_item(anim->item);
 }
 
+static void call_anim_step(call_anim *anim, float interpolated)
+{
+    if(anim->callback)
+        anim->callback(anim->data, interpolated);
+}
+
 static void anim_update(uint32_t diff, void *data)
 {
     struct anim_list *list = data;
@@ -201,6 +207,16 @@ static void anim_update(uint32_t diff, void *data)
             case ANIM_TYPE_ITEM:
                 item_anim_step((item_anim*)anim, interpolated);
                 break;
+            case ANIM_TYPE_CALLBACK:
+                call_anim_step((call_anim*)anim, interpolated);
+                break;
+        }
+
+        if(anim->on_step_call)
+        {
+            pthread_mutex_unlock(&list->mutex);
+            anim->on_step_call(anim->on_step_data);
+            pthread_mutex_lock(&list->mutex);
         }
 
         // remove complete animations
@@ -216,7 +232,9 @@ static void anim_update(uint32_t diff, void *data)
             switch(it->anim_type)
             {
                 case ANIM_TYPE_ITEM:
+                    pthread_mutex_unlock(&list->mutex);
                     item_anim_on_finished((item_anim*)anim);
+                    pthread_mutex_lock(&list->mutex);
                     break;
             }
 
@@ -256,7 +274,7 @@ void anim_stop(void)
     pthread_mutex_unlock(&anim_list.mutex);
 }
 
-void anim_fb_item_removed(void *item)
+void anim_cancel_for(void *fb_item, int only_not_started)
 {
     if(!anim_list.running)
         return;
@@ -265,12 +283,12 @@ void anim_fb_item_removed(void *item)
         return;
 
     struct anim_list_it *it, *to_remove;
-    item_anim *anim;
 
     pthread_mutex_lock(&anim_list.mutex);
     for(it = anim_list.first; it; )
     {
-        if(it->anim_type == ANIM_TYPE_ITEM && ((item_anim*)it->anim)->item == item)
+        if (it->anim_type == ANIM_TYPE_ITEM && ((item_anim*)it->anim)->item == fb_item &&
+            (!only_not_started || it->anim->start_offset != 0))
         {
             to_remove = it;
             it = it->next;
@@ -344,6 +362,41 @@ void item_anim_add(item_anim *anim)
 
     struct anim_list_it *it = mzalloc(sizeof(struct anim_list_it));
     it->anim_type = ANIM_TYPE_ITEM;
+    it->anim = (anim_header*)anim;
+    anim_list_append(it);
+}
+
+void item_anim_add_after(item_anim *anim)
+{
+    struct anim_list_it *it;
+    pthread_mutex_lock(&anim_list.mutex);
+    for(it = anim_list.first; it; it = it->next)
+    {
+        if(it->anim_type == ANIM_TYPE_ITEM && ((item_anim*)it->anim)->item == anim->item)
+        {
+            const int u = it->anim->start_offset + it->anim->duration - it->anim->elapsed;
+            anim->start_offset = imax(anim->start_offset, u);
+        }
+    }
+    pthread_mutex_unlock(&anim_list.mutex);
+
+    item_anim_add(anim);
+}
+
+call_anim *call_anim_create(void *data, call_anim_callback callback, int duration, int interpolator)
+{
+    call_anim *anim = mzalloc(sizeof(call_anim));
+    anim->data = data;
+    anim->callback = callback;
+    anim->duration = duration;
+    anim->interpolator = interpolator;
+    return anim;
+}
+
+void call_anim_add(call_anim *anim)
+{
+    struct anim_list_it *it = mzalloc(sizeof(struct anim_list_it));
+    it->anim_type = ANIM_TYPE_CALLBACK;
     it->anim = (anim_header*)anim;
     anim_list_append(it);
 }

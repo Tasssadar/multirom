@@ -33,6 +33,8 @@ typedef struct
     int id;
     void *data;
     int flags;
+    fb_item_header *parent_rect;
+    int touchX, touchY;
 } listview_item;
 
 typedef struct 
@@ -47,8 +49,7 @@ typedef struct
 
 typedef struct
 {
-    int x, y;
-    int w, h;
+    FB_ITEM_POS
 
     int pos; // scroll pos
     int fullH; // height of all items
@@ -58,12 +59,13 @@ typedef struct
 
     void (*item_draw)(int, int, int, listview_item *); // x, y, w, item
     void (*item_hide)(void*); // data
-    int (*item_height)(void*); // data
+    int (*item_height)(listview_item *); // data, item
     void (*item_destroy)(listview_item *);
     void (*item_selected)(listview_item *, listview_item *); // prev, now
     void (*item_confirmed)(listview_item *); // item - confirmed by keyaction
 
     fb_item_header **ui_items;
+    fb_rect *bg_rect;
     fb_rect *scroll_mark;
     fb_rect *overscroll_marks[2];
     fb_rect **keyact_frame;
@@ -94,7 +96,7 @@ int listview_keyaction_call(void *data, int act);
 void *rom_item_create(const char *text, const char *partition, const char *icon);
 void rom_item_draw(int x, int y, int w, listview_item *it);
 void rom_item_hide(void *data);
-int rom_item_height(void *data);
+int rom_item_height(listview_item *it);
 void rom_item_destroy(listview_item *it);
 
 #endif

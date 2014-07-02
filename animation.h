@@ -21,6 +21,7 @@
 enum
 {
     ANIM_TYPE_ITEM,
+    ANIM_TYPE_CALLBACK,
 };
 
 enum
@@ -39,7 +40,9 @@ typedef void (*animation_callback)(void*); // data
     uint32_t elapsed; \
     int interpolator; \
     void *on_finished_data; \
-    animation_callback on_finished_call;
+    animation_callback on_finished_call; \
+    void *on_step_data; \
+    animation_callback on_step_call;
 
 typedef struct 
 {
@@ -60,13 +63,27 @@ typedef struct
     int targetW, targetH;
 } item_anim;
 
+typedef void (*call_anim_callback)(void*, float); // data, interpolated
+typedef struct
+{
+    ANIM_HEADER
+
+    call_anim_callback callback;
+    void *data;
+} call_anim;
+
 void anim_init(void);
 void anim_stop(void);
-void anim_fb_item_removed(void *item);
+void anim_cancel_for(void *fb_item, int only_not_started);
 void anim_push_context(void);
 void anim_pop_context(void);
 
 item_anim *item_anim_create(void *fb_item, int duration, int interpolator);
 void item_anim_add(item_anim *anim);
+void item_anim_add_after(item_anim *anim);
+
+call_anim *call_anim_create(void *data, call_anim_callback callback, int duration, int interpolator);
+void call_anim_add(call_anim *anim);
+
 
 #endif
