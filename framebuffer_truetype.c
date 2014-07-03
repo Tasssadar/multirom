@@ -41,14 +41,21 @@
 #define TT_LOG(x...) ;
 #endif
 
-struct glyph_cache_entry
+static const char *FONT_FILES[STYLE_COUNT] = {
+    "Roboto-Regular.ttf",     // STYLE_NORMAL
+    "Roboto-Italic.ttf",      // STYLE_ITALIC
+    "Roboto-Bold.ttf",        // STYLE_BOLD
+    "OxygenMono-Regular.ttf", // STYLE_MONOSPACE
+};
+
+struct glyphs_entry
 {
     FT_Face face;
     imap *glyphs;
     int refcnt;
 };
 
-struct string_cache_entry
+struct strings_entry
 {
     px_type *data;
     int w, h;
@@ -59,21 +66,35 @@ struct string_cache_entry
 
 struct text_cache
 {
-    imap *glyph_cache;
+    imap *glyphs[STYLE_COUNT];
+    imap *strings[STYLE_COUNT];
     FT_Library ft_lib;
-    imap *string_cache;
 };
 
-static struct text_cache cache = { NULL, NULL, NULL };
+static struct text_cache cache = {
+    .glyphs = { 0 },
+    .strings = { 0 },
+    .ft_lib = NULL
+};
 
 struct text_line
 {
-    const char *text; // doesn't end with \0
+    char *text; // doesn't end with \0
     int len;
     int w, h, base;
     int offX, offY;
     FT_Vector *pos;
 };
+
+typedef struct 
+{
+    char *text;
+    px_type color;
+    int size;
+    int justify;
+    int style;
+    int baseline;
+} text_extra;
 
 static int convert_ft_bitmap(FT_BitmapGlyph bit, px_type color, px_type *res_data, int stride, struct text_line *line, FT_Vector *pos)
 {
@@ -110,10 +131,10 @@ static int convert_ft_bitmap(FT_BitmapGlyph bit, px_type color, px_type *res_dat
     return 0;
 }
 
-static struct glyph_cache_entry *get_cache_for_size(const int size)
+static struct glyphs_entry *get_cache_for_size(const int style, const int size)
 {
     int error;
-    struct glyph_cache_entry *res;
+    struct glyphs_entry *res;
 
     if(!cache.ft_lib)
     {
@@ -125,15 +146,15 @@ static struct glyph_cache_entry *get_cache_for_size(const int size)
         }
     }
 
-    if(!cache.glyph_cache)
-        cache.glyph_cache = imap_create();
+    if(!cache.glyphs[style])
+        cache.glyphs[style] = imap_create();
 
-    res = imap_get_val(cache.glyph_cache, size);
+    res = imap_get_val(cache.glyphs[style], size);
     if(!res)
     {
         char buff[128];
-        res = mzalloc(sizeof(struct glyph_cache_entry));
-        snprintf(buff, sizeof(buff), "%s/"FONT_FILE, multirom_dir);
+        res = mzalloc(sizeof(struct glyphs_entry));
+        snprintf(buff, sizeof(buff), "%s/res/%s", multirom_dir, FONT_FILES[style]);
         error = FT_New_Face(cache.ft_lib, buff, 0, &res->face);
         if(error)
         {
@@ -152,56 +173,77 @@ static struct glyph_cache_entry *get_cache_for_size(const int size)
         }
 
         res->glyphs = imap_create();
-        imap_add_not_exist(cache.glyph_cache, size, res);
+        imap_add_not_exist(cache.glyphs[style], size, res);
     }
 
     return res;
 }
 
-static struct string_cache_entry *get_cache_for_string(px_type color, int size, const char *text)
+static struct strings_entry *get_cache_for_string(text_extra *ex)
 {
-    if(!cache.string_cache)
+    if(!cache.strings[ex->style])
         return NULL;
 
-    map *c = imap_get_val(cache.string_cache, size);
+    map *c = imap_get_val(cache.strings[ex->style], ex->size);
     if(!c)
         return NULL;
 
-    struct string_cache_entry *sen = map_get_val(c, text);
-    if(sen && sen->color == color)
+    struct strings_entry *sen = map_get_val(c, ex->text);
+    if(sen && sen->color == ex->color)
         return sen;
     return NULL;
 }
 
-static void add_to_string_cache(px_type color, int baseline, int size, const char *text, int w, int h, px_type *data)
+static void add_to_strings(fb_img *img)
 {
-    if(!cache.string_cache)
-        cache.string_cache = imap_create();
+    text_extra *ex = img->extra;
 
-    map *c = imap_get_val(cache.string_cache, size);
+    if(!cache.strings[ex->style])
+        cache.strings[ex->style] = imap_create();
+
+    map *c = imap_get_val(cache.strings[ex->style], ex->size);
     if(!c)
     {
         c = map_create();
-        imap_add_not_exist(cache.string_cache, size, c);
+        imap_add_not_exist(cache.strings[ex->style], ex->size, c);
     }
-    else if(map_find(c, text) != -1)
+    else if(map_find(c, ex->text) != -1)
     {
         return;
     }
 
-    struct string_cache_entry *sen = mzalloc(sizeof(struct string_cache_entry));
-    sen->data = data;
+    struct strings_entry *sen = mzalloc(sizeof(struct strings_entry));
+    sen->data = img->data;
     sen->refcnt = 1;
-    sen->w = w;
-    sen->h = h;
-    sen->color = color;
-    sen->baseline = baseline;
-    map_add_not_exist(c, text, sen);
+    sen->w = img->w;
+    sen->h = img->h;
+    sen->color = ex->color;
+    sen->baseline = ex->baseline;
+    map_add_not_exist(c, ex->text, sen);
 
-    TT_LOG("CACHE: add %02d 0x%08X\n", size, (uint32_t)data);
+    TT_LOG("CACHE: add %02d 0x%08X\n", ex->size, (uint32_t)img->data);
 }
 
-static void measure_line(struct text_line *line, struct glyph_cache_entry *en, int size)
+static int unlink_from_caches(text_extra *ex)
+{
+    struct glyphs_entry *en;
+    struct strings_entry *sen;
+
+    en = get_cache_for_size(ex->style, ex->size);
+    if(en)
+        --en->refcnt;
+
+    sen = get_cache_for_string(ex);
+    if(sen)
+    {
+        --sen->refcnt;
+        TT_LOG("CACHE: drop %02d 0x%08X\n", ex->size, (uint32_t)sen->data);
+        return 1;
+    }
+    return 0;
+}
+
+static void measure_line(struct text_line *line, struct glyphs_entry *en, int size)
 {
     int i, penX, penY, idx, prev_idx, error;
     FT_Vector delta;
@@ -257,7 +299,7 @@ static void measure_line(struct text_line *line, struct glyph_cache_entry *en, i
     line->base = bbox.yMax;
 }
 
-static void render_line(struct text_line *line, struct glyph_cache_entry *en, px_type *res_data, int stride, px_type converted_color)
+static void render_line(struct text_line *line, struct glyphs_entry *en, px_type *res_data, int stride, px_type converted_color)
 {
     int i, error;
     FT_Glyph *image;
@@ -281,89 +323,29 @@ static void destroy_line(struct text_line *line)
     free(line);
 }
 
-typedef struct 
-{
-    char *text;
-    px_type color;
-    int size;
-    int justify;
-    int baseline;
-} text_extra;
-
-fb_img *fb_text_create_item(int x, int y, uint32_t color, int size, int justify, const char *text)
-{
-    fb_img *result = mzalloc(sizeof(fb_img));
-    result->id = fb_generate_item_id();
-    result->parent = &DEFAULT_FB_PARENT;
-    result->type = FB_IT_IMG;
-    result->level = LEVEL_TEXT;
-    result->x = x;
-    result->y = y;
-    result->img_type = FB_IMG_TYPE_TEXT;
-    result->data = NULL;
-    result->extra = mzalloc(sizeof(text_extra));
-
-    text_extra *extras = result->extra;
-    // set color's alpha to 0, because data from the bitmap will act as alpha
-    extras->color = fb_convert_color(color & ~(0xFF << 24));
-    extras->size = size;
-    extras->justify = justify;
-
-    fb_text_set_content(result, text);
-
-    if(!result->data)
-    {
-        free(extras);
-        free(result);
-        result = NULL;
-    }
-
-    return result;
-}
-
-void fb_text_set_content(fb_img *img, const char *text)
+static void fb_text_render(fb_img *img)
 {
     int maxW, maxH, totalH, i, lineH, lines_cnt;
-    struct glyph_cache_entry *en;
-    struct string_cache_entry *sen, *old_sen = NULL;
+    struct glyphs_entry *en;
+    struct strings_entry *sen;
     struct text_line **lines = NULL;
-    const char *start = text, *end;
+    char *start, *end;
     px_type *res_data;
     text_extra *ex = img->extra;
 
-    en = get_cache_for_size(ex->size);
+    en = get_cache_for_size(ex->style, ex->size);
     if(!en)
         return;
 
-    if(ex->text)
-    {
-        old_sen = get_cache_for_string(ex->color, ex->size, ex->text);
-    }
-    else
-    {
-        // if ex->text is empty, this is first call of fb_set_text for this fb_img
-        // increase refcount on this size's glyph cache entry
-        ++en->refcnt;
-    }
+    ++en->refcnt;
 
-    sen = get_cache_for_string(ex->color, ex->size, text);
+    sen = get_cache_for_string(ex);
     if(sen)
     {
-        if(old_sen)
-        {
-            TT_LOG("CACHE: drop %02d 0x%08X\n", ex->size, (uint32_t)old_sen->data);
-            --old_sen->refcnt;
-        }
-
         img->w = sen->w;
         img->h = sen->h;
         img->data = sen->data;
         ex->baseline = sen->baseline;
-        if(ex->text != text)
-        {
-            ex->text = realloc(ex->text, strlen(text)+1);
-            strcpy(ex->text, text);
-        }
         ++sen->refcnt;
 
         TT_LOG("CACHE: use %02d 0x%08X\n", ex->size, (uint32_t)sen->data);
@@ -371,9 +353,10 @@ void fb_text_set_content(fb_img *img, const char *text)
         return;
     }
 
-    TT_LOG("Rendering string %s\n", text);
+    TT_LOG("Rendering string %s\n", ex->text);
 
     maxW = maxH = lines_cnt = 0;
+    start = ex->text;
     while(start && *start)
     {
         struct text_line *line = mzalloc(sizeof(struct text_line));
@@ -425,50 +408,92 @@ void fb_text_set_content(fb_img *img, const char *text)
     if(lines_cnt > 1)
         ex->baseline /= 2;
 
+    img->w = img->h = 0;
+
     // always 4 bytes per pixel cause of fb_img data structure
-    if(old_sen)
-    {
-        img->data = malloc(maxW*totalH*4);
-        --old_sen->refcnt;
-        TT_LOG("CACHE: drop %02d 0x%08X\n", ex->size, (uint32_t)old_sen->data);
-    }
-    else
-    {
-        if(img->data != NULL)
-        {
-            TT_LOG("CACHE: realloc %02d 0x%08X old_sen 0x%08X %d\n", ex->size, (uint32_t)img->data, (uint32_t)old_sen, old_sen ? old_sen->refcnt : 0);
-        }
+    img->data = mzalloc(maxW*totalH*4);
 
-        img->data = realloc(img->data, maxW*totalH*4);
-    }
+    for(i = 0; i < lines_cnt; ++i)
+        render_line(lines[i], en, img->data, maxW, ex->color);
 
-    memset(img->data, 0, maxW*totalH*4);
     img->w = maxW;
     img->h = totalH;
 
-    for(i = 0; i < lines_cnt; ++i)
-        render_line(lines[i], en, img->data, img->w, ex->color);
-
-    add_to_string_cache(ex->color, ex->baseline, ex->size, text, img->w, img->h, img->data);
+    add_to_strings(img);
 
     list_clear(&lines, &destroy_line);
-
-    if(ex->text != text)
-    {
-        ex->text = realloc(ex->text, strlen(text)+1);
-        strcpy(ex->text, text);
-    }
 }
 
-inline void center_text(fb_img *text, int targetX, int targetY, int targetW, int targetH)
+fb_img *fb_add_text(int x, int y, uint32_t color, int size, const char *fmt, ...)
 {
-    text_extra *ex = text->extra;
+    int ret;
+    fb_img *res;
+    fb_text_proto *p;
+    char txt[512] = { 0 };
+    char *buff = txt;
+    va_list ap;
 
-    if(targetX != -1)
-        text->x = targetX + (targetW/2 - text->w/2);
+    txt[0] = 0;
 
-    if(targetY != -1)
-        text->y = targetY + (targetH/2 - ex->baseline/2);
+    va_start(ap, fmt);
+    ret = vsnprintf(txt, sizeof(txt), fmt, ap);
+    if(ret >= (int)sizeof(txt))
+    {
+        buff = malloc(ret+1);
+        vsnprintf(buff, ret+1, fmt, ap);
+    }
+    va_end(ap);
+
+    p = fb_text_create(x, y, color, size, buff);
+    res = fb_text_finalize(p);
+
+    if(ret >= (int)sizeof(txt))
+        free(buff);
+    return res;
+}
+
+fb_text_proto *fb_text_create(int x, int y, uint32_t color, int size, const char *text)
+{
+    fb_text_proto *p = mzalloc(sizeof(fb_text_proto));
+    p->x = x;
+    p->y = y;
+    p->level = LEVEL_TEXT;
+    p->parent = &DEFAULT_FB_PARENT;
+    p->color = color;
+    p->size = size;
+    p->style = STYLE_NORMAL;
+    if(text)
+        p->text = strdup(text);
+    return p;
+}
+
+fb_img *fb_text_finalize(fb_text_proto *p)
+{
+    fb_img *result = mzalloc(sizeof(fb_img));
+    result->id = fb_generate_item_id();
+    result->type = FB_IT_IMG;
+    result->parent = p->parent;
+    result->level = p->level;
+    result->x = p->x;
+    result->y = p->y;
+    result->img_type = FB_IMG_TYPE_TEXT;
+    result->data = NULL;
+    result->extra = mzalloc(sizeof(text_extra));
+
+    text_extra *extras = result->extra;
+    // set color's alpha to 0 because data from the font will act as alpha
+    extras->color = fb_convert_color(p->color & ~(0xFF << 24));
+    extras->size = p->size;
+    extras->justify = p->justify;
+    extras->style = p->style;
+    extras->text = p->text;
+
+    free(p);
+
+    fb_text_render(result);
+    fb_ctx_add_item(result);
+
+    return result;
 }
 
 void fb_text_set_color(fb_img *img, uint32_t color)
@@ -480,7 +505,7 @@ void fb_text_set_color(fb_img *img, uint32_t color)
     if(extras->color == converted_color)
         return;
 
-    struct string_cache_entry *sen = get_cache_for_string(extras->color, extras->size, extras->text);
+    struct strings_entry *sen = get_cache_for_string(extras);
     if(sen)
     {
         if(sen->refcnt == 1)
@@ -523,17 +548,50 @@ void fb_text_set_color(fb_img *img, uint32_t color)
 void fb_text_set_size(fb_img *img, int size)
 {
     text_extra *ex = img->extra;
-    if(ex->size == size)
+
+    if(size == ex->size)
         return;
+
+    unlink_from_caches(ex);
     ex->size = size;
-    fb_text_set_content(img, ex->text);
+    fb_text_render(img);
+}
+
+void fb_text_set_content(fb_img *img, const char *text)
+{
+    text_extra *ex = img->extra;
+
+    if(text == ex->text)
+        return;
+
+    if(unlink_from_caches(ex) == 0)
+    {
+        img->w = img->h = 0;
+        free(img->data);
+        img->data = NULL;
+    }
+
+    ex->text = realloc(ex->text, strlen(text)+1);
+    strcpy(ex->text, text);
+    fb_text_render(img);
+}
+
+inline void center_text(fb_img *text, int targetX, int targetY, int targetW, int targetH)
+{
+    text_extra *ex = text->extra;
+
+    if(targetX != -1)
+        text->x = targetX + (targetW/2 - text->w/2);
+
+    if(targetY != -1)
+        text->y = targetY + (targetH/2 - ex->baseline/2);
 }
 
 void fb_text_destroy(fb_img *i)
 {
     text_extra *ex = i->extra;
 
-    struct string_cache_entry *sen = get_cache_for_string(ex->color, ex->size, ex->text);
+    struct strings_entry *sen = get_cache_for_string(ex);
     if(sen)
     {
         TT_LOG("CACHE: drop %02d 0x%08X\n", ex->size, (uint32_t)sen->data);
@@ -545,7 +603,7 @@ void fb_text_destroy(fb_img *i)
         free(i->data);
     }
 
-    struct glyph_cache_entry *en = get_cache_for_size(ex->size);
+    struct glyphs_entry *en = get_cache_for_size(ex->style, ex->size);
     if(en)
     {
         --en->refcnt;
@@ -557,82 +615,96 @@ void fb_text_destroy(fb_img *i)
     // fb_img is freed in fb_destroy_item
 }
 
-void fb_text_drop_cache_unused(void)
+static int drop_glyphs_cache(imap *g_cache)
+{
+    size_t i;
+    for(i = 0; i < g_cache->size;)
+    {
+        const int key = g_cache->keys[i];
+        struct glyphs_entry *en = g_cache->values[i];
+        TT_LOG("glyphs_entry size %d has refcnt %d\n", key, en->refcnt);
+        if(en->refcnt == 0)
+        {
+            imap_destroy(en->glyphs, (void*)&FT_Done_Glyph);
+            FT_Done_Face(en->face);
+            imap_rm(g_cache, key, &free);
+        }
+        else
+            ++i;
+    }
+    return g_cache->size == 0;
+}
+
+static int drop_strings_cache(imap *s_cache)
 {
     size_t i, x;
-
-    if(cache.glyph_cache)
+    for(i = 0; i < s_cache->size; )
     {
-        TT_LOG("Dropping unused glyph caches\n");
-        for(i = 0; i < cache.glyph_cache->size;)
+        const int key = s_cache->keys[i];
+        map *size_c = s_cache->values[i];
+        TT_LOG("Dropping unused string caches for size %d\n", key);
+
+        for(x = 0; x < size_c->size; )
         {
-            const int key = cache.glyph_cache->keys[i];
-            struct glyph_cache_entry *en = cache.glyph_cache->values[i];
-            TT_LOG("glyph_cache_entry size %d has refcnt %d\n", key, en->refcnt);
-            if(en->refcnt == 0)
+            char *s_key = size_c->keys[x];
+            struct strings_entry *sen = size_c->values[x];
+
+            TT_LOG("strings_entry size %d str \"%s\" has refcnt %d\n", key, s_key, sen->refcnt);
+            if(sen->refcnt == 0)
             {
-                imap_destroy(en->glyphs, (void*)&FT_Done_Glyph);
-                FT_Done_Face(en->face);
-                imap_rm(cache.glyph_cache, key, &free);
+                free(sen->data);
+                map_rm(size_c, s_key, &free);
             }
             else
-                ++i;
+                ++x;
         }
 
-        if(cache.glyph_cache->size == 0)
+        if(size_c->size == 0)
         {
-            TT_LOG("Whole glyph cache was freed.\n");
-            imap_destroy(cache.glyph_cache, NULL);
-            cache.glyph_cache = NULL;
+            TT_LOG("Removing string cache for size %d\n", key);
+            map_destroy(size_c, &free);
+            imap_rm(s_cache, key, NULL);
+        }
+        else
+            ++i;
+    }
+    return s_cache->size == 0;
+}
+
+void fb_text_drop_cache_unused(void)
+{
+    size_t s;
+    int free_ft_lib = 1;
+
+    for(s = 0; s < STYLE_COUNT; ++s)
+    {
+        if(cache.glyphs[s])
+        {
+            if(drop_glyphs_cache(cache.glyphs[s]))
+            {
+                TT_LOG("Whole glyph cache was freed.\n");
+                imap_destroy(cache.glyphs[s], NULL);
+                cache.glyphs[s] = NULL;
+            }
+            else
+                free_ft_lib = 0;
+        }
+
+        if(cache.strings[s])
+        {
+            if(drop_strings_cache(cache.strings[s]))
+            {
+                TT_LOG("Whole string cache was freed.\n");
+                imap_destroy(cache.strings[s], NULL);
+                cache.strings[s] = NULL;
+            }
         }
     }
 
-    if(!cache.glyph_cache && cache.ft_lib)
+    if(free_ft_lib && cache.ft_lib)
     {
         TT_LOG("Freeing libfreetype\n");
         FT_Done_FreeType(cache.ft_lib);
         cache.ft_lib = NULL;
-    }
-
-    if(cache.string_cache)
-    {
-        TT_LOG("Dropping unused string caches\n");
-        for(i = 0; i < cache.string_cache->size; )
-        {
-            const int key = cache.string_cache->keys[i];
-            map *size_c = cache.string_cache->values[i];
-            TT_LOG("Dropping unused string caches for size %d\n", key);
-
-            for(x = 0; x < size_c->size; )
-            {
-                char *s_key = size_c->keys[x];
-                struct string_cache_entry *sen = size_c->values[x];
-
-                TT_LOG("string_cache_entry size %d str \"%s\" has refcnt %d\n", key, s_key, sen->refcnt);
-                if(sen->refcnt == 0)
-                {
-                    free(sen->data);
-                    map_rm(size_c, s_key, &free);
-                }
-                else
-                    ++x;
-            }
-
-            if(size_c->size == 0)
-            {
-                TT_LOG("Removing string cache for size %d\n", key);
-                map_destroy(size_c, &free);
-                imap_rm(cache.string_cache, key, NULL);
-            }
-            else
-                ++i;
-        }
-
-        if(cache.string_cache->size == 0)
-        {
-            TT_LOG("Whole string cache was freed.\n");
-            imap_destroy(cache.string_cache, NULL);
-            cache.string_cache = NULL;
-        }
     }
 }

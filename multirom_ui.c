@@ -43,7 +43,6 @@
 static struct multirom_status *mrom_status = NULL;
 static struct multirom_rom *selected_rom = NULL;
 static volatile int exit_ui_code = -1;
-static fb_msgbox *active_msgbox = NULL;
 static volatile int loop_act = 0;
 static multirom_themes_info *themes_info = NULL;
 static multirom_theme *cur_theme = NULL;
@@ -99,7 +98,6 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     exit_ui_code = -1;
     selected_rom = NULL;
-    active_msgbox = NULL;
     last_selected_int_rom = -1;
     last_int_listview_pos = -1;
 
@@ -132,7 +130,6 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     add_touch_handler(&multirom_ui_touch_handler, NULL);
     start_input_thread();
     keyaction_enable(1);
-    keyaction_set_destroy_msgbox_handle(multirom_ui_destroy_msgbox);
 
     multirom_set_brightness(s->brightness);
 
@@ -205,22 +202,20 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     rm_touch_handler(&multirom_ui_touch_handler, NULL);
 
-    fb_create_msgbox(500*DPI_MUL, 250*DPI_MUL, CLR_PRIMARY);
-
     switch(exit_ui_code)
     {
         case UI_EXIT_BOOT_ROM:
             *to_boot = selected_rom;
-            fb_msgbox_add_text(-1, 40*DPI_MUL, SIZE_BIG, "Booting ROM...");
-            fb_msgbox_add_text(-1, -1, SIZE_NORMAL, selected_rom->name);
+            //fb_msgbox_add_text(-1, 40*DPI_MUL, SIZE_BIG, "Booting ROM...");
+            //fb_msgbox_add_text(-1, -1, SIZE_NORMAL, selected_rom->name);
             break;
         case UI_EXIT_REBOOT:
         case UI_EXIT_REBOOT_RECOVERY:
         case UI_EXIT_REBOOT_BOOTLOADER:
-            fb_msgbox_add_text(-1, -1, SIZE_BIG, "Rebooting...");
+            //fb_msgbox_add_text(-1, -1, SIZE_BIG, "Rebooting...");
             break;
         case UI_EXIT_SHUTDOWN:
-            fb_msgbox_add_text(-1, -1, SIZE_BIG, "Shutting down...");
+            //fb_msgbox_add_text(-1, -1, SIZE_BIG, "Shutting down...");
             break;
     }
 
@@ -384,8 +379,6 @@ int multirom_ui_touch_handler(touch_event *ev, void *data)
             multirom_take_screenshot();
             touch_count = 0;
         }
-
-        multirom_ui_destroy_msgbox();
     }
 
     if((ev->changed & TCHNG_REMOVED) && touch_count > 0)
@@ -394,22 +387,10 @@ int multirom_ui_touch_handler(touch_event *ev, void *data)
     return -1;
 }
 
-int multirom_ui_destroy_msgbox(void)
-{
-    if(!active_msgbox)
-        return 0;
-
-    pthread_mutex_lock(&exit_code_mutex);
-    fb_destroy_msgbox();
-    fb_freeze(0);
-    fb_request_draw();
-    active_msgbox = NULL;
-    pthread_mutex_unlock(&exit_code_mutex);
-    return 1;
-}
-
 void multirom_ui_auto_boot(void)
 {
+    fb_request_draw();
+    /*
     int seconds = mrom_status->auto_boot_seconds*1000;
     active_msgbox = fb_create_msgbox(500*DPI_MUL, 300*DPI_MUL, CLR_PRIMARY);
 
@@ -455,6 +436,7 @@ void multirom_ui_auto_boot(void)
         }
         usleep(50000);
     }
+    */
 }
 
 void multirom_ui_refresh_usb_handler(void)
@@ -568,6 +550,7 @@ void multirom_ui_tab_rom_boot_btn(int action)
     if(!rom)
         return;
 
+/*
     int m = M(rom->type);
     if(m & MASK_UNSUPPORTED)
     {
@@ -615,6 +598,7 @@ void multirom_ui_tab_rom_boot_btn(int action)
     selected_rom = rom;
     exit_ui_code = UI_EXIT_BOOT_ROM;
     pthread_mutex_unlock(&exit_code_mutex);
+    */
 }
 
 void multirom_ui_tab_rom_update_usb(void *data)
@@ -649,9 +633,9 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
 
     if(empty && !t->usb_text)
     {
-        const int line_len = 37;
-        static const char *txt = "This list is refreshed automagically,\njust plug in the USB drive and wait.";
-        t->usb_text = fb_add_text_justified(0, 0, WHITE, SIZE_NORMAL, JUSTIFY_CENTER, txt);
+        fb_text_proto *p = fb_text_create(0, 0, WHITE, SIZE_NORMAL, "This list is refreshed automagically,\njust plug in the USB drive and wait.");
+        p->justify = JUSTIFY_CENTER;
+        t->usb_text = fb_text_finalize(p);
         list_add(t->usb_text, &t->ui_elements);
 
         center_text(t->usb_text, t->list->x, t->list->y, width, t->list->h);
@@ -710,6 +694,7 @@ void multirom_ui_tab_misc_copy_log(int action)
 
     int res = multirom_copy_log(NULL, "../multirom_log.txt");
 
+/*
     static const char *text[] = { "Failed to copy log to sdcard!", "Successfully copied error log!" };
 
     active_msgbox = fb_create_msgbox(550*DPI_MUL, 260*DPI_MUL, res ? DRED : CLR_PRIMARY);
@@ -719,5 +704,5 @@ void multirom_ui_tab_misc_copy_log(int action)
     fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to close");
 
     fb_request_draw();
-    fb_freeze(1);
+    fb_freeze(1);*/
 }

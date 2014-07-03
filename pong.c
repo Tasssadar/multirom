@@ -87,7 +87,9 @@ void pong(void)
 
     fb_set_background(BLACK);
 
-    fb_text *help = fb_add_text(0, 0, GRAYISH, SIZE_SMALL, "Press power button to go back");
+    fb_text_proto *p = fb_text_create(0, 0, GRAYISH, SIZE_SMALL, "Press power button to go back");
+    p->style = STYLE_ITALIC;
+    fb_text *help = fb_text_finalize(p);
     help->y = fb_height/2 - help->h*1.5;
     center_text(help, 0, -1, fb_width, -1);
 

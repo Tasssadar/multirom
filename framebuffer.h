@@ -123,7 +123,6 @@ void fb_force_generic_impl(int force);
 enum 
 {
     FB_IT_RECT,
-    FB_IT_BOX,
     FB_IT_IMG,
 };
 
@@ -139,6 +138,16 @@ enum
     JUSTIFY_LEFT,
     JUSTIFY_CENTER,
     JUSTIFY_RIGHT,
+};
+
+enum
+{
+    STYLE_NORMAL,
+    STYLE_ITALIC,
+    STYLE_BOLD,
+    STYLE_MONOSPACE,
+
+    STYLE_COUNT
 };
 
 enum
@@ -210,56 +219,50 @@ typedef fb_img fb_text;
 
 typedef struct
 {
-    FB_ITEM_HEAD
-
-    fb_img **imgs;
-    fb_rect *background[3];
-} fb_msgbox;
-
-typedef struct
-{
     uint32_t background_color;
     fb_item_header *first_item;
-    fb_msgbox *msgbox;
     pthread_mutex_t mutex;
     volatile int batch_started;
     volatile pthread_t batch_thread;
 } fb_context_t;
 
+typedef struct
+{
+    int x, y;
+    int level;
+    fb_item_pos *parent;
+    uint32_t color;
+    int size;
+    int justify;
+    int style;
+    char *text;
+} fb_text_proto;
+
 void fb_remove_item(void *item);
 int fb_generate_item_id(void);
+px_type fb_convert_color(uint32_t c);
 
-fb_img *fb_add_text_lvl_justified(int level, int x, int y, uint32_t color, int size, int justify, const char *fmt, ...);
-#define fb_add_text_justified(x, y, color, size, justify, fmt, args...) fb_add_text_lvl_justified(LEVEL_TEXT, x, y, color, size, justify, fmt, ##args)
-#define fb_add_text(x, y, color, size, fmt, args...) fb_add_text_lvl_justified(LEVEL_TEXT, x, y, color, size, JUSTIFY_LEFT, fmt, ##args)
-#define fb_add_text_lvl(level, x, y, color, size, fmt, args...) fb_add_text_lvl_justified(level, x, y, color, size, JUSTIFY_LEFT, fmt, ##args)
-
-fb_img *fb_add_text_long_lvl_justified(int level, int x, int y, uint32_t color, int size, int justify, const char *text);
-#define fb_add_text_long(x, y, color, size, text) fb_add_text_long_lvl_justified(LEVEL_TEXT, x, y, color, size, JUSTIFY_LEFT, text)
-
-fb_img *fb_text_create_item(int x, int y, uint32_t color, int size, int justify, const char *txt);
-void fb_text_set_content(fb_img *img, const char *text);
+fb_img *fb_add_text(int x, int y, uint32_t color, int size, const char *fmt, ...);
+fb_text_proto *fb_text_create(int x, int y, uint32_t color, int size, const char *text);
+fb_img *fb_text_finalize(fb_text_proto *p);
 void fb_text_set_color(fb_img *img, uint32_t color);
 void fb_text_set_size(fb_img *img, int size);
+void fb_text_set_content(fb_img *img, const char *text);
+
 void fb_text_drop_cache_unused(void);
 void fb_text_destroy(fb_img *i);
 
 fb_rect *fb_add_rect_lvl(int level, int x, int y, int w, int h, uint32_t color);
 #define fb_add_rect(x, y, w, h, color) fb_add_rect_lvl(LEVEL_RECT, x, y, w, h, color)
+void fb_add_rect_notfilled(int x, int y, int w, int h, uint32_t color, int thickness, fb_rect ***list);
 
 fb_img *fb_add_img(int x, int y, int w, int h, int img_type, px_type *data);
 fb_img *fb_add_png_img(int x, int y, int w, int h, const char *path);
-void fb_add_rect_notfilled(int x, int y, int w, int h, uint32_t color, int thickness, fb_rect ***list);
-fb_msgbox *fb_create_msgbox(int w, int h, int bgcolor);
-fb_text *fb_msgbox_add_text(int x, int y, int size, char *txt, ...);
-void fb_msgbox_rm_text(fb_img *text);
-void fb_destroy_msgbox(void);
+
 void fb_rm_text(fb_img *i);
 void fb_rm_rect(fb_rect *r);
 void fb_rm_img(fb_img *i);
-px_type fb_convert_color(uint32_t c);
 
-void fb_draw_overlay(void);
 void fb_draw_rect(fb_rect *r);
 void fb_draw_img(fb_img *i);
 void fb_fill(uint32_t color);
@@ -275,8 +278,8 @@ void fb_pop_context(void);
 void fb_batch_start(void);
 void fb_batch_end(void);
 
-void fb_ctx_add_item(fb_context_t *ctx, void *item);
-void fb_ctx_rm_item(fb_context_t *ctx, void *item);
+void fb_ctx_add_item(void *item);
+void fb_ctx_rm_item(void *item);
 void fb_set_background(uint32_t color);
 
 px_type *fb_png_get(const char *path, int w, int h);

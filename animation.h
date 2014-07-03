@@ -34,6 +34,7 @@ enum
 };
 
 typedef void (*animation_callback)(void*); // data
+typedef int (*animation_cancel_check)(void*, void*); // data, item
 
 #define ANIM_HEADER \
     uint32_t start_offset; \
@@ -43,7 +44,9 @@ typedef void (*animation_callback)(void*); // data
     void *on_finished_data; \
     animation_callback on_finished_call; \
     void *on_step_data; \
-    animation_callback on_step_call;
+    animation_callback on_step_call; \
+    void *cancel_check_data; \
+    animation_cancel_check cancel_check;
 
 typedef struct 
 {
@@ -78,6 +81,7 @@ void anim_stop(void);
 void anim_cancel_for(void *fb_item, int only_not_started);
 void anim_push_context(void);
 void anim_pop_context(void);
+int anim_item_cancel_check(void *item_my, void *item_destroyed);
 
 item_anim *item_anim_create(void *fb_item, int duration, int interpolator);
 void item_anim_add(item_anim *anim);

@@ -181,6 +181,8 @@ int multirom(const char *rom_to_boot)
                 exit = (EXIT_SHUTDOWN | EXIT_UMOUNT);
                 break;
         }
+        multirom_emergency_reboot();
+        exit = EXIT_REBOOT;
     }
 
     if(to_boot)
@@ -249,15 +251,21 @@ int multirom_init_fb(int rotation)
 
 void multirom_emergency_reboot(void)
 {
+    char *klog;
+    fb_text_proto *p;
+    fb_img *t;
+    char *tail;
+    int cur_y;
     if(multirom_init_fb(0) < 0)
     {
         ERROR("Failed to init framebuffer in emergency reboot");
         return;
     }
+    fb_set_background(BLACK);
 
-    char *klog = multirom_get_klog();
+    klog = multirom_get_klog();
 
-    fb_img *t = fb_add_text(0, 120, WHITE, SIZE_NORMAL,
+    t = fb_add_text(0, 120, WHITE, SIZE_NORMAL,
                 "An error occured.\nShutting down MultiROM to avoid data corruption.\n"
                 "Report this error to the developer!\nDebug info: /sdcard/multirom_log.txt\n\n"
                 "Press POWER button to reboot.");
@@ -265,17 +273,20 @@ void multirom_emergency_reboot(void)
     t = fb_add_text(0, t->y + t->h + 100*DPI_MUL, GRAYISH, SIZE_SMALL, "Last lines from klog:");
     fb_add_rect(0, t->y + t->h + 5*DPI_MUL, fb_width, 1, GRAYISH);
 
-    char *tail = klog+strlen(klog);
-
+    tail = klog+strlen(klog);
+    cur_y = fb_height;
     const int start_y = (t->y + t->h + 2);
-    int cur_y = fb_height;
     while(tail > klog)
     {
         --tail;
         if(*tail == '\n')
         {
             *tail = 0;
-            t = fb_add_text(0, cur_y, GRAYISH, SIZE_SMALL, tail+1);
+
+            p = fb_text_create(0, cur_y, GRAYISH, 4, tail+1);
+            p->style = STYLE_MONOSPACE;
+            t = fb_text_finalize(p);
+
             cur_y -= t->h;
             t->y = cur_y;
 

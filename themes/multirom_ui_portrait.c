@@ -201,9 +201,7 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
     text->y = fb_height - text->h;
     list_add(text, &d->ui_elements);
 
-    char bat_text[16];
-    snprintf(bat_text, sizeof(bat_text), "Battery: %d%%", multirom_get_battery());
-    text = fb_add_text_long(0, 0, WHITE, SIZE_SMALL, bat_text);
+    text = fb_add_text(0, 0, WHITE, SIZE_SMALL, "Battery: %d%%", multirom_get_battery());
     text->x = fb_width - text->w;
     text->y = fb_height - text->h;
     list_add(text, &d->ui_elements);

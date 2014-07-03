@@ -33,7 +33,7 @@ multirom_themes_info *multirom_ui_init_themes(void)
     list_add(&theme_info_ ## RES, &i->themes);
 
     // universal themes which scale according to DPI_MUL
-    ADD_THEME(landscape);
+    //ADD_THEME(landscape);
     ADD_THEME(portrait);
     return i;
 }

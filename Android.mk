@@ -22,7 +22,6 @@ LOCAL_SRC_FILES:= \
     pong.c \
     progressdots.c \
     multirom_ui_themes.c \
-    themes/multirom_ui_landscape.c \
     themes/multirom_ui_portrait.c \
     fstab.c \
     workers.c \
@@ -33,6 +32,8 @@ LOCAL_SRC_FILES:= \
     framebuffer_png.c \
     framebuffer_truetype.c \
     animation.c
+
+#    themes/multirom_ui_landscape.c \
 
 ifeq ($(ARCH_ARM_HAVE_NEON),true)
     LOCAL_SRC_FILES += col32cb16blend_neon.S

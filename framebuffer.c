@@ -65,7 +65,6 @@ static int fb_force_generic = 0;
 
 static fb_context_t fb_ctx = { 
     .first_item = NULL,
-    .msgbox = NULL,
     .batch_started = 0,
     .background_color = BLACK,
     .mutex = PTHREAD_MUTEX_INITIALIZER
@@ -407,16 +406,16 @@ void fb_batch_end(void)
     pthread_mutex_unlock(&fb_ctx.mutex);
 }
 
-static inline void fb_items_lock(fb_context_t *ctx)
+static inline void fb_items_lock(void)
 {
-    if(!ctx->batch_started || !pthread_equal(ctx->batch_thread, pthread_self()))
-        pthread_mutex_lock(&ctx->mutex);
+    if(!fb_ctx.batch_started || !pthread_equal(fb_ctx.batch_thread, pthread_self()))
+        pthread_mutex_lock(&fb_ctx.mutex);
 }
 
-static inline void fb_items_unlock(fb_context_t *ctx)
+static inline void fb_items_unlock(void)
 {
-    if(!ctx->batch_started || !pthread_equal(ctx->batch_thread, pthread_self()))
-        pthread_mutex_unlock(&ctx->mutex);
+    if(!fb_ctx.batch_started || !pthread_equal(fb_ctx.batch_thread, pthread_self()))
+        pthread_mutex_unlock(&fb_ctx.mutex);
 }
 
 static void fb_ctx_put_it_before(fb_item_header *new_it, fb_item_header *next_it)
@@ -441,23 +440,23 @@ static void fb_ctx_put_it_after(fb_item_header *new_it, fb_item_header *prev_it)
     prev_it->next = new_it;
 }
 
-void fb_ctx_add_item(fb_context_t *ctx, void *item)
+void fb_ctx_add_item(void *item)
 {
     fb_item_header *h = item;
 
-    fb_items_lock(ctx);
+    fb_items_lock();
 
-    if(!ctx->first_item)
-        ctx->first_item = item;
+    if(!fb_ctx.first_item)
+        fb_ctx.first_item = item;
     else
     {
-        fb_item_header *itr = ctx->first_item;
+        fb_item_header *itr = fb_ctx.first_item;
         while(1)
         {
             if(itr->level > h->level)
             {
-                if(itr == ctx->first_item)
-                    ctx->first_item = h;
+                if(itr == fb_ctx.first_item)
+                    fb_ctx.first_item = h;
                 fb_ctx_put_it_before(h, itr);
                 itr = NULL;
                 break;
@@ -473,24 +472,24 @@ void fb_ctx_add_item(fb_context_t *ctx, void *item)
             fb_ctx_put_it_after(h, itr);
     }
 
-    fb_items_unlock(ctx);
+    fb_items_unlock();
 }
 
-void fb_ctx_rm_item(fb_context_t *ctx, void *item)
+void fb_ctx_rm_item(void *item)
 {
     fb_item_header *h = item;
 
-    fb_items_lock(ctx);
+    fb_items_lock();
 
     if(!h->prev)
-        ctx->first_item = h->next;
+        fb_ctx.first_item = h->next;
     else
         h->prev->next = h->next;
 
     if(h->next)
         h->next->prev = h->prev;
 
-    fb_items_unlock(ctx);
+    fb_items_unlock();
 }
 
 void fb_remove_item(void *item)
@@ -499,10 +498,6 @@ void fb_remove_item(void *item)
     {
         case FB_IT_RECT:
             fb_rm_rect((fb_rect*)item);
-            break;
-        case FB_IT_BOX:
-            // fb_destroy_msgbox must be used
-            assert(0);
             break;
         case FB_IT_IMG:
             fb_rm_img((fb_img*)item);
@@ -517,10 +512,6 @@ void fb_destroy_item(void *item)
     switch(((fb_item_header*)item)->type)
     {
         case FB_IT_RECT:
-            break;
-        case FB_IT_BOX:
-            // fb_destroy_msgbox must be used
-            assert(0);
             break;
         case FB_IT_IMG:
         {
@@ -687,48 +678,12 @@ void fb_draw_img(fb_img *i)
 
 int fb_generate_item_id(void)
 {
-    fb_items_lock(&fb_ctx);
+    fb_items_lock();
     static int id = 0;
     int res = id++;
-    fb_items_unlock(&fb_ctx);
+    fb_items_unlock();
 
     return res;
-}
-
-fb_img *fb_add_text_lvl_justified(int level, int x, int y, uint32_t color, int size, int justify, const char *fmt, ...)
-{
-    int ret;
-    fb_img *res;
-    char txt[512] = { 0 };
-    va_list ap;
-    char *buff = txt;
-
-    txt[0] = 0;
-
-    va_start(ap, fmt);
-    ret = vsnprintf(txt, sizeof(txt), fmt, ap);
-    if(ret >= (int)sizeof(txt))
-    {
-        buff = malloc(ret+1);
-        vsnprintf(buff, ret+1, fmt, ap);
-    }
-    va_end(ap);
-
-    res = fb_add_text_long_lvl_justified(level, x, y, color, size, justify, buff);
-    if(ret >= (int)sizeof(txt))
-        free(buff);
-    return res;
-}
-
-fb_img *fb_add_text_long_lvl_justified(int level, int x, int y, uint32_t color, int size, int justify, const char *text)
-{
-    fb_img *img = fb_text_create_item(x, y, color, size, justify, text);
-    if(img)
-    {
-        img->level = level;
-        fb_ctx_add_item(&fb_ctx, img);
-    }
-    return img;
 }
 
 fb_rect *fb_add_rect_lvl(int level, int x, int y, int w, int h, uint32_t color)
@@ -746,7 +701,7 @@ fb_rect *fb_add_rect_lvl(int level, int x, int y, int w, int h, uint32_t color)
     r->h = h;
     r->color = color;
 
-    fb_ctx_add_item(&fb_ctx, r);
+    fb_ctx_add_item(r);
     return r;
 }
 
@@ -784,7 +739,7 @@ fb_img *fb_add_img(int x, int y, int w, int h, int img_type, px_type *data)
     result->w = w;
     result->h = h;
 
-    fb_ctx_add_item(&fb_ctx, result);
+    fb_ctx_add_item(result);
     return result;
 }
 
@@ -802,7 +757,7 @@ void fb_rm_rect(fb_rect *r)
     if(!r)
         return;
 
-    fb_ctx_rm_item(&fb_ctx, r);
+    fb_ctx_rm_item(r);
     fb_destroy_item(r);
 }
 
@@ -816,99 +771,8 @@ void fb_rm_img(fb_img *i)
     if(!i)
         return;
 
-    fb_ctx_rm_item(&fb_ctx, i);
+    fb_ctx_rm_item(i);
     fb_destroy_item(i);
-}
-
-#define BOX_BORDER (2*DPI_MUL)
-#define SHADOW (10*DPI_MUL)
-fb_msgbox *fb_create_msgbox(int w, int h, int bgcolor)
-{
-    if(fb_ctx.msgbox)
-        return fb_ctx.msgbox;
-
-    fb_msgbox *box = mzalloc(sizeof(fb_msgbox));
-
-    int x = fb_width/2 - w/2;
-    int y = fb_height/2 - h/2;
-
-    box->id = fb_generate_item_id();
-    box->type = FB_IT_BOX;
-    box->x = x;
-    box->y = y;
-    box->w = w;
-    box->h = h;
-
-    box->background[0] = fb_add_rect(x+SHADOW, y+SHADOW, w, h, GRAY); // shadow
-    box->background[1] = fb_add_rect(x, y, w, h, WHITE); // border
-    box->background[2] = fb_add_rect(x+BOX_BORDER, y+BOX_BORDER,
-                                     w-BOX_BORDER*2, h-BOX_BORDER*2, bgcolor);
-
-    pthread_mutex_lock(&fb_ctx.mutex);
-    fb_ctx.msgbox = box;
-    pthread_mutex_unlock(&fb_ctx.mutex);
-    return box;
-}
-
-fb_img *fb_msgbox_add_text(int x, int y, int size, char *fmt, ...)
-{
-    char txt[512];
-    txt[0] = 0;
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(txt, sizeof(txt), fmt, ap);
-    va_end(ap);
-
-    fb_msgbox *box = fb_ctx.msgbox;
-
-    fb_img *t = fb_text_create_item(x, y, WHITE, size, JUSTIFY_LEFT, txt);
-
-    if(x == -1)
-        t->x = box->w/2 - t->w/2;
-
-    if(y == -1)
-        t->y = box->h/2 - t->h/2;
-
-    t->x += box->x;
-    t->y += box->y;
-
-    pthread_mutex_lock(&fb_ctx.mutex);
-    list_add(t, &box->imgs);
-    pthread_mutex_unlock(&fb_ctx.mutex);
-    return t;
-}
-
-void fb_msgbox_rm_text(fb_img *text)
-{
-    if(!text)
-        return;
-
-    pthread_mutex_lock(&fb_ctx.mutex);
-    if(fb_ctx.msgbox)
-        list_rm_noreorder(text, &fb_ctx.msgbox->imgs, &fb_destroy_item);
-    pthread_mutex_unlock(&fb_ctx.mutex);
-}
-
-void fb_destroy_msgbox(void)
-{
-    pthread_mutex_lock(&fb_ctx.mutex);
-    if(!fb_ctx.msgbox)
-    {
-        pthread_mutex_unlock(&fb_ctx.mutex);
-        return;
-    }
-
-    fb_msgbox *box = fb_ctx.msgbox;
-    fb_ctx.msgbox = NULL;
-    pthread_mutex_unlock(&fb_ctx.mutex);
-
-    list_clear(&box->imgs, &fb_destroy_item);
-
-    uint32_t i;
-    for(i = 0; i < ARRAY_SIZE(box->background); ++i)
-        fb_rm_rect(box->background[i]);
-
-    free(box);
 }
 
 void fb_clear(void)
@@ -923,73 +787,17 @@ void fb_clear(void)
     fb_ctx.first_item = NULL;
     pthread_mutex_unlock(&fb_ctx.mutex);
 
-    fb_destroy_msgbox();
-
     fb_png_drop_unused();
     fb_text_drop_cache_unused();
-}
-
-#if PIXEL_SIZE == 4
-#define ALPHA 220
-#define BLEND_CLR 0x1B
-static inline int blend(int value1, int value2) {
-    int r = (0xFF-ALPHA)*value1 + ALPHA*value2;
-    return (r+1 + (r >> 8)) >> 8; // divide by 255
-}
-#else
-#ifndef HAS_NEON_BLEND
-#define ALPHA5 0x04
-#define ALPHA6 0x08
-#define BLEND_CLR5 0x03
-#define BLEND_CLR6 0x06
-#endif
-#endif
-
-void fb_draw_overlay(void)
-{
-#ifndef MR_DISABLE_ALPHA
- #if PIXEL_SIZE == 4
-    int i;
-    uint8_t *bits = (uint8_t*)fb.buffer;
-    const int size = fb.vi.xres_virtual*fb.vi.yres;
-    for(i = 0; i < size; ++i)
-    {
-        *bits = blend(*bits, BLEND_CLR);
-        ++bits;
-        *bits = blend(*bits, BLEND_CLR);
-        ++bits;
-        *bits = blend(*bits, BLEND_CLR);
-        bits += 2;
-    }
- #else
-  #ifdef HAS_NEON_BLEND
-    uint32_t blend_clr = 0xDC1B1B1B;
-    scanline_col32cb16blend_neon((uint16_t*)fb.buffer, &blend_clr, fb.size >> 1);
-  #else
-    const int size = fb.size >> 1;
-    uint16_t *bits = fb.buffer;
-    int i;
-    for(i = 0; i < size; ++i)
-    {
-        *bits = ((ALPHA5*(*bits & 0x1F) + (ALPHA5*BLEND_CLR5)) / 31) |
-            (((ALPHA6*((*bits & 0x7E0) >> 5) + (ALPHA6*BLEND_CLR6)) / 63) << 5) |
-            (((ALPHA5*((*bits & 0xF800) >> 11) + (ALPHA5*BLEND_CLR5)) / 31) << 11);
-        ++bits;
-    }
-  #endif
- #endif // PIXEL_SIZE
-#endif // MR_DISABLE_ALPHA
 }
 
 static void fb_draw(void)
 {
     uint32_t i;
     fb_item_header *it;
+
     pthread_mutex_lock(&fb_ctx.mutex);
-
     fb_fill(fb_ctx.background_color);
-
-    // rectangles
     for(it = fb_ctx.first_item; it; it = it->next)
     {
         switch(it->type)
@@ -1002,21 +810,6 @@ static void fb_draw(void)
                 break;
         }
     }
-
-    // msg box
-    if(fb_ctx.msgbox)
-    {
-        fb_draw_overlay();
-
-        fb_msgbox *box = fb_ctx.msgbox;
-
-        for(i = 0; i < ARRAY_SIZE(box->background); ++i)
-            fb_draw_rect(box->background[i]);
-
-        for(i = 0; box->imgs && box->imgs[i]; ++i)
-            fb_draw_img(box->imgs[i]);
-    }
-
     pthread_mutex_unlock(&fb_ctx.mutex);
 
     pthread_mutex_lock(&fb_update_mutex);
@@ -1037,13 +830,9 @@ void fb_push_context(void)
     fb_context_t *ctx = mzalloc(sizeof(fb_context_t));
 
     pthread_mutex_lock(&fb_ctx.mutex);
-
     ctx->first_item = fb_ctx.first_item;
-    ctx->msgbox = fb_ctx.msgbox;
     ctx->background_color = fb_ctx.background_color;
     fb_ctx.first_item = NULL;
-    fb_ctx.msgbox = NULL;
-
     pthread_mutex_unlock(&fb_ctx.mutex);
 
     list_add(ctx, &inactive_ctx);
@@ -1060,11 +849,8 @@ void fb_pop_context(void)
     fb_context_t *ctx = inactive_ctx[idx];
 
     pthread_mutex_lock(&fb_ctx.mutex);
-
     fb_ctx.first_item = ctx->first_item;
-    fb_ctx.msgbox = ctx->msgbox;
     fb_ctx.background_color = ctx->background_color;
-
     pthread_mutex_unlock(&fb_ctx.mutex);
 
     list_rm_noreorder(ctx, &inactive_ctx, &free);

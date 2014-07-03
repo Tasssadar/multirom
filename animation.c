@@ -208,7 +208,6 @@ static void anim_update(uint32_t diff, void *data)
             normalized = ((float)anim->elapsed)/anim->duration;
 
         interpolated = anim_interpolate(anim->interpolator, normalized);
-        INFO("Interpolate diff %u normalized %f interpolated %f\n", diff, normalized, interpolated);
 
         // Handle animation step
         switch(it->anim_type)
@@ -296,12 +295,20 @@ void anim_cancel_for(void *fb_item, int only_not_started)
         return;
 
     struct anim_list_it *it, *to_remove;
+    anim_header *anim;
 
     pthread_mutex_lock(&anim_list.mutex);
     for(it = anim_list.first; it; )
     {
-        if (it->anim_type == ANIM_TYPE_ITEM && ((item_anim*)it->anim)->item == fb_item &&
-            (!only_not_started || it->anim->start_offset != 0))
+        anim = it->anim;
+
+        if(!anim->cancel_check || (only_not_started && anim->start_offset == 0))
+        {
+            it = it->next;
+            continue;
+        }
+
+        if(anim->cancel_check(anim->cancel_check_data, fb_item))
         {
             to_remove = it;
             it = it->next;
@@ -355,12 +362,19 @@ void anim_pop_context(void)
     pthread_mutex_unlock(&anim_list.mutex);
 }
 
+int anim_item_cancel_check(void *item_my, void *item_destroyed)
+{
+    return item_my == item_destroyed;
+}
+
 item_anim *item_anim_create(void *fb_item, int duration, int interpolator)
 {
     item_anim *anim = mzalloc(sizeof(item_anim));
     anim->item = fb_item;
     anim->duration = duration;
     anim->interpolator = interpolator;
+    anim->cancel_check_data = fb_item;
+    anim->cancel_check = anim_item_cancel_check;
     anim->targetX = -1;
     anim->targetY = -1;
     anim->targetW = -1;

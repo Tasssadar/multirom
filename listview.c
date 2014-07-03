@@ -623,6 +623,8 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
 
             call_anim *canim = call_anim_create(d, rom_item_alpha, 200, INTERPOLATOR_ACCELERATE);
             canim->start_offset = anim->start_offset;
+            canim->cancel_check_data = d->sel_rect;
+            canim->cancel_check = anim_item_cancel_check;
             canim->on_finished_data = d;
             canim->on_finished_call = rom_item_deselect_finished;
             call_anim_add(canim);
