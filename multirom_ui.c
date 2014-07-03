@@ -404,7 +404,6 @@ int multirom_ui_destroy_msgbox(void)
     fb_freeze(0);
     fb_request_draw();
     active_msgbox = NULL;
-    set_touch_handlers_mode(HANDLERS_FIRST);
     pthread_mutex_unlock(&exit_code_mutex);
     return 1;
 }
@@ -422,7 +421,6 @@ void multirom_ui_auto_boot(void)
 
     fb_request_draw();
     fb_freeze(1);
-    set_touch_handlers_mode(HANDLERS_ALL);
 
     while(1)
     {
@@ -457,7 +455,6 @@ void multirom_ui_auto_boot(void)
         }
         usleep(50000);
     }
-    set_touch_handlers_mode(HANDLERS_FIRST);
 }
 
 void multirom_ui_refresh_usb_handler(void)
@@ -582,7 +579,6 @@ void multirom_ui_tab_rom_boot_btn(int action)
 
         fb_request_draw();
         fb_freeze(1);
-        set_touch_handlers_mode(HANDLERS_ALL);
         return;
     }
 
@@ -599,7 +595,6 @@ void multirom_ui_tab_rom_boot_btn(int action)
 
         fb_request_draw();
         fb_freeze(1);
-        set_touch_handlers_mode(HANDLERS_ALL);
         return;
     }
 
@@ -613,7 +608,6 @@ void multirom_ui_tab_rom_boot_btn(int action)
 
         fb_request_draw();
         fb_freeze(1);
-        set_touch_handlers_mode(HANDLERS_ALL);
         return;
     }
 
@@ -726,5 +720,4 @@ void multirom_ui_tab_misc_copy_log(int action)
 
     fb_request_draw();
     fb_freeze(1);
-    set_touch_handlers_mode(HANDLERS_ALL);
 }

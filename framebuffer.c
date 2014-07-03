@@ -456,6 +456,8 @@ void fb_ctx_add_item(fb_context_t *ctx, void *item)
         {
             if(itr->level > h->level)
             {
+                if(itr == ctx->first_item)
+                    ctx->first_item = h;
                 fb_ctx_put_it_before(h, itr);
                 itr = NULL;
                 break;
@@ -575,7 +577,7 @@ void fb_draw_rect(fb_rect *r)
 
     int i, x;
     uint8_t *comps_bits;
-    uint8_t *comps_clr = (uint8_t*)&color;
+    const uint8_t *comps_clr = (uint8_t*)&color;
     for(i = min_y; i < max_y; ++i)
     {
         if(alpha == 0xFF)
@@ -590,30 +592,21 @@ void fb_draw_rect(fb_rect *r)
             fb_memset(bits, color, w);
             bits += fb.stride;
 #else
-  #if PIXEL_SIZE == 4
             for(x = 0; x < rendered_w; ++x)
             {
+  #if PIXEL_SIZE == 4
                 comps_bits = (uint8_t*)bits;
                 comps_bits[PX_IDX_R] = blend_png(comps_bits[PX_IDX_R], comps_clr[PX_IDX_R], alpha);
                 comps_bits[PX_IDX_G] = blend_png(comps_bits[PX_IDX_G], comps_clr[PX_IDX_G], alpha);
                 comps_bits[PX_IDX_B] = blend_png(comps_bits[PX_IDX_B], comps_clr[PX_IDX_B], alpha);
                 comps_bits[PX_IDX_A] = 0xFF;
-                ++bits;
-            }
   #else
-    #ifdef HAS_NEON_BLEND
-                scanline_col32cb16blend_neon((uint16_t*)bits, &r->color, rendered_w);
-                bits += rendered_w;
-    #else
-            for(x = 0; x < rendered_w; ++x)
-            {
-                *bits = (((31-alpha5b)*(*bits & 0x1F)            + (alpha5b*(*img & 0x1F))) / 31) |
-                        ((((63-alpha6b)*((*bits & 0x7E0) >> 5)   + (alpha6b*((*img & 0x7E0) >> 5))) / 63) << 5) |
-                        ((((31-alpha5b)*((*bits & 0xF800) >> 11) + (alpha5b*((*img & 0xF800) >> 11))) / 31) << 11);
+                *bits = (((31-alpha5b)*(*bits & 0x1F)            + (alpha5b*(color & 0x1F))) / 31) |
+                        ((((63-alpha6b)*((*bits & 0x7E0) >> 5)   + (alpha6b*((color & 0x7E0) >> 5))) / 63) << 5) |
+                        ((((31-alpha5b)*((*bits & 0xF800) >> 11) + (alpha5b*((color & 0xF800) >> 11))) / 31) << 11);
+  #endif // PIXEL_SIZE
                 ++bits;
             }
-    #endif
-  #endif // PIXEL_SIZE
             bits += fb.stride - rendered_w;
 #endif // MR_DISABLE_ALPHA
         }

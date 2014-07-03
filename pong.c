@@ -85,6 +85,12 @@ void pong(void)
     score_val[L] = 0;
     score_val[R] = 0;
 
+    fb_set_background(BLACK);
+
+    fb_text *help = fb_add_text(0, 0, GRAYISH, SIZE_SMALL, "Press power button to go back");
+    help->y = fb_height/2 - help->h*1.5;
+    center_text(help, 0, -1, fb_width, -1);
+
     // middle line
     fb_add_rect(0, fb_height/2 - 1, fb_width, 1, WHITE);
 

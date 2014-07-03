@@ -117,7 +117,7 @@ int button_touch_handler(touch_event *ev, void *data)
 {
     button *b = (button*)data;
 
-    if(b->flags & BTN_DISABLED)
+    if(ev->consumed || b->flags & BTN_DISABLED)
         return -1;
 
     if(b->touch_id == -1 && (ev->changed & TCHNG_ADDED))

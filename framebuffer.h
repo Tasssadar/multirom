@@ -101,7 +101,7 @@ enum
 
 enum
 {
-    SIZE_SMALL     = 6,
+    SIZE_SMALL     = 7,
     SIZE_NORMAL    = 10,
     SIZE_BIG       = 13,
     SIZE_EXTRA     = 15,

@@ -32,18 +32,13 @@ enum
     TCHNG_REMOVED   = 0x08
 };
 
-enum
-{
-    HANDLERS_FIRST  = 0,
-    HANDLERS_ALL    = 1
-};
-
 typedef struct
 {
     int id;
     int x, orig_x;
     int y, orig_y;
     int changed;
+    int consumed;
 
     struct timeval time;
     int64_t us_diff;
@@ -59,7 +54,6 @@ int wait_for_key(void);
 
 void add_touch_handler(touch_callback callback, void *data);
 void rm_touch_handler(touch_callback callback, void *data);
-void set_touch_handlers_mode(int mode);
 
 void input_push_context(void);
 void input_pop_context(void);

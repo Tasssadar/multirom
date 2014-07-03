@@ -88,14 +88,19 @@ static void init_header(multirom_theme_data *t)
     x = fb_width/2 - (maxW*TAB_COUNT)/2;
 
     fb_img *l = fb_add_png_img((20*DPI_MUL), HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, "/realdata/media/multirom/miri.png");
+    if(!l)
+        l = fb_add_png_img((20*DPI_MUL), HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, "/realdata/media/0/multirom/miri.png");
 
-    pong_btn = mzalloc(sizeof(button));
-    pong_btn->x = l->x;
-    pong_btn->y = l->y;
-    pong_btn->w = l->w;
-    pong_btn->h = l->h;
-    pong_btn->clicked = &multirom_ui_start_pong;
-    button_init_ui(pong_btn, NULL, 0);
+    if(l)
+    {
+        pong_btn = mzalloc(sizeof(button));
+        pong_btn->x = l->x;
+        pong_btn->y = l->y;
+        pong_btn->w = l->w;
+        pong_btn->h = l->h;
+        pong_btn->clicked = &multirom_ui_start_pong;
+        button_init_ui(pong_btn, NULL, 0);
+    }
 
     for(i = 0; i < TAB_COUNT; ++i)
     {

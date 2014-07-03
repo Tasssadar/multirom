@@ -56,7 +56,6 @@ static pthread_t input_thread;
 
 static handler_list_it *mt_handlers = NULL;
 static handlers_ctx **inactive_ctx = NULL;
-static int mt_handlers_mode = HANDLERS_FIRST;
 
 #define DIV_ROUND_UP(n,d)  (((n) + (d) - 1) / (d))
 #define BIT(nr)            (1UL << (nr))
@@ -255,11 +254,12 @@ void touch_commit_events(struct timeval ev_time)
         while(it)
         {
             h = it->handler;
-            if((*h->callback)(&mt_events[i], h->data) == 0 && mt_handlers_mode == HANDLERS_FIRST)
-                break;
+            if((*h->callback)(&mt_events[i], h->data) == 0)
+                mt_events[i].consumed = 1;
             it = it->next;
         }
 
+        mt_events[i].consumed = 0;
         mt_events[i].changed = 0;
     }
 }
@@ -339,25 +339,20 @@ void stop_input_thread(void)
 
 void add_touch_handler(touch_callback callback, void *data)
 {
-    touch_handler *handler = malloc(sizeof(touch_handler));
+    touch_handler *handler = mzalloc(sizeof(touch_handler));
     handler->data = data;
     handler->callback = callback;
 
-    handler_list_it *new_it = malloc(sizeof(handler_list_it));
-    memset(new_it, 0, sizeof(handler_list_it));
+    handler_list_it *new_it = mzalloc(sizeof(handler_list_it));
     new_it->handler = handler;
 
     pthread_mutex_lock(&touch_mutex);
 
-    handler_list_it **it = &mt_handlers;
-    while(*it)
-    {
-        if(!(*it)->next)
-            new_it->prev = *it;
-
-        it = &((*it)->next);
-    }
-    *it = new_it;
+    handler_list_it *it = mt_handlers;
+    if(mt_handlers)
+        it->prev = new_it;
+    new_it->next = it;
+    mt_handlers = new_it;
 
     pthread_mutex_unlock(&touch_mutex);
 }
@@ -391,24 +386,13 @@ void rm_touch_handler(touch_callback callback, void *data)
     pthread_mutex_unlock(&touch_mutex);
 }
 
-void set_touch_handlers_mode(int mode)
-{
-    mt_handlers_mode = mode;
-}
-
 void input_push_context(void)
 {
-    handlers_ctx *ctx = malloc(sizeof(handlers_ctx));
-    memset(ctx, 0, sizeof(handlers_ctx));
+    handlers_ctx *ctx = mzalloc(sizeof(handlers_ctx));
 
     pthread_mutex_lock(&touch_mutex);
-
-    ctx->handlers_mode = mt_handlers_mode;
     ctx->handlers = mt_handlers;
-
-    mt_handlers_mode = HANDLERS_FIRST;
     mt_handlers = NULL;
-
     pthread_mutex_unlock(&touch_mutex);
 
     list_add(ctx, &inactive_ctx);
@@ -423,10 +407,7 @@ void input_pop_context(void)
     handlers_ctx *ctx = inactive_ctx[idx];
 
     pthread_mutex_lock(&touch_mutex);
-
-    mt_handlers_mode = ctx->handlers_mode;
     mt_handlers = ctx->handlers;
-
     pthread_mutex_unlock(&touch_mutex);
 
     list_rm_noreorder(ctx, &inactive_ctx, &free);

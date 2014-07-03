@@ -88,7 +88,7 @@ void listview_scroll_to(listview *view, int pct);
 int listview_ensure_visible(listview *view, listview_item *it);
 int listview_ensure_selected_visible(listview *view);
 listview_item *listview_item_at(listview *view, int y_pos);
-inline void listview_select_item(listview *view, listview_item *it);
+inline int listview_select_item(listview *view, listview_item *it);
 void listview_update_keyact_frame(listview *view);
 int listview_keyaction_call(void *data, int act);
 

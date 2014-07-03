@@ -135,11 +135,7 @@ void listview_update_ui(listview *view)
 
         visible = (int)(view->pos <= y+it_h && y-view->pos <= view->h);
 
-        /*if(!visible && (it->flags & IT_VISIBLE))
-        {
-            //(*view->item_hide)(it->data);
-        }
-        else if(visible)*/
+        if(visible || (it->flags & IT_VISIBLE))
             (*view->item_draw)(view->x, view->y+y-view->pos, view->w - PADDING, it);
 
         if(visible)
@@ -222,6 +218,13 @@ int listview_touch_handler(touch_event *ev, void *data)
     {
         if (ev->x < view->x || ev->y < view->y ||
             ev->x > view->x+view->w || ev->y > view->y+view->h)
+        {
+            if(listview_select_item(view, NULL))
+                listview_update_ui(view);
+            return -1;
+        }
+
+        if(ev->consumed)
             return -1;
 
         view->touch.id = ev->id;
@@ -284,8 +287,11 @@ int listview_touch_handler(touch_event *ev, void *data)
     return 0;
 }
 
-void listview_select_item(listview *view, listview_item *it)
+int listview_select_item(listview *view, listview_item *it)
 {
+    if(view->selected == it)
+        return 0;
+
     if(view->item_selected)
         (*view->item_selected)(view->selected, it);
 
@@ -296,6 +302,7 @@ void listview_select_item(listview *view, listview_item *it)
         it->flags |= IT_SELECTED;
 
     view->selected = it;
+    return 1;
 }
 
 void listview_scroll_by(listview *view, int y)
@@ -464,13 +471,12 @@ void listview_update_keyact_frame(listview *view)
     listview_update_ui(view);
 }
 
-#define ROM_ITEM_H (100*DPI_MUL)
-#define ROM_ITEM_SHADOW (5*DPI_MUL)
-#define ROM_BOX_PADDING (5*DPI_MUL)
+#define ROM_ITEM_H (110*DPI_MUL)
+#define ROM_ITEM_SHADOW (7*DPI_MUL)
 #define ROM_ITEM_SEL_W (8*DPI_MUL)
-#define ROM_ICON_PADDING (20*DPI_MUL)
-#define ROM_ICON_H (ROM_ITEM_H-(ROM_ICON_PADDING*2))
+#define ROM_ICON_H (70*DPI_MUL)
 #define ROM_TEXT_PADDING (130*DPI_MUL)
+#define ROM_ICON_PADDING (ROM_TEXT_PADDING/2 - ROM_ICON_H/2)
 
 typedef struct
 {
@@ -501,10 +507,9 @@ void *rom_item_create(const char *text, const char *partition, const char *icon)
     return data;
 }
 
-static void rom_item_deselect_finished(void *it_v)
+static void rom_item_deselect_finished(void *data)
 {
-    listview_item *it = it_v;
-    rom_item_data *d = (rom_item_data*)it->data;
+    rom_item_data *d = data;
 
     fb_rm_rect(d->sel_rect);
     fb_rm_rect(d->sel_rect_sh);
@@ -512,11 +517,9 @@ static void rom_item_deselect_finished(void *it_v)
     d->sel_rect_sh = NULL;
 }
 
-static void rom_item_alpha(void *it_v, float interpolated)
+static void rom_item_alpha(void *data, float interpolated)
 {
-    listview_item *it = it_v;
-    rom_item_data *d = (rom_item_data*)it->data;
-
+    rom_item_data *d = data;
     if(!d->sel_rect || !d->sel_rect_sh)
         return;
 
@@ -531,7 +534,7 @@ static void rom_item_alpha(void *it_v, float interpolated)
 static void rom_item_sel_step(void *data)
 {
     rom_item_data *d = data;
-    if(!d->sel_rect_sh || !d->sel_rect)
+    if(!d->sel_rect || !d->sel_rect_sh)
         return;
 
     d->sel_rect_sh->x = d->sel_rect->x + ROM_ITEM_SHADOW;
@@ -582,7 +585,7 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
             d->sel_rect = fb_add_rect(it->touchX, it->touchY, 1, 1, WHITE & ~(0xFF << 24));
             //d->sel_rect->parent = it->parent_rect;
 
-            call_anim *canim = call_anim_create(it, rom_item_alpha, 300, INTERPOLATOR_ACCEL_DECEL);
+            call_anim *canim = call_anim_create(d, rom_item_alpha, 300, INTERPOLATOR_ACCEL_DECEL);
             call_anim_add(canim);
 
             item_anim *anim = item_anim_create(d->sel_rect, 300, INTERPOLATOR_ACCEL_DECEL);
@@ -618,9 +621,9 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
             anim->on_step_call = rom_item_sel_step;
             item_anim_add_after(anim);
 
-            call_anim *canim = call_anim_create(it, rom_item_alpha, 150, INTERPOLATOR_ACCELERATE);
+            call_anim *canim = call_anim_create(d, rom_item_alpha, 200, INTERPOLATOR_ACCELERATE);
             canim->start_offset = anim->start_offset;
-            canim->on_finished_data = it;
+            canim->on_finished_data = d;
             canim->on_finished_call = rom_item_deselect_finished;
             call_anim_add(canim);
         }

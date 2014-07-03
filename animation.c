@@ -142,7 +142,6 @@ static void item_anim_step(item_anim *anim, float interpolated)
     anim_int_step(&fb_it->y, &anim->start[1], &anim->last[1], &anim->targetY, interpolated);
     anim_int_step(&fb_it->w, &anim->start[2], &anim->last[2], &anim->targetW, interpolated);
     anim_int_step(&fb_it->h, &anim->start[3], &anim->last[3], &anim->targetH, interpolated);
-    fb_request_draw();
 }
 
 static void item_anim_on_start(item_anim *anim)
@@ -181,6 +180,7 @@ static void anim_update(uint32_t diff, void *data)
     struct anim_list_it *it;
     anim_header *anim;
     float normalized, interpolated;
+    int need_draw = 0;
 
     pthread_mutex_lock(&list->mutex);
     list->in_update_loop = 1;
@@ -214,6 +214,7 @@ static void anim_update(uint32_t diff, void *data)
         switch(it->anim_type)
         {
             case ANIM_TYPE_ITEM:
+                need_draw = 1;
                 item_anim_step((item_anim*)anim, interpolated);
                 break;
             case ANIM_TYPE_CALLBACK:
@@ -256,6 +257,9 @@ static void anim_update(uint32_t diff, void *data)
         else
             it = it->next;
     }
+
+    if(need_draw)
+        fb_request_draw();
 
     list->in_update_loop = 0;
     pthread_mutex_unlock(&list->mutex);
