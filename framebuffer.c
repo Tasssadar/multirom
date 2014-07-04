@@ -406,13 +406,13 @@ void fb_batch_end(void)
     pthread_mutex_unlock(&fb_ctx.mutex);
 }
 
-static inline void fb_items_lock(void)
+void fb_items_lock(void)
 {
     if(!fb_ctx.batch_started || !pthread_equal(fb_ctx.batch_thread, pthread_self()))
         pthread_mutex_lock(&fb_ctx.mutex);
 }
 
-static inline void fb_items_unlock(void)
+void fb_items_unlock(void)
 {
     if(!fb_ctx.batch_started || !pthread_equal(fb_ctx.batch_thread, pthread_self()))
         pthread_mutex_unlock(&fb_ctx.mutex);

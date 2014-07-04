@@ -519,6 +519,8 @@ void fb_text_set_color(fb_img *img, uint32_t color)
 
     extras->color = converted_color;
 
+    fb_items_lock();
+
     px_type *itr = img->data;
     if(copy)
     {
@@ -543,6 +545,8 @@ void fb_text_set_color(fb_img *img, uint32_t color)
         itr += 2;
 #endif
     }
+
+    fb_items_unlock();
 }
 
 void fb_text_set_size(fb_img *img, int size)
@@ -552,9 +556,17 @@ void fb_text_set_size(fb_img *img, int size)
     if(size == ex->size)
         return;
 
-    unlink_from_caches(ex);
+    fb_items_lock();
+    if(unlink_from_caches(ex) == 0)
+    {
+        img->w = img->h = 0;
+        free(img->data);
+        img->data = NULL;
+    }
+
     ex->size = size;
     fb_text_render(img);
+    fb_items_unlock();
 }
 
 void fb_text_set_content(fb_img *img, const char *text)
@@ -564,6 +576,7 @@ void fb_text_set_content(fb_img *img, const char *text)
     if(text == ex->text)
         return;
 
+    fb_items_lock();
     if(unlink_from_caches(ex) == 0)
     {
         img->w = img->h = 0;
@@ -574,6 +587,7 @@ void fb_text_set_content(fb_img *img, const char *text)
     ex->text = realloc(ex->text, strlen(text)+1);
     strcpy(ex->text, text);
     fb_text_render(img);
+    fb_items_unlock();
 }
 
 inline void center_text(fb_img *text, int targetX, int targetY, int targetW, int targetH)
