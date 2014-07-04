@@ -934,6 +934,8 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     switch(type)
     {
         case ROM_DEFAULT:
+            rom_quirks_on_android_mounted_fs(to_boot);
+            break;
         case ROM_LINUX_INTERNAL:
         case ROM_LINUX_USB:
             break;
@@ -950,6 +952,8 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
 
                 if(multirom_create_media_link() == -1)
                     return -1;
+
+                rom_quirks_on_android_mounted_fs(to_boot);
             }
 
             if(to_boot->partition)
@@ -1087,8 +1091,6 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
                 return -1;
         }
     }
-
-    rom_quirks_on_android_mounted_fs(rom);
 
     if(has_fw)
     {
@@ -1286,7 +1288,6 @@ int multirom_create_media_link(void)
         chmod(LAYOUT_VERSION, 0600);
     }
 
-    rom_quirks_on_android_media_link_created();
     return 0;
 }
 

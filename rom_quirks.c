@@ -27,22 +27,6 @@
 #include "log.h"
 #include "util.h"
 
-void rom_quirks_on_android_mounted_fs(struct multirom_rom *rom)
-{
-    // CyanogenMod has init script 50selinuxrelabel which calls
-    // restorecon on /data. On secondary ROMs, /system is placed
-    // inside /data/media/ and mount-binded to /system, so restorecon
-    // sets contexts to files in /system as if they were in /data.
-    // This behaviour is there mainly because of old recoveries which
-    // didn't set contexts properly, so it should be safe to remove
-    // that file entirely.
-    if(rom->type != ROM_ANDROID_USB_IMG && access("/system/etc/init.d/50selinuxrelabel", F_OK) >= 0)
-    {
-        INFO("Removing /system/etc/init.d/50selinuxrelabel.\n");
-        remove("/system/etc/init.d/50selinuxrelabel");
-    }
-}
-
 #define MULTIROM_DIR_ANDROID "/data/media/0/multirom"
 
 static void write_changed_restorecons(const char *path, FILE *rc)
@@ -149,8 +133,21 @@ static void workaround_rc_restorecon(const char *rc_file_name)
     free(name_out);
 }
 
-void rom_quirks_on_android_media_link_created(void)
+void rom_quirks_on_android_mounted_fs(struct multirom_rom *rom)
 {
+    // CyanogenMod has init script 50selinuxrelabel which calls
+    // restorecon on /data. On secondary ROMs, /system is placed
+    // inside /data/media/ and mount-binded to /system, so restorecon
+    // sets contexts to files in /system as if they were in /data.
+    // This behaviour is there mainly because of old recoveries which
+    // didn't set contexts properly, so it should be safe to remove
+    // that file entirely.
+    if(rom->type != ROM_ANDROID_USB_IMG && access("/system/etc/init.d/50selinuxrelabel", F_OK) >= 0)
+    {
+        INFO("Removing /system/etc/init.d/50selinuxrelabel.\n");
+        remove("/system/etc/init.d/50selinuxrelabel");
+    }
+
     // The Android L preview (and presumably later releases) have SELinux
     // set to "enforcing" and "restorecon_recursive /data" line in init.rc.
     // Restorecon on /data goes into /data/media/0/multirom/roms/ and changes
