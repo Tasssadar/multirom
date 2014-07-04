@@ -67,7 +67,6 @@ typedef struct
     fb_item_header **ui_items;
     fb_rect *scroll_mark;
     fb_rect *overscroll_marks[2];
-    fb_rect **keyact_frame;
     int keyact_item_selected;
 
     listview_touch_data touch;

@@ -550,25 +550,24 @@ void multirom_ui_tab_rom_boot_btn(int action)
     if(!rom)
         return;
 
-/*
     int m = M(rom->type);
     if(m & MASK_UNSUPPORTED)
     {
-        active_msgbox = fb_create_msgbox(550*DPI_MUL, 360*DPI_MUL, DRED);
+       /* active_msgbox = fb_create_msgbox(550*DPI_MUL, 360*DPI_MUL, DRED);
         fb_msgbox_add_text(-1, 30*DPI_MUL, SIZE_BIG, "Error");
         fb_msgbox_add_text(-1, 90*DPI_MUL, SIZE_NORMAL, "Unsupported ROM type.");
         fb_msgbox_add_text(-1, 180*DPI_MUL, SIZE_NORMAL, "See XDA thread for more info.");
         fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to close");
 
         fb_request_draw();
-        fb_freeze(1);
+        fb_freeze(1);*/
         return;
     }
 
     if (((m & MASK_KEXEC) || ((m & MASK_ANDROID) && rom->has_bootimg)) &&
         multirom_has_kexec() != 0)
     {
-        active_msgbox = fb_create_msgbox(550*DPI_MUL, 360*DPI_MUL, DRED);
+        /*active_msgbox = fb_create_msgbox(550*DPI_MUL, 360*DPI_MUL, DRED);
         fb_msgbox_add_text(-1, 30*DPI_MUL, SIZE_BIG, "Error");
         fb_msgbox_add_text(-1, 90*DPI_MUL, SIZE_NORMAL, "Kexec-hardboot support");
         fb_msgbox_add_text(-1, 125*DPI_MUL, SIZE_NORMAL, "required to boot this ROM.");
@@ -577,20 +576,20 @@ void multirom_ui_tab_rom_boot_btn(int action)
         fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to close");
 
         fb_request_draw();
-        fb_freeze(1);
+        fb_freeze(1);*/
         return;
     }
 
     if((m & MASK_KEXEC) && strchr(rom->name, ' '))
     {
-        active_msgbox = fb_create_msgbox(550*DPI_MUL, 360*DPI_MUL, DRED);
+        /*active_msgbox = fb_create_msgbox(550*DPI_MUL, 360*DPI_MUL, DRED);
         fb_msgbox_add_text(-1, 30*DPI_MUL, SIZE_BIG, "Error");
         fb_msgbox_add_text(-1, 90*DPI_MUL, SIZE_NORMAL, "ROM's name contains spaces");
         fb_msgbox_add_text(-1, 180*DPI_MUL, SIZE_NORMAL, "Remove spaces from ROM's name");
         fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to close");
 
         fb_request_draw();
-        fb_freeze(1);
+        fb_freeze(1);*/
         return;
     }
 
@@ -598,7 +597,6 @@ void multirom_ui_tab_rom_boot_btn(int action)
     selected_rom = rom;
     exit_ui_code = UI_EXIT_BOOT_ROM;
     pthread_mutex_unlock(&exit_code_mutex);
-    */
 }
 
 void multirom_ui_tab_rom_update_usb(void *data)

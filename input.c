@@ -429,7 +429,6 @@ struct keyaction_ctx
     uint32_t repeat_timer;
     int repeat;
     int enable;
-    int (*destroy_msgbox)(void);
 };
 
 static struct keyaction_ctx keyaction_ctx = {
@@ -439,11 +438,10 @@ static struct keyaction_ctx keyaction_ctx = {
     .lock = PTHREAD_MUTEX_INITIALIZER,
     .repeat = KEYACT_NONE,
     .enable = 0,
-    .destroy_msgbox = NULL,
 };
 
 #define REPEAT_TIME_FIRST 500
-#define REPEAT_TIME 100
+#define REPEAT_TIME 150
 
 static int compare_keyactions(const void* k1, const void* k2)
 {
@@ -599,9 +597,6 @@ int keyaction_handle_keyevent(int key, int press)
 
     res = 0;
 
-    if(press == 1 && keyaction_ctx.destroy_msgbox() == 1)
-        goto exit;
-
     if(keyaction_ctx.repeat == act && press == 0)
         keyaction_ctx.repeat = KEYACT_NONE;
     else if(keyaction_ctx.repeat == KEYACT_NONE && press == 1)
@@ -641,12 +636,5 @@ void keyaction_enable(int enable)
         else
             workers_remove(&keyaction_repeat_worker, &keyaction_ctx);
     }
-    pthread_mutex_unlock(&keyaction_ctx.lock);
-}
-
-void keyaction_set_destroy_msgbox_handle(int (*handler)(void))
-{
-    pthread_mutex_lock(&keyaction_ctx.lock);
-    keyaction_ctx.destroy_msgbox = handler;
     pthread_mutex_unlock(&keyaction_ctx.lock);
 }

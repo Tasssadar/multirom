@@ -77,6 +77,5 @@ void keyaction_remove(keyaction_call call, void *data);
 void keyaction_clear(void);
 int keyaction_handle_keyevent(int key, int press);
 void keyaction_enable(int enable);
-void keyaction_set_destroy_msgbox_handle(int (*handler)(void));
 
 #endif

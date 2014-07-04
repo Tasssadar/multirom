@@ -99,7 +99,7 @@ void listview_destroy(listview *view)
 
 listview_item *listview_add_item(listview *view, int id, void *data)
 {
-    listview_item *it = malloc(sizeof(listview_item));
+    listview_item *it = mzalloc(sizeof(listview_item));
     it->id = id;
     it->data = data;
     it->flags = 0;
@@ -277,7 +277,13 @@ int listview_touch_handler(touch_event *ev, void *data)
     {
         if(view->touch.hover)
         {
-            listview_select_item(view, view->touch.hover);
+            if(view->selected == view->touch.hover)
+            {
+                if(view->item_confirmed)
+                    view->item_confirmed(view->selected);
+            }
+            else
+                listview_select_item(view, view->touch.hover);
             view->touch.hover->flags &= ~(IT_HOVER);
         }
         view->touch.id = -1;
@@ -413,9 +419,13 @@ int listview_keyaction_call(void *data, int act)
         }
         case KEYACT_CLEAR:
         {
-            v->keyact_item_selected = -1;
-            listview_update_keyact_frame(v);
-            fb_request_draw();
+            if(v->keyact_item_selected != -1)
+            {
+                v->keyact_item_selected = -1;
+                listview_select_item(v, NULL);
+                listview_update_ui(v);
+                fb_request_draw();
+            }
             return 0;
         }
         case KEYACT_CONFIRM:
@@ -431,19 +441,15 @@ int listview_keyaction_call(void *data, int act)
 
 void listview_update_keyact_frame(listview *view)
 {
-    if(view->keyact_item_selected == -1 && view->keyact_frame)
+    if(view->keyact_item_selected == -1)
     {
-        list_clear(&view->keyact_frame, &fb_remove_item);
+        if(view->selected)
+        {
+            listview_select_item(view, NULL);
+            listview_update_ui(view);
+        }
         return;
     }
-    else if(view->keyact_item_selected != -1 && !view->keyact_frame)
-    {
-        fb_add_rect_notfilled(view->x, 0, view->w-PADDING, 0,
-                              KEYACT_FRAME_CLR, KEYACT_FRAME_W,
-                              &view->keyact_frame);
-    }
-    else if(view->keyact_item_selected == -1 && !view->keyact_frame)
-        return;
 
     listview_item *it = view->items[view->keyact_item_selected];
     listview_ensure_visible(view, it);
@@ -455,17 +461,6 @@ void listview_update_keyact_frame(listview *view)
 
     int h = view->item_height(view->items[i]);
     y -= view->pos;
-
-    // top
-    view->keyact_frame[0]->y = y;
-    // right
-    view->keyact_frame[1]->y = y;
-    view->keyact_frame[1]->h = h;
-    // bottom
-    view->keyact_frame[2]->y = y+h-KEYACT_FRAME_W;
-    // left
-    view->keyact_frame[3]->y = y;
-    view->keyact_frame[3]->h = h;
 
     listview_select_item(view, it);
     listview_update_ui(view);
@@ -580,10 +575,18 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
     {
         if(!d->sel_rect)
         {
-            d->sel_rect_sh = fb_add_rect(it->touchX+ROM_ITEM_SHADOW, it->touchY+ROM_ITEM_SHADOW, 1, 1, GRAYISH & ~(0xFF << 24));
-            //d->sel_rect_sh->parent = it->parent_rect;
-            d->sel_rect = fb_add_rect(it->touchX, it->touchY, 1, 1, WHITE & ~(0xFF << 24));
-            //d->sel_rect->parent = it->parent_rect;
+            int baseX = it->touchX;
+            int baseY = it->touchY;
+            if(!baseX && !baseY)
+            {
+                baseX = x + w/2;
+                baseY = y + item_h/2;
+            }
+
+            d->sel_rect_sh = fb_add_rect(baseX+ROM_ITEM_SHADOW, baseY+ROM_ITEM_SHADOW, 1, 1, GRAYISH & ~(0xFF << 24));
+            d->sel_rect_sh->parent = it->parent_rect;
+            d->sel_rect = fb_add_rect(baseX, baseY, 1, 1, WHITE & ~(0xFF << 24));
+            d->sel_rect->parent = it->parent_rect;
 
             call_anim *canim = call_anim_create(d, rom_item_alpha, 300, INTERPOLATOR_ACCEL_DECEL);
             call_anim_add(canim);
@@ -613,15 +616,23 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
             d->deselect_anim_started = 1;
 
             item_anim *anim = item_anim_create(d->sel_rect, 150, INTERPOLATOR_ACCELERATE);
-            anim->targetX = it->touchX;
-            anim->targetY = it->touchY;
+            if(it->touchX || it->touchY)
+            {
+                anim->targetX = it->touchX;
+                anim->targetY = it->touchY;
+            }
+            else
+            {
+                anim->targetX = x + w/2;
+                anim->targetY = y + item_h/2;
+            }
             anim->targetW = 0;
             anim->targetH = 0;
             anim->on_step_data = d;
             anim->on_step_call = rom_item_sel_step;
             item_anim_add_after(anim);
 
-            call_anim *canim = call_anim_create(d, rom_item_alpha, 200, INTERPOLATOR_ACCELERATE);
+            call_anim *canim = call_anim_create(d, rom_item_alpha, 150, INTERPOLATOR_ACCELERATE);
             canim->start_offset = anim->start_offset;
             canim->cancel_check_data = d->sel_rect;
             canim->cancel_check = anim_item_cancel_check;
