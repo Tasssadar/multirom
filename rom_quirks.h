@@ -20,6 +20,5 @@
 struct multirom_rom;
 
 void rom_quirks_on_android_mounted_fs(struct multirom_rom *rom);
-void rom_quirks_on_android_media_link_created(void);
 
 #endif
