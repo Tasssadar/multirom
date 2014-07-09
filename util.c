@@ -599,3 +599,17 @@ void *mzalloc(size_t size)
     memset(res, 0, size);
     return res;
 }
+
+char *strtoupper(const char *str)
+{
+    int i;
+    const int len = strlen(str);
+    char *res = malloc(len + 1);
+    for(i = 0; i < len; ++i)
+    {
+        res[i] = str[i];
+        if(str[i] >= 'a' && str[i] <= 'z')
+            res[i] -= 'a'-'A';
+    }
+    return res;
+}

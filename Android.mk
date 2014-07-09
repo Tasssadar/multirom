@@ -31,7 +31,8 @@ LOCAL_SRC_FILES:= \
     framebuffer_generic.c \
     framebuffer_png.c \
     framebuffer_truetype.c \
-    animation.c
+    animation.c \
+    notification_card.c
 
 #    themes/multirom_ui_landscape.c \
 

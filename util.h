@@ -47,6 +47,8 @@ void emergency_remount_ro(void);
 inline int imin(int a, int b);
 inline int imax(int a, int b);
 inline int in_rect(int x, int y, int rx, int ry, int rw, int rh);
+
 inline void *mzalloc(size_t size); // alloc and fill with 0s
+char *strtoupper(const char *str);
 
 #endif

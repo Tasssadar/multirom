@@ -25,6 +25,7 @@
 #include "../input.h"
 #include "../log.h"
 #include "../animation.h"
+#include "../notification_card.h"
 
 #define HEADER_HEIGHT (110*DPI_MUL)
 #define STATUS_HEIGHT (33*DPI_MUL)
@@ -71,16 +72,20 @@ static void init_header(multirom_theme_data *t)
     static const char *str[] = { "Internal", "USB", "Misc", "MultiROM" };
 
     // header background
-    fb_add_rect(0, 0, fb_width, HEADER_HEIGHT, CLR_PRIMARY);
+    fb_add_rect_lvl(100, 0, 0, fb_width, HEADER_HEIGHT, CLR_PRIMARY);
     //fb_add_rect(0, HEADER_HEIGHT, fb_width, (2*DPI_MUL), 0xFF7F07BC);
 
     //fb_text *title = fb_add_text(0, 0, WHITE, SIZE_NORMAL, str[3]);
     //center_text(title, 0, 0, x, STATUS_HEIGHT);
 
+    ncard_set_top_offset(HEADER_HEIGHT);
+
     int maxW = 0;
     for(i = 0; i < TAB_COUNT; ++i)
     {
-        tab_texts[i] = fb_add_text(0, 0, WHITE, SIZE_BIG, str[i]);
+        fb_text_proto *p = fb_text_create(0, 0, WHITE, SIZE_BIG, str[i]);
+        p->level = 101;
+        tab_texts[i] = fb_text_finalize(p);
         maxW = imax(maxW, tab_texts[i]->w);
     }
 

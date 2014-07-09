@@ -26,6 +26,7 @@
 #include "workers.h"
 #include "input.h"
 #include "animation.h"
+#include "notification_card.h"
 
 #define MARK_W (10*DPI_MUL)
 #define MARK_H (50*DPI_MUL)
@@ -297,6 +298,28 @@ int listview_select_item(listview *view, listview_item *it)
 {
     if(view->selected == it)
         return 0;
+
+    if(it)
+    {
+        ncard_builder *b = ncard_create_builder();
+        ncard_set_text(b, "Tap again to boot the system");
+        fb_item_pos p;
+        int y = 0, i;
+        for(i = 0; view->items && view->items[i]; ++i)
+        {
+            if(view->items[i] == it)
+                break;
+            y += view->item_height(view->items[i]);
+        }
+        p.y = view->y + y - view->pos;
+        p.h = view->item_height(view->items[i]);
+        ncard_avoid_item(b, &p);
+        ncard_show(b, 1);
+    }
+    else if(!it)
+    {
+        ncard_hide();
+    }
 
     if(view->item_selected)
         (*view->item_selected)(view->selected, it);
