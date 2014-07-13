@@ -36,10 +36,9 @@ LOCAL_SRC_FILES:= \
 
 #    themes/multirom_ui_landscape.c \
 
-ifeq ($(ARCH_ARM_HAVE_NEON),true)
-    LOCAL_SRC_FILES += col32cb16blend_neon.S
-    LOCAL_CFLAGS += -DHAS_NEON_BLEND
-endif
+# With these, GCC optimizes aggressively enough so full-screen alpha blending
+# is quick enough to be done in an animation
+LOCAL_CFLAGS += -O3 -funsafe-math-optimizations
 
 #LOCAL_CFLAGS += -D_FORTIFY_SOURCE=2 -fstack-protector-all -O0 -g -fno-omit-frame-pointer -Wall
 

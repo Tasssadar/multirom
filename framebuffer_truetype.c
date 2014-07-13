@@ -45,6 +45,7 @@ static const char *FONT_FILES[STYLE_COUNT] = {
     "Roboto-Regular.ttf",     // STYLE_NORMAL
     "Roboto-Italic.ttf",      // STYLE_ITALIC
     "Roboto-Bold.ttf",        // STYLE_BOLD
+    "Roboto-Medium.ttf",      // STYLE_MEDIUM
     "OxygenMono-Regular.ttf", // STYLE_MONOSPACE
 };
 

@@ -59,7 +59,8 @@ typedef struct
 
     void (*item_draw)(int, int, int, listview_item *); // x, y, w, item
     void (*item_hide)(void*); // data
-    int (*item_height)(listview_item *); // data, item
+    int (*item_height)(listview_item *); // item
+
     void (*item_destroy)(listview_item *);
     void (*item_selected)(listview_item *, listview_item *); // prev, now
     void (*item_confirmed)(listview_item *); // item - confirmed by keyaction

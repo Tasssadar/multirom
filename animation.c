@@ -224,7 +224,7 @@ static void anim_update(uint32_t diff, void *data)
         if(anim->on_step_call)
         {
             pthread_mutex_unlock(&list->mutex);
-            anim->on_step_call(anim->on_step_data);
+            anim->on_step_call(anim->on_step_data, interpolated);
             pthread_mutex_lock(&list->mutex);
         }
 

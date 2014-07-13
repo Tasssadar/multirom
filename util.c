@@ -611,5 +611,6 @@ char *strtoupper(const char *str)
         if(str[i] >= 'a' && str[i] <= 'z')
             res[i] -= 'a'-'A';
     }
+    res[i] = 0;
     return res;
 }

@@ -44,9 +44,6 @@
 #define fb_memset(dst, what, len) android_memset32(dst, what, len)
 #else
 #define fb_memset(dst, what, len) android_memset16(dst, what, len)
-  #ifdef HAS_NEON_BLEND
-extern void scanline_col32cb16blend_neon(uint16_t *dst, uint32_t *col, size_t ct);
-  #endif
 #endif
 
 
@@ -538,22 +535,28 @@ void fb_destroy_item(void *item)
     free(item);
 }
 
-static inline int blend_png(int value1, int value2, int alpha) {
-    int r = (0xFF-alpha)*value1 + alpha*value2;
-    return (r+1 + (r >> 8)) >> 8; // divide by 255
-}
-
 void fb_draw_rect(fb_rect *r)
 {
     const uint8_t alpha = (r->color >> 24) & 0xFF;
+    const uint8_t inv_alpha = 0xFF - ((r->color >> 24) & 0xFF);
     const px_type color = fb_convert_color(r->color);
 
     if(alpha == 0)
         return;
 
-#if PIXEL_SIZE == 2
-    const uint8_t alpha5b = alpha >> 3;
-    const uint8_t alpha6b = alpha >> 2;
+#ifdef RECOVERY_RGBX
+    const uint32_t premult_color_rb = ((color & 0xFF00FF) * (alpha)) >> 8;
+    const uint32_t premult_color_g = ((color & 0x00FF00) * (alpha)) >> 8;
+#elif defined(RECOVERY_BGRA)
+    const uint32_t premult_color_rb = (((color >> 8) & 0xFF00FF) * (alpha)) >> 8;
+    const uint32_t premult_color_g = (((color >> 8) & 0x00FF00) * (alpha)) >> 8;
+#elif defined(RECOVERY_RGB_565)
+    const uint8_t alpha5b = (alpha >> 3) + 1;
+    const uint8_t alpha6b = (alpha >> 2) + 1;
+    const uint8_t inv_alpha5b = 32 - alpha5b;
+    const uint8_t inv_alpha6b = 64 - alpha6b;
+    const uint16_t premult_color_rb = ((color & 0xF81F) * alpha5b) >> 5;
+    const uint16_t premult_color_g = ((color & 0x7E0) * alpha6b) >> 6;
 #endif
 
     const int min_x = r->x >= r->parent->x ? 0 : r->parent->x - r->x;
@@ -585,23 +588,32 @@ void fb_draw_rect(fb_rect *r)
 #else
             for(x = 0; x < rendered_w; ++x)
             {
-  #if PIXEL_SIZE == 4
-                comps_bits = (uint8_t*)bits;
-                comps_bits[PX_IDX_R] = blend_png(comps_bits[PX_IDX_R], comps_clr[PX_IDX_R], alpha);
-                comps_bits[PX_IDX_G] = blend_png(comps_bits[PX_IDX_G], comps_clr[PX_IDX_G], alpha);
-                comps_bits[PX_IDX_B] = blend_png(comps_bits[PX_IDX_B], comps_clr[PX_IDX_B], alpha);
-                comps_bits[PX_IDX_A] = 0xFF;
+  #ifdef RECOVERY_RGBX
+                const uint32_t rb = (premult_color_rb & 0xFF00FF) + ((inv_alpha * (*bits & 0xFF00FF)) >> 8);
+                const uint32_t g = (premult_color_g & 0x00FF00) + ((inv_alpha * (*bits & 0x00FF00)) >> 8);
+                *bits = 0xFF000000 | (rb & 0xFF00FF) | (g & 0x00FF00);
+  #elif defined(RECOVERY_BGRA)
+                const uint32_t rb = (premult_color_rb & 0xFF00FF) + ((inv_alpha * ((*bits >> 8) & 0xFF00FF)) >> 8);
+                const uint32_t g = (premult_color_g & 0x00FF00) + ((inv_alpha * ((*bits >> 8) & 0x00FF00)) >> 8);
+                *bits = 0xFF000000 | (rb & 0xFF00FF) | (g & 0x00FF00);
+  #elif defined(RECOVERY_RGB_565)
+                const uint16_t rb = (premult_color_rb & 0xF81F) + ((inv_alpha5b * (*bits & 0xF81F)) >> 5);
+                const uint16_t g = (premult_color_g & 0x7E0) + ((inv_alpha6b * (*bits & 0x7E0)) >> 6);
+                *bits = (rb & 0xF81F) | (g & 0x7E0);
   #else
-                *bits = (((31-alpha5b)*(*bits & 0x1F)            + (alpha5b*(color & 0x1F))) / 31) |
-                        ((((63-alpha6b)*((*bits & 0x7E0) >> 5)   + (alpha6b*((color & 0x7E0) >> 5))) / 63) << 5) |
-                        ((((31-alpha5b)*((*bits & 0xF800) >> 11) + (alpha5b*((color & 0xF800) >> 11))) / 31) << 11);
-  #endif // PIXEL_SIZE
+    #error "No alpha blending implementation for this format!"
+  #endif
                 ++bits;
             }
             bits += fb.stride - rendered_w;
 #endif // MR_DISABLE_ALPHA
         }
     }
+}
+
+static inline int blend_png(int value1, int value2, int alpha) {
+    int r = (0xFF-alpha)*value1 + alpha*value2;
+    return (r+1 + (r >> 8)) >> 8; // divide by 255
 }
 
 void fb_draw_img(fb_img *i)

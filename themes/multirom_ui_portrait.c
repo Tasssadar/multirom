@@ -134,7 +134,7 @@ static void header_select(multirom_theme_data *t, int tab)
 
     int dest_x = t->tab_btns[tab]->x;
     if(!t->selected_tab_rect)
-        t->selected_tab_rect = fb_add_rect(dest_x, HEADER_HEIGHT-SELECTED_RECT_H, TAB_BTN_WIDTH, SELECTED_RECT_H, WHITE);
+        t->selected_tab_rect = fb_add_rect_lvl(101, dest_x, HEADER_HEIGHT-SELECTED_RECT_H, TAB_BTN_WIDTH, SELECTED_RECT_H, WHITE);
     else
     {
         anim_cancel_for(t->selected_tab_rect, 0);

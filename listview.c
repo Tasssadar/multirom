@@ -299,28 +299,6 @@ int listview_select_item(listview *view, listview_item *it)
     if(view->selected == it)
         return 0;
 
-    if(it)
-    {
-        ncard_builder *b = ncard_create_builder();
-        ncard_set_text(b, "Tap again to boot the system");
-        fb_item_pos p;
-        int y = 0, i;
-        for(i = 0; view->items && view->items[i]; ++i)
-        {
-            if(view->items[i] == it)
-                break;
-            y += view->item_height(view->items[i]);
-        }
-        p.y = view->y + y - view->pos;
-        p.h = view->item_height(view->items[i]);
-        ncard_avoid_item(b, &p);
-        ncard_show(b, 1);
-    }
-    else if(!it)
-    {
-        ncard_hide();
-    }
-
     if(view->item_selected)
         (*view->item_selected)(view->selected, it);
 
@@ -549,7 +527,7 @@ static void rom_item_alpha(void *data, float interpolated)
     d->sel_rect_sh->color = (d->sel_rect_sh->color & ~(0xFF << 24)) | alpha;
 }
 
-static void rom_item_sel_step(void *data)
+static void rom_item_sel_step(void *data, float interpolated)
 {
     rom_item_data *d = data;
     if(!d->sel_rect || !d->sel_rect_sh)
@@ -559,6 +537,78 @@ static void rom_item_sel_step(void *data)
     d->sel_rect_sh->y = d->sel_rect->y + ROM_ITEM_SHADOW;
     d->sel_rect_sh->w = d->sel_rect->w;
     d->sel_rect_sh->h = d->sel_rect->h;
+}
+
+static void rom_item_select(int x, int y, int w, int item_h, listview_item *it, rom_item_data *d)
+{
+    int baseX = it->touchX;
+    int baseY = it->touchY;
+    if(!baseX && !baseY)
+    {
+        baseX = x + w/2;
+        baseY = y + item_h/2;
+    }
+
+    d->deselect_anim_started = 0;
+
+    d->sel_rect_sh = fb_add_rect(baseX+ROM_ITEM_SHADOW, baseY+ROM_ITEM_SHADOW, 1, 1, GRAYISH & ~(0xFF << 24));
+    d->sel_rect_sh->parent = it->parent_rect;
+    d->sel_rect = fb_add_rect(baseX, baseY, 1, 1, WHITE & ~(0xFF << 24));
+    d->sel_rect->parent = it->parent_rect;
+
+    call_anim *canim = call_anim_create(d, rom_item_alpha, 300, INTERPOLATOR_ACCEL_DECEL);
+    call_anim_add(canim);
+
+    item_anim *anim = item_anim_create(d->sel_rect, 300, INTERPOLATOR_ACCEL_DECEL);
+    anim->start_offset = 0;
+    anim->targetX = x;
+    anim->targetY = y;
+    anim->targetW = w;
+    anim->targetH = item_h;
+    anim->on_step_data = d;
+    anim->on_step_call = rom_item_sel_step;
+    item_anim_add(anim);
+
+    ncard_builder *b = ncard_create_builder();
+    ncard_set_text(b, "Tap again to boot the system");
+    fb_item_pos p;
+    p.y = y;
+    p.h = item_h;
+    ncard_avoid_item(b, &p);
+    ncard_show(b, 1);
+}
+
+static void rom_item_deselect(int x, int y, int w, int item_h, listview_item *it, rom_item_data *d)
+{
+    d->deselect_anim_started = 1;
+
+    if(!((listview*)it->parent_rect)->selected)
+        ncard_hide();
+
+    item_anim *anim = item_anim_create(d->sel_rect, 150, INTERPOLATOR_ACCELERATE);
+    if(it->touchX || it->touchY)
+    {
+        anim->targetX = it->touchX;
+        anim->targetY = it->touchY;
+    }
+    else
+    {
+        anim->targetX = x + w/2;
+        anim->targetY = y + item_h/2;
+    }
+    anim->targetW = 0;
+    anim->targetH = 0;
+    anim->on_step_data = d;
+    anim->on_step_call = rom_item_sel_step;
+    item_anim_add_after(anim);
+
+    call_anim *canim = call_anim_create(d, rom_item_alpha, 150, INTERPOLATOR_ACCELERATE);
+    canim->start_offset = anim->start_offset;
+    canim->cancel_check_data = d->sel_rect;
+    canim->cancel_check = anim_item_cancel_check;
+    canim->on_finished_data = d;
+    canim->on_finished_call = rom_item_deselect_finished;
+    call_anim_add(canim);
 }
 
 void rom_item_draw(int x, int y, int w, listview_item *it)
@@ -598,33 +648,7 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
     {
         if(!d->sel_rect)
         {
-            int baseX = it->touchX;
-            int baseY = it->touchY;
-            if(!baseX && !baseY)
-            {
-                baseX = x + w/2;
-                baseY = y + item_h/2;
-            }
-
-            d->sel_rect_sh = fb_add_rect(baseX+ROM_ITEM_SHADOW, baseY+ROM_ITEM_SHADOW, 1, 1, GRAYISH & ~(0xFF << 24));
-            d->sel_rect_sh->parent = it->parent_rect;
-            d->sel_rect = fb_add_rect(baseX, baseY, 1, 1, WHITE & ~(0xFF << 24));
-            d->sel_rect->parent = it->parent_rect;
-
-            call_anim *canim = call_anim_create(d, rom_item_alpha, 300, INTERPOLATOR_ACCEL_DECEL);
-            call_anim_add(canim);
-
-            item_anim *anim = item_anim_create(d->sel_rect, 300, INTERPOLATOR_ACCEL_DECEL);
-            anim->start_offset = 0;
-            anim->targetX = x;
-            anim->targetY = y;
-            anim->targetW = w;
-            anim->targetH = item_h;
-            anim->on_step_data = d;
-            anim->on_step_call = rom_item_sel_step;
-            item_anim_add(anim);
-
-            d->deselect_anim_started = 0;
+            rom_item_select(x, y, w, item_h, it, d);
         }
         else
         {
@@ -636,32 +660,7 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
     {
         if(!d->deselect_anim_started)
         {
-            d->deselect_anim_started = 1;
-
-            item_anim *anim = item_anim_create(d->sel_rect, 150, INTERPOLATOR_ACCELERATE);
-            if(it->touchX || it->touchY)
-            {
-                anim->targetX = it->touchX;
-                anim->targetY = it->touchY;
-            }
-            else
-            {
-                anim->targetX = x + w/2;
-                anim->targetY = y + item_h/2;
-            }
-            anim->targetW = 0;
-            anim->targetH = 0;
-            anim->on_step_data = d;
-            anim->on_step_call = rom_item_sel_step;
-            item_anim_add_after(anim);
-
-            call_anim *canim = call_anim_create(d, rom_item_alpha, 150, INTERPOLATOR_ACCELERATE);
-            canim->start_offset = anim->start_offset;
-            canim->cancel_check_data = d->sel_rect;
-            canim->cancel_check = anim_item_cancel_check;
-            canim->on_finished_data = d;
-            canim->on_finished_call = rom_item_deselect_finished;
-            call_anim_add(canim);
+            rom_item_deselect(x, y, w, item_h, it, d);
         }
         else
         {

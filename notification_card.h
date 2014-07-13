@@ -32,7 +32,8 @@ enum
 {
     NCARD_POS_AUTO,
     NCARD_POS_TOP,
-    NCARD_POS_BOTTOM
+    NCARD_POS_BOTTOM,
+    NCARD_POS_CENTER,
 };
 
 typedef void (*ncard_btn_callback)(void*);

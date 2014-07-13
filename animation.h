@@ -34,6 +34,7 @@ enum
 };
 
 typedef void (*animation_callback)(void*); // data
+typedef void (*animation_callback_step)(void*, float); // data, interpolated
 typedef int (*animation_cancel_check)(void*, void*); // data, item
 
 #define ANIM_HEADER \
@@ -44,7 +45,7 @@ typedef int (*animation_cancel_check)(void*, void*); // data, item
     void *on_finished_data; \
     animation_callback on_finished_call; \
     void *on_step_data; \
-    animation_callback on_step_call; \
+    animation_callback_step on_step_call; \
     void *cancel_check_data; \
     animation_cancel_check cancel_check;
 
