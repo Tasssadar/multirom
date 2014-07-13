@@ -38,6 +38,7 @@ typedef void (*animation_callback_step)(void*, float); // data, interpolated
 typedef int (*animation_cancel_check)(void*, void*); // data, item
 
 #define ANIM_HEADER \
+    uint32_t id; \
     uint32_t start_offset; \
     uint32_t duration; \
     uint32_t elapsed; \
@@ -79,6 +80,7 @@ typedef struct
 
 void anim_init(void);
 void anim_stop(void);
+void anim_cancel(uint32_t id, int only_not_started);
 void anim_cancel_for(void *fb_item, int only_not_started);
 void anim_push_context(void);
 void anim_pop_context(void);

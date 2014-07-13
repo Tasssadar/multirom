@@ -808,8 +808,9 @@ static void fb_draw(void)
     uint32_t i;
     fb_item_header *it;
 
-    pthread_mutex_lock(&fb_ctx.mutex);
     fb_fill(fb_ctx.background_color);
+
+    pthread_mutex_lock(&fb_ctx.mutex);
     for(it = fb_ctx.first_item; it; it = it->next)
     {
         switch(it->type)

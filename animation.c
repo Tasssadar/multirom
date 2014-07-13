@@ -264,6 +264,12 @@ static void anim_update(uint32_t diff, void *data)
     pthread_mutex_unlock(&list->mutex);
 }
 
+static uint32_t anim_generate_id(void)
+{
+    static uint32_t id = 0;
+    return id++;
+}
+
 void anim_init(void)
 {
     if(anim_list.running)
@@ -283,6 +289,29 @@ void anim_stop(void)
 
     pthread_mutex_lock(&anim_list.mutex);
     anim_list_clear();
+    pthread_mutex_unlock(&anim_list.mutex);
+}
+
+void anim_cancel(uint32_t id, int only_not_started)
+{
+    if(!anim_list.running)
+        return;
+
+    struct anim_list_it *it;
+
+    pthread_mutex_lock(&anim_list.mutex);
+    for(it = anim_list.first; it; )
+    {
+        if(it->anim->id == id && (!only_not_started || it->anim->start_offset == 0))
+        {
+            anim_list_rm(it);
+            free(it->anim);
+            free(it);
+            break;
+        }
+        else
+            it = it->next;
+    }
     pthread_mutex_unlock(&anim_list.mutex);
 }
 
@@ -370,6 +399,7 @@ int anim_item_cancel_check(void *item_my, void *item_destroyed)
 item_anim *item_anim_create(void *fb_item, int duration, int interpolator)
 {
     item_anim *anim = mzalloc(sizeof(item_anim));
+    anim->id = anim_generate_id();
     anim->item = fb_item;
     anim->duration = duration;
     anim->interpolator = interpolator;
@@ -412,6 +442,7 @@ void item_anim_add_after(item_anim *anim)
 call_anim *call_anim_create(void *data, call_anim_callback callback, int duration, int interpolator)
 {
     call_anim *anim = mzalloc(sizeof(call_anim));
+    anim->id = anim_generate_id();
     anim->data = data;
     anim->callback = callback;
     anim->duration = duration;

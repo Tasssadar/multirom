@@ -32,7 +32,6 @@
 #include "containers.h"
 #include "multirom.h"
 
-#define FONT_FILE "Roboto-Regular.ttf"
 #define LINE_SPACING 1.1
 
 #if 0
