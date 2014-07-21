@@ -16,8 +16,10 @@
  */
 
 #include <unistd.h>
+
 #include "progressdots.h"
 #include "multirom_ui.h"
+#include "multirom_ui_themes.h"
 #include "workers.h"
 #include "util.h"
 #include "animation.h"
@@ -43,7 +45,7 @@ progdots *progdots_create(int x, int y)
     p->x = x;
     p->y = y;
 
-    p->rect = fb_add_rect(x, y, PROGDOTS_H*4, PROGDOTS_H, CLR_PRIMARY);
+    p->rect = fb_add_rect(x, y, PROGDOTS_H*4, PROGDOTS_H, C_HIGHLIGHT_BG);
     item_anim *a = item_anim_create(p->rect, 1000, INTERPOLATOR_ACCEL_DECEL);
     a->targetX = x + PROGDOTS_W - p->rect->w;
     a->on_finished_call = progdots_anim_finished;

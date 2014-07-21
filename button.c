@@ -21,6 +21,7 @@
 #include "input.h"
 #include "util.h"
 #include "multirom_ui.h"
+#include "multirom_ui_themes.h"
 #include "log.h"
 
 void button_init_ui(button *b, const char *text, int size)
@@ -29,14 +30,14 @@ void button_init_ui(button *b, const char *text, int size)
 
     if(text != NULL)
     {
-        b->c[CLR_NORMAL][0] = CLR_PRIMARY;
-        b->c[CLR_NORMAL][1] = WHITE;
-        b->c[CLR_HOVER][0] = CLR_SECONDARY;
-        b->c[CLR_HOVER][1] = WHITE;
+        b->c[CLR_NORMAL][0] = C_HIGHLIGHT_BG;
+        b->c[CLR_NORMAL][1] = C_HIGHLIGHT_TEXT;
+        b->c[CLR_HOVER][0] = C_HIGHLIGHT_HOVER;
+        b->c[CLR_HOVER][1] = C_HIGHLIGHT_TEXT;
         b->c[CLR_DIS][0] = GRAY;
         b->c[CLR_DIS][1] = WHITE;
-        b->c[CLR_CHECK][0] = CLR_SECONDARY;
-        b->c[CLR_CHECK][1] = WHITE;
+        b->c[CLR_CHECK][0] = C_HIGHLIGHT_BG;
+        b->c[CLR_CHECK][1] = C_HIGHLIGHT_TEXT;
 
         b->rect = fb_add_rect(b->x, b->y, b->w, b->h, b->c[CLR_NORMAL][0]);
         b->text = fb_add_text(0, 0, b->c[CLR_NORMAL][1], size, text);

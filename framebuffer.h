@@ -90,14 +90,14 @@ enum
     FB_IMPL_CNT
 };
 
-// Colors, 0xAABBGGRR
+// Colors, 0xAARRGGBB
 #define BLACK     0xFF000000
 #define WHITE     0xFFFFFFFF
-#define LBLUE     0xFFCC9900
-#define LBLUE2    0xFFF4DFA8
+#define LBLUE     0xFF0099CC
+#define LBLUE2    0xFFA8DFF4
 #define GRAYISH   0xFFBEBEBE
 #define GRAY      0xFF7F7F7F
-#define DRED      0xFF0000CC
+#define DRED      0xFFCC0000
 
 enum
 {

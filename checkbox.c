@@ -21,6 +21,7 @@
 #include "input.h"
 #include "util.h"
 #include "multirom_ui.h"
+#include "multirom_ui_themes.h"
 
 #define BORDER_SIZE (2*DPI_MUL)
 #define BORDER_PADDING (2*DPI_MUL)
@@ -103,7 +104,7 @@ void checkbox_select(checkbox *c, int select)
     if(select)
     {
         c->selected = fb_add_rect(c->x + SELECTED_PADDING, c->y + SELECTED_PADDING,
-                                  SELECTED_SIZE, SELECTED_SIZE, CLR_PRIMARY);
+                                  SELECTED_SIZE, SELECTED_SIZE, C_HIGHLIGHT_BG);
     }
     else
     {
@@ -122,7 +123,7 @@ int checkbox_touch_handler(touch_event *ev, void *data)
             return -1;
 
         box->touch_id = ev->id;
-        box->hover = fb_add_rect(box->x-TOUCH, box->y-TOUCH, CHECKBOX_SIZE+TOUCH*2, CHECKBOX_SIZE+TOUCH*2, CLR_SECONDARY);
+        box->hover = fb_add_rect(box->x-TOUCH, box->y-TOUCH, CHECKBOX_SIZE+TOUCH*2, CHECKBOX_SIZE+TOUCH*2, C_HIGHLIGHT_HOVER);
         fb_request_draw();
     }
 

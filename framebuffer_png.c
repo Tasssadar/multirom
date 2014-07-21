@@ -187,12 +187,13 @@ static px_type *load_png(const char *path, int destW, int destH)
             if(channels == 4)
             {
                 src_pix = ((uint32_t*)row_buff)[i];
+                src_pix = (src_pix & 0xFF00FF00) | ((src_pix & 0xFF0000) >> 16) | ((src_pix & 0xFF) << 16);
             }
             else //if(channels == 3) - no other option
             {
-                src_pix = row_buff[si++];          // R
+                src_pix = (row_buff[si++] << 16);  // R
                 src_pix |= (row_buff[si++] << 8);  // G
-                src_pix |= (row_buff[si++] << 16); // B
+                src_pix |= (row_buff[si++]);       // B
                 src_pix |= 0xFF000000;             // A
             }
 

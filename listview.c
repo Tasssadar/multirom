@@ -23,6 +23,7 @@
 #include "log.h"
 #include "checkbox.h"
 #include "multirom_ui.h"
+#include "multirom_ui_themes.h"
 #include "workers.h"
 #include "input.h"
 #include "animation.h"
@@ -170,10 +171,10 @@ void listview_enable_scroll(listview *view, int enable)
         view->scroll_mark = fb_add_rect(x, view->y, MARK_W, MARK_H, GRAY);
         view->scroll_mark->parent = (fb_item_pos*)view;
 
-        view->overscroll_marks[0] = fb_add_rect(view->x, view->y, 0, OVERSCROLL_MARK_H, CLR_SECONDARY);
+        view->overscroll_marks[0] = fb_add_rect(view->x, view->y, 0, OVERSCROLL_MARK_H, C_HIGHLIGHT_BG);
         view->overscroll_marks[0]->parent = (fb_item_pos*)view;
         view->overscroll_marks[1] = fb_add_rect(view->x, view->y+view->h-OVERSCROLL_MARK_H,
-                                                0, OVERSCROLL_MARK_H, CLR_SECONDARY);
+                                                0, OVERSCROLL_MARK_H, C_HIGHLIGHT_BG);
         view->overscroll_marks[1]->parent = (fb_item_pos*)view;
         workers_add(listview_bounceback, view);
     }
@@ -554,9 +555,9 @@ static void rom_item_select(int x, int y, int w, int item_h, listview_item *it, 
 
     d->deselect_anim_started = 0;
 
-    d->sel_rect_sh = fb_add_rect(baseX+ROM_ITEM_SHADOW, baseY+ROM_ITEM_SHADOW, 1, 1, GRAYISH & ~(0xFF << 24));
+    d->sel_rect_sh = fb_add_rect(baseX+ROM_ITEM_SHADOW, baseY+ROM_ITEM_SHADOW, 1, 1, C_ROM_HIGHLIGHT_SHADOW & ~(0xFF << 24));
     d->sel_rect_sh->parent = it->parent_rect;
-    d->sel_rect = fb_add_rect(baseX, baseY, 1, 1, WHITE & ~(0xFF << 24));
+    d->sel_rect = fb_add_rect(baseX, baseY, 1, 1, C_ROM_HIGHLIGHT & ~(0xFF << 24));
     d->sel_rect->parent = it->parent_rect;
 
     call_anim *canim = call_anim_create(d, rom_item_alpha, 300, INTERPOLATOR_ACCEL_DECEL);
@@ -620,7 +621,7 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
     const int item_h = rom_item_height(it);
     if(!d->text_it)
     {
-        d->text_it = fb_add_text(x+ROM_TEXT_PADDING, 0, BLACK, d->rom_name_size, d->text);
+        d->text_it = fb_add_text(x+ROM_TEXT_PADDING, 0, C_TEXT, d->rom_name_size, d->text);
         d->text_it->parent = it->parent_rect;
 
         while(d->text_it->w + ROM_TEXT_PADDING >= w && d->rom_name_size > 3)
@@ -634,7 +635,7 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
 
         if(d->partition)
         {
-            d->part_it = fb_add_text(x+ROM_TEXT_PADDING, 0, GRAY, SIZE_SMALL, d->partition);
+            d->part_it = fb_add_text(x+ROM_TEXT_PADDING, 0, C_TEXT_SECONDARY, SIZE_SMALL, d->partition);
             d->part_it->parent = it->parent_rect;
         }
     }

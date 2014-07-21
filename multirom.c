@@ -507,7 +507,7 @@ int multirom_load_status(struct multirom_status *s)
             s->auto_boot_type = atoi(arg);
         else if(strstr(name, "curr_rom_part"))
             s->curr_rom_part = strdup(arg);
-        else if(strstr(name, "colors"))
+        else if(strstr(name, "colors_v2"))
             s->colors = atoi(arg);
         else if(strstr(name, "brightness"))
             s->brightness = atoi(arg);
@@ -607,7 +607,7 @@ int multirom_save_status(struct multirom_status *s)
     fprintf(f, "auto_boot_rom=%s\n", auto_boot_name);
     fprintf(f, "auto_boot_type=%d\n", s->auto_boot_type);
     fprintf(f, "curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "");
-    fprintf(f, "colors=%d\n", s->colors);
+    fprintf(f, "colors_v2=%d\n", s->colors);
     fprintf(f, "brightness=%d\n", s->brightness);
     fprintf(f, "enable_adb=%d\n", s->enable_adb);
     fprintf(f, "hide_internal=%d\n", s->hide_internal);
@@ -639,7 +639,7 @@ void multirom_dump_status(struct multirom_status *s)
     INFO("Dumping multirom status:\n");
     INFO("  is_second_boot=%d\n", s->is_second_boot);
     INFO("  current_rom=%s\n", s->current_rom ? s->current_rom->name : "NULL");
-    INFO("  colors=%d\n", s->colors);
+    INFO("  colors_v2=%d\n", s->colors);
     INFO("  brightness=%d\n", s->brightness);
     INFO("  enable_adb=%d\n", s->enable_adb);
     INFO("  rotation=%d\n", s->rotation);

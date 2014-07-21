@@ -373,13 +373,13 @@ void fb_fill(uint32_t color)
 px_type fb_convert_color(uint32_t c)
 {
 #ifdef RECOVERY_BGRA
-    //             A              R                    G                  B
-    return (c & 0xFF000000) | ((c & 0xFF) << 16) | (c & 0xFF00) | ((c & 0xFF0000) >> 16);
-#elif defined(RECOVERY_RGBX)
     return c;
+#elif defined(RECOVERY_RGBX)
+    //             A              B                   G                  R
+    return (c & 0xFF000000) | ((c & 0xFF) << 16) | (c & 0xFF00) | ((c & 0xFF0000) >> 16);
 #elif defined(RECOVERY_RGB_565)
     //            R                                G                              B
-    return (((c & 0xFF) >> 3) << 11) | (((c & 0xFF00) >> 10) << 5) | ((c & 0xFF0000) >> 19);
+    return (((c & 0xFF0000) >> 19) << 11) | (((c & 0xFF00) >> 10) << 5) | ((c & 0xFF) >> 3);
 #else
 #error "Unknown pixel format"
 #endif

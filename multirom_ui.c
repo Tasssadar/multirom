@@ -110,7 +110,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     last_selected_int_rom = -1;
     last_int_listview_pos = -1;
 
-    multirom_ui_setup_colors(s->colors, &CLR_PRIMARY, &CLR_SECONDARY);
+    multirom_ui_select_color(s->colors);
     themes_info = multirom_ui_init_themes();
     if((cur_theme = multirom_ui_select_theme(themes_info, fb_width, fb_height)) == NULL)
     {
@@ -132,9 +132,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     workers_start();
     anim_init();
 
-    multirom_ui_init_header();
-    multirom_ui_switch(TAB_INTERNAL);
-    fb_set_background(0xFFDCDCDC);
+    multirom_ui_init_theme();
 
     add_touch_handler(&multirom_ui_touch_handler, NULL);
     start_input_thread();
@@ -194,14 +192,10 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
         {
             fb_freeze(1);
 
-            multirom_ui_setup_colors(s->colors, &CLR_PRIMARY, &CLR_SECONDARY);
-
-            // force redraw tab
-            int tab = themes_info->data->selected_tab;
-            themes_info->data->selected_tab = -1;
-
-            multirom_ui_destroy_tab(tab);
-            multirom_ui_switch(tab);
+            multirom_ui_destroy_theme();
+            multirom_ui_select_color(s->colors);
+            multirom_ui_init_theme();
+            multirom_ui_switch(TAB_MISC);
 
             fb_freeze(0);
             fb_request_draw();
@@ -250,8 +244,33 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     ncard_show(b, 1);
     anim_stop(1);
+    workers_stop();
+    stop_input_thread();
     fb_freeze(1);
 
+    multirom_ui_destroy_theme();
+    multirom_ui_free_themes(themes_info);
+    themes_info = NULL;
+    
+#if MR_DEVICE_HOOKS >= 2
+    mrom_hook_before_fb_close();
+#endif
+    fb_close();
+    return exit_ui_code;
+}
+
+void multirom_ui_init_theme(void)
+{
+    memset(themes_info->data, 0, sizeof(multirom_theme_data));
+    themes_info->data->selected_tab = -1;
+
+    multirom_ui_init_header();
+    multirom_ui_switch(TAB_INTERNAL);
+    fb_set_background(C_BACKGROUND);
+}
+
+void multirom_ui_destroy_theme(void)
+{
     cur_theme->destroy(themes_info->data);
 
     int i;
@@ -261,40 +280,9 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
         themes_info->data->tab_btns[i] = NULL;
     }
 
-    stop_input_thread();
-
     multirom_ui_destroy_tab(themes_info->data->selected_tab);
-    multirom_ui_free_themes(themes_info);
-    themes_info = NULL;
-
-    workers_stop();
 
     fb_clear();
-#if MR_DEVICE_HOOKS >= 2
-    mrom_hook_before_fb_close();
-#endif
-    fb_close();
-    return exit_ui_code;
-}
-
-
-void multirom_ui_setup_colors(int clr, uint32_t *primary, uint32_t *secondary)
-{
-    static const int clrs[][2] = {
-        // Primary,   Secondary - OxAAGGBBRR
-        { 0xFF2F2FF7, 0xFF2F2FF7 }, // CLRS_BLUE
-        { 0xFFCC66AA, 0xFFCC89B6 }, // CLRS_PURPLE
-        { 0xFF00BD8A, 0xFF51F2C9 }, // CLRS_GREEN
-        { 0xFF008AFF, 0xFF51AEFF }, // CLRS_ORANGE
-        { 0xFF0000CC, 0xFF6363FF }, // CLRS_RED
-        { 0xFF2F5EB8, 0xFF689CFF }, // CLRS_BROWN
-    };
-
-    if(clr < 0 || clr >= (int)ARRAY_SIZE(clrs))
-        clr = 0;
-
-    *primary = clrs[clr][0];
-    *secondary = clrs[clr][1];
 }
 
 void multirom_ui_init_header(void)
@@ -564,11 +552,6 @@ void multirom_ui_tab_rom_selected(listview_item *prev, listview_item *now)
     if(!rom || !themes_info->data->tab_data)
         return;
 
-    tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data;
-    cur_theme->set_rom_name(t, rom->name);
-
-    fb_request_draw();
-
     if(M(rom->type) & MASK_INTERNAL)
         last_selected_int_rom = now->id;
 }
@@ -662,7 +645,7 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
 
     if(empty && !t->usb_text)
     {
-        fb_text_proto *p = fb_text_create(0, 0, BLACK, SIZE_NORMAL, "This list is refreshed automagically, just plug in the USB drive and wait.");
+        fb_text_proto *p = fb_text_create(0, 0, C_TEXT, SIZE_NORMAL, "This list is refreshed automagically, just plug in the USB drive and wait.");
         p->wrap_w = t->list->w - 100*DPI_MUL;
         p->justify = JUSTIFY_CENTER;
         t->usb_text = fb_text_finalize(p);

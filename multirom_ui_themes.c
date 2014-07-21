@@ -26,7 +26,6 @@ multirom_themes_info *multirom_ui_init_themes(void)
     multirom_themes_info *i = mzalloc(sizeof(multirom_themes_info));
 
     i->data = mzalloc(sizeof(multirom_theme_data));
-    i->data->selected_tab = -1;
 
 #define ADD_THEME(RES) \
     extern struct multirom_theme theme_info_ ## RES; \
@@ -67,4 +66,74 @@ multirom_theme *multirom_ui_select_theme(multirom_themes_info *i, int w, int h)
         INFO("Using universal theme (%d)\n", uni_type);
 
     return universal;
+}
+
+
+static const struct multirom_color_theme color_themes[] = {
+    // 0 - red/white, default
+    {
+        .background = 0xFFDCDCDC,
+        .highlight_bg = 0xFFF72F2F,
+        .highlight_hover = 0xFFF85555,
+        .highlight_text = 0xFFFFFFFF,
+        .text = 0xFF000000,
+        .text_secondary = 0xFF4D4D4D,
+        .ncard_bg = 0xFF37474F,
+        .ncard_text = 0xFFFFFFFF,
+        .ncard_text_secondary = 0xFFE6E6E6,
+        .ncard_shadow = 0xFFBEBEBE,
+        .rom_highlight = 0xFFFFFFFF,
+        .rom_highlight_shadow = 0xFFBEBEBE,
+    },
+    // 1 - blue/white
+    {
+        .background = 0xFFDCDCDC,
+        .highlight_bg = 0xFF2F87F7,
+        .highlight_hover = 0xFF7BB3FA,
+        .highlight_text = 0xFFFFFFFF,
+        .text = 0xFF000000,
+        .text_secondary = 0xFF4D4D4D,
+        .ncard_bg = 0xFF37474F,
+        .ncard_text = 0xFFFFFFFF,
+        .ncard_text_secondary = 0xFFE6E6E6,
+        .ncard_shadow = 0xFFBEBEBE,
+        .rom_highlight = 0xFFFFFFFF,
+        .rom_highlight_shadow = 0xFFBEBEBE,
+    },
+    // 1 - green/white
+    {
+        .background = 0xFFDCDCDC,
+        .highlight_bg = 0xFF259B24,
+        .highlight_hover = 0xFF72D572,
+        .highlight_text = 0xFFFFFFFF,
+        .text = 0xFF000000,
+        .text_secondary = 0xFF4D4D4D,
+        .ncard_bg = 0xFF37474F,
+        .ncard_text = 0xFFFFFFFF,
+        .ncard_text_secondary = 0xFFE6E6E6,
+        .ncard_shadow = 0xFFBEBEBE,
+        .rom_highlight = 0xFFFFFFFF,
+        .rom_highlight_shadow = 0xFFBEBEBE,
+    },
+};
+
+const struct multirom_color_theme *color_theme = &color_themes[0];
+
+void multirom_ui_select_color(size_t color_theme_idx)
+{
+    if(color_theme_idx >= ARRAY_SIZE(color_themes))
+        return;
+    color_theme = &color_themes[color_theme_idx];
+}
+
+const struct multirom_color_theme *multirom_ui_get_color_theme(size_t color_theme_idx)
+{
+    if(color_theme_idx >= ARRAY_SIZE(color_themes))
+        return NULL;
+    return &color_themes[color_theme_idx];
+}
+
+int multirom_ui_get_color_theme_count(void)
+{
+    return ARRAY_SIZE(color_themes);
 }

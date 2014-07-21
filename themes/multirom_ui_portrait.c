@@ -50,13 +50,14 @@
 
 #define SELECTED_RECT_H (10*DPI_MUL)
 
-#define COLOR_HIGHLIGHT 0xFF2F2FF7
-
 static button *pong_btn = NULL;
 static void destroy(multirom_theme_data *t)
 {
-    button_destroy(pong_btn);
-    pong_btn = NULL;
+    if(pong_btn)
+    {
+        button_destroy(pong_btn);
+        pong_btn = NULL;
+    }
 }
 
 static void init_header(multirom_theme_data *t)
@@ -71,13 +72,13 @@ static void init_header(multirom_theme_data *t)
 
     static const char *str[] = { "Internal", "USB", "Misc", "MultiROM" };
 
-    fb_add_rect_lvl(100, 0, 0, fb_width, HEADER_HEIGHT, CLR_PRIMARY);
+    fb_add_rect_lvl(100, 0, 0, fb_width, HEADER_HEIGHT, C_HIGHLIGHT_BG);
     ncard_set_top_offset(HEADER_HEIGHT);
 
     int maxW = 0;
     for(i = 0; i < TAB_COUNT; ++i)
     {
-        fb_text_proto *p = fb_text_create(0, 0, WHITE, SIZE_BIG, str[i]);
+        fb_text_proto *p = fb_text_create(0, 0, C_HIGHLIGHT_TEXT, SIZE_BIG, str[i]);
         p->level = 101;
         tab_texts[i] = fb_text_finalize(p);
         maxW = imax(maxW, tab_texts[i]->w);
@@ -86,9 +87,10 @@ static void init_header(multirom_theme_data *t)
     maxW += (30*DPI_MUL);
     x = fb_width/2 - (maxW*TAB_COUNT)/2;
 
-    fb_img *l = fb_add_png_img_lvl(101, (20*DPI_MUL), HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, "/realdata/media/multirom/miri.png");
+    fb_img *l = NULL;
+    /*l = fb_add_png_img_lvl(101, (20*DPI_MUL), HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, "/realdata/media/multirom/miri.png");
     if(!l)
-        l = fb_add_png_img_lvl(101, (20*DPI_MUL), HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, "/realdata/media/0/multirom/miri.png");
+        l = fb_add_png_img_lvl(101, (20*DPI_MUL), HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, "/realdata/media/0/multirom/miri.png");*/
 
     if(l)
     {
@@ -128,7 +130,7 @@ static void header_select(multirom_theme_data *t, int tab)
 
     int dest_x = t->tab_btns[tab]->x;
     if(!t->selected_tab_rect)
-        t->selected_tab_rect = fb_add_rect_lvl(101, dest_x, HEADER_HEIGHT-SELECTED_RECT_H, TAB_BTN_WIDTH, SELECTED_RECT_H, WHITE);
+        t->selected_tab_rect = fb_add_rect_lvl(101, dest_x, HEADER_HEIGHT-SELECTED_RECT_H, TAB_BTN_WIDTH, SELECTED_RECT_H, C_HIGHLIGHT_TEXT);
     else
     {
         anim_cancel_for(t->selected_tab_rect, 0);
@@ -195,30 +197,30 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
             y += 50*DPI_MUL;
     }
 
-    fb_text *text = fb_add_text(0, 0, WHITE, SIZE_SMALL, "MultiROM v%d"VERSION_DEV_FIX" with trampoline v%d.",
+    fb_text *text = fb_add_text(0, 0, C_TEXT_SECONDARY, SIZE_SMALL, "MultiROM v%d"VERSION_DEV_FIX" with trampoline v%d.",
                                VERSION_MULTIROM, multirom_get_trampoline_ver());
     text->y = fb_height - text->h;
     list_add(text, &d->ui_elements);
 
-    text = fb_add_text(0, 0, WHITE, SIZE_SMALL, "Battery: %d%%", multirom_get_battery());
+    text = fb_add_text(0, 0, C_TEXT_SECONDARY, SIZE_SMALL, "Battery: %d%%", multirom_get_battery());
     text->x = fb_width - text->w;
     text->y = fb_height - text->h;
     list_add(text, &d->ui_elements);
 
-    x = fb_width/2 - (CLRS_MAX*CLRBTN_TOTAL)/2;
-    uint32_t p, s;
+    const int max_colors = multirom_ui_get_color_theme_count();
+    x = fb_width/2 - (max_colors*CLRBTN_TOTAL)/2;
     fb_rect *r;
-    for(i = 0; i < CLRS_MAX; ++i)
+    for(i = 0; i < max_colors; ++i)
     {
-        multirom_ui_setup_colors(i, &p, &s);
+        const struct multirom_color_theme *th = multirom_ui_get_color_theme(i);
 
         if(i == color_scheme)
         {
-            r = fb_add_rect(x, CLRBTN_Y, CLRBTN_TOTAL, CLRBTN_TOTAL, WHITE);
+            r = fb_add_rect(x, CLRBTN_Y, CLRBTN_TOTAL, CLRBTN_TOTAL, C_TEXT_SECONDARY);
             list_add(r, &d->ui_elements);
         }
 
-        r = fb_add_rect(x+CLRBTN_B/2, CLRBTN_Y+CLRBTN_B/2, CLRBTN_W, CLRBTN_W, p);
+        r = fb_add_rect(x+CLRBTN_B/2, CLRBTN_Y+CLRBTN_B/2, CLRBTN_W, CLRBTN_W, th->highlight_bg);
         list_add(r, &d->ui_elements);
 
         b = mzalloc(sizeof(button));
@@ -248,11 +250,6 @@ static int get_tab_height(multirom_theme_data *t)
     return fb_height - HEADER_HEIGHT;
 }
 
-static void set_rom_name(tab_data_roms *d, const char *name)
-{
-
-}
-
 const struct multirom_theme theme_info_portrait = {
     .width = TH_PORTRAIT,
     .height = TH_PORTRAIT,
@@ -264,5 +261,4 @@ const struct multirom_theme theme_info_portrait = {
     .tab_misc_init = &tab_misc_init,
     .get_tab_width = &get_tab_width,
     .get_tab_height = &get_tab_height,
-    .set_rom_name = &set_rom_name
 };
