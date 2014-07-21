@@ -91,6 +91,11 @@ void ncard_set_on_hidden(ncard_builder *b, ncard_callback callback, void *data)
     b->on_hidden_data = data;
 }
 
+void ncard_set_from_black(ncard_builder *b, int from_black)
+{
+    b->reveal_from_black = from_black;
+}
+
 static int ncard_calc_pos(ncard_builder* b, int max_y)
 {
     if(b->pos == NCARD_POS_AUTO)
@@ -131,6 +136,7 @@ struct ncard
     int cancelable;
     ncard_callback on_hidden_call;
     void *on_hidden_data;
+    int reveal_from_black;
 } ncard = {
     .bg = NULL,
     .shadow = NULL,
@@ -144,6 +150,7 @@ struct ncard
     .cancelable = 0,
     .on_hidden_call = NULL,
     .on_hidden_data = NULL,
+    .reveal_from_black = 0,
 };
 
 static int ncard_touch_handler(touch_event *ev, void *data)
@@ -214,7 +221,11 @@ static void ncard_move_step(void *data, float interpolated)
             interpolated = 1.f;
         if(c->hiding)
             interpolated = 1.f - interpolated;
-        c->alpha_bg->color = (c->alpha_bg->color & ~(0xFF << 24)) | (((int)(0xCC*interpolated)) << 24);
+
+        if(!c->hiding && c->reveal_from_black)
+            c->alpha_bg->color = (c->alpha_bg->color & ~(0xFF << 24)) | ((0xFF - (int)(0x33*interpolated)) << 24);
+        else
+            c->alpha_bg->color = (c->alpha_bg->color & ~(0xFF << 24)) | (((int)(0xCC*interpolated)) << 24);
     }
 }
 
@@ -328,7 +339,10 @@ void ncard_show(ncard_builder *b, int destroy_builder)
     if(ncard.pos != NCARD_POS_CENTER)
         ncard.targetH *= 1.3;
     else if(!ncard.alpha_bg)
-        ncard.alpha_bg = fb_add_rect_lvl(LEVEL_NCARD_SHADOW + lvl_offset - 1, 0, 0, fb_width, fb_height, 0x00000000);
+    {
+        ncard.alpha_bg = fb_add_rect_lvl(LEVEL_NCARD_SHADOW + lvl_offset - 1, 0, 0, fb_width, fb_height,
+                b->reveal_from_black ? BLACK : 0x00000000);
+    }
 
     if(items_h >= ncard.bg->h)
     {
@@ -377,6 +391,7 @@ void ncard_show(ncard_builder *b, int destroy_builder)
     ncard.cancelable = b->cancelable;
     ncard.on_hidden_call = b->on_hidden_call;
     ncard.on_hidden_data = b->on_hidden_data;
+    ncard.reveal_from_black = b->reveal_from_black;
 
     item_anim *a = item_anim_create(ncard.bg, 400, interpolator);
     switch(ncard.pos)

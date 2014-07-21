@@ -84,6 +84,15 @@ static int impl_open(struct framebuffer *fb)
     fb->vi.vmode = FB_VMODE_NONINTERLACED;
     fb->vi.activate = FB_ACTIVATE_NOW | FB_ACTIVATE_FORCE;
 
+    // mmap and memset to 0 before setting the vi to prevent screen flickering during init
+    px_type *mapped = mmap(0, fb->fi.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fb->fd, 0);
+
+    if (mapped == MAP_FAILED)
+        return -1;
+
+    memset(mapped, 0, fb->fi.smem_len);
+    munmap(mapped, fb->fi.smem_len);
+
     if (ioctl(fb->fd, FBIOPUT_VSCREENINFO, &fb->vi) < 0)
     {
         ERROR("failed to set fb0 vi info");
@@ -93,7 +102,7 @@ static int impl_open(struct framebuffer *fb)
     if (ioctl(fb->fd, FBIOGET_FSCREENINFO, &fb->fi) < 0)
         return -1;
 
-    px_type *mapped = mmap(0, fb->fi.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fb->fd, 0);
+    mapped = mmap(0, fb->fi.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fb->fd, 0);
 
     if (mapped == MAP_FAILED)
         return -1;

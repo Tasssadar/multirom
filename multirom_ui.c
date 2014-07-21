@@ -88,6 +88,14 @@ static void list_block(char *path, int rec)
     closedir(d);
 }
 
+static void reveal_rect_alpha_step(void *data, float interpolated)
+{
+    fb_rect *r = data;
+    interpolated = 1.f - interpolated;
+    r->color = (r->color & ~(0xFF << 24)) | (((int)(0xFF*interpolated)) << 24);
+    fb_request_draw();
+}
+
 int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 {
     if(multirom_init_fb(s->rotation) < 0)
@@ -135,10 +143,19 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     multirom_set_brightness(s->brightness);
 
     fb_freeze(0);
-    fb_force_draw();
 
     if(s->auto_boot_rom && s->auto_boot_seconds > 0)
         multirom_ui_auto_boot();
+    else
+    {
+        fb_rect *r = fb_add_rect_lvl(1000, 0, 0, fb_width, fb_height, BLACK);
+        call_anim *a = call_anim_create(r, reveal_rect_alpha_step, 500, INTERPOLATOR_ACCELERATE);
+        a->on_finished_call = fb_remove_item;
+        a->on_finished_data = r;
+        call_anim_add(a);
+    }
+
+    fb_request_draw();
 
     while(1)
     {
@@ -432,7 +449,7 @@ static void multirom_ui_auto_boot_tick(void *data)
     }
     else
     {
-        snprintf(buff, sizeof(buff), "Booting in %d second%s.", d->seconds, d->seconds != 1 ? "s" : "");
+        snprintf(buff, sizeof(buff), "ROM: %s\n\nBooting in %d second%s.", mrom_status->auto_boot_rom->name, d->seconds, d->seconds != 1 ? "s" : "");
         ncard_set_text(d->b, buff);
         ncard_show(d->b, 0);
 
@@ -454,10 +471,11 @@ void multirom_ui_auto_boot(void)
 
     ncard_set_pos(b, NCARD_POS_CENTER);
     ncard_set_cancelable(b, 1);
-    ncard_set_title(b, mrom_status->auto_boot_rom->name);
+    ncard_set_title(b, "Auto-boot");
     ncard_add_btn(b, BTN_NEGATIVE, "Cancel", ncard_hide_callback, NULL);
     ncard_add_btn(b, BTN_POSITIVE, "Boot now", multirom_ui_auto_boot_now, d);
     ncard_set_on_hidden(b, multirom_ui_auto_boot_hidden, d);
+    ncard_set_from_black(b, 1);
 
     multirom_ui_auto_boot_tick(d);
 }

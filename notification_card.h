@@ -55,6 +55,7 @@ typedef struct
     int cancelable;
     ncard_callback on_hidden_call;
     void *on_hidden_data;
+    int reveal_from_black;
 } ncard_builder;
 
 ncard_builder *ncard_create_builder(void);
@@ -65,6 +66,7 @@ void ncard_set_cancelable(ncard_builder *b, int cancelable);
 void ncard_avoid_item(ncard_builder *b, void *item);
 void ncard_add_btn(ncard_builder *b, int btn_type, const char *text, ncard_callback callback, void *callback_data);
 void ncard_set_on_hidden(ncard_builder *b, ncard_callback callback, void *data);
+void ncard_set_from_black(ncard_builder *b, int from_black);
 
 void ncard_set_top_offset(int offset);
 void ncard_show(ncard_builder *b, int destroy_builder);
