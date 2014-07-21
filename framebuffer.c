@@ -737,13 +737,13 @@ void fb_add_rect_notfilled(int x, int y, int w, int h, uint32_t color, int thick
     list_add(r, list);
 }
 
-fb_img *fb_add_img(int x, int y, int w, int h, int img_type, px_type *data)
+fb_img *fb_add_img(int level, int x, int y, int w, int h, int img_type, px_type *data)
 {
     fb_img *result = mzalloc(sizeof(fb_img));
     result->id = fb_generate_item_id();
     result->type = FB_IT_IMG;
     result->parent = &DEFAULT_FB_PARENT;
-    result->level = LEVEL_PNG;
+    result->level = level;
     result->x = x;
     result->y = y;
     result->img_type = img_type;
@@ -755,13 +755,13 @@ fb_img *fb_add_img(int x, int y, int w, int h, int img_type, px_type *data)
     return result;
 }
 
-fb_img* fb_add_png_img(int x, int y, int w, int h, const char *path)
+fb_img* fb_add_png_img_lvl(int level, int x, int y, int w, int h, const char *path)
 {
     px_type *data = fb_png_get(path, w, h);
     if(!data)
         return NULL;
 
-    return fb_add_img(x, y, w, h, FB_IMG_TYPE_PNG, data);
+    return fb_add_img(level, x, y, w, h, FB_IMG_TYPE_PNG, data);
 }
 
 void fb_rm_rect(fb_rect *r)

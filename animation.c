@@ -279,10 +279,22 @@ void anim_init(void)
     workers_add(&anim_update, &anim_list);
 }
 
-void anim_stop(void)
+void anim_stop(int wait_for_finished)
 {
     if(!anim_list.running)
         return;
+
+    while(wait_for_finished)
+    {
+        pthread_mutex_lock(&anim_list.mutex);
+        if(!anim_list.first)
+        {
+            pthread_mutex_unlock(&anim_list.mutex);
+            break;
+        }
+        pthread_mutex_unlock(&anim_list.mutex);
+        usleep(10000);
+    }
 
     anim_list.running = 0;
     workers_remove(&anim_update, &anim_list);

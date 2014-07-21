@@ -115,8 +115,10 @@ listview_item *listview_add_item(listview *view, int id, void *data)
 
 void listview_clear(listview *view)
 {
+    if(listview_select_item(view, NULL))
+        listview_update_ui(view);
+
     list_clear(&view->items, view->item_destroy);
-    view->selected = NULL;
 
     keyaction_remove(listview_keyaction_call, view);
 }
@@ -240,8 +242,9 @@ int listview_touch_handler(touch_event *ev, void *data)
             view->touch.hover->flags |= IT_HOVER;
             view->touch.hover->touchX = ev->x;
             view->touch.hover->touchY = ev->y;
-            listview_update_ui(view);
         }
+        else
+            listview_select_item(view, NULL);
         listview_keyaction_call(view, KEYACT_CLEAR);
         listview_update_ui(view);
         return 0;
@@ -636,13 +639,16 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
         }
     }
 
-    center_text(d->text_it, -1, y, -1, item_h);
+    if(!d->part_it)
+        center_text(d->text_it, -1, y, -1, item_h);
+    else
+    {
+        d->text_it->y = y + (item_h/2 - (d->text_it->h + d->part_it->h + 4*DPI_MUL)/2);
+        d->part_it->y = d->text_it->y + d->text_it->h + 4*DPI_MUL;
+    }
 
     if(d->icon)
         d->icon->y = y + (item_h/2 - ROM_ICON_H/2);
-
-    if(d->part_it)
-        d->part_it->y = d->text_it->y + d->text_it->h + 2*DPI_MUL;
 
     if(it->flags & IT_SELECTED)
     {

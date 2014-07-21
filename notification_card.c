@@ -24,12 +24,15 @@
 #include "notification_card.h"
 #include "containers.h"
 #include "log.h"
+#include "input.h"
 
 enum
 {
     LEVEL_NCARD_SHADOW = 49,
     LEVEL_NCARD_BG = 50,
-    LEVEL_NCARD_TEXT = 60
+    LEVEL_NCARD_TEXT = 60,
+
+    LEVEL_NCARD_CENTER_OFFSET = 1000,
 };
 
 #define CARD_PADDING_H (40*DPI_MUL)
@@ -58,6 +61,11 @@ void ncard_set_pos(ncard_builder *b, int pos)
     b->pos = pos;
 }
 
+void ncard_set_cancelable(ncard_builder *b, int cancelable)
+{
+    b->cancelable = cancelable;
+}
+
 void ncard_avoid_item(ncard_builder *b, void *item)
 {
     fb_item_pos *it = item;
@@ -68,13 +76,19 @@ void ncard_avoid_item(ncard_builder *b, void *item)
     b->avoid_item->h = it->h;
 }
 
-void ncard_add_btn(ncard_builder *b, int btn_type, const char *text, ncard_btn_callback callback, void *callback_data)
+void ncard_add_btn(ncard_builder *b, int btn_type, const char *text, ncard_callback callback, void *callback_data)
 {
     ncard_builder_btn *btn = mzalloc(sizeof(ncard_builder_btn));
     btn->text = strtoupper(text);
     btn->callback_data = callback_data;
     btn->callback = callback;
     b->buttons[btn_type] = btn;
+}
+
+void ncard_set_on_hidden(ncard_builder *b, ncard_callback callback, void *data)
+{
+    b->on_hidden_call = callback;
+    b->on_hidden_data = data;
 }
 
 static int ncard_calc_pos(ncard_builder* b, int max_y)
@@ -95,7 +109,7 @@ struct ncard_btn
 {
     fb_item_pos pos;
     void *callback_data;
-    ncard_btn_callback callback;
+    ncard_callback callback;
 };
 
 struct ncard
@@ -110,70 +124,113 @@ struct ncard
     int targetH;
     int top_offset;
     int last_y;
+    int hiding;
+    int touch_handler_registered;
+    int touch_id;
+    int hover_btn;
+    int cancelable;
+    ncard_callback on_hidden_call;
+    void *on_hidden_data;
 } ncard = {
     .bg = NULL,
     .shadow = NULL,
     .texts = NULL,
     .active_btns = 0,
-    .top_offset = 0
+    .top_offset = 0,
+    .hiding = 0,
+    .touch_handler_registered = 0,
+    .touch_id = -1,
+    .hover_btn = 0,
+    .cancelable = 0,
+    .on_hidden_call = NULL,
+    .on_hidden_data = NULL,
 };
 
-struct ncard_hide_data
+static int ncard_touch_handler(touch_event *ev, void *data)
 {
-    fb_text **texts;
-    fb_rect *bg;
-    fb_rect *shadow;
-    fb_rect *alpha_bg;
-    int last_y;
-};
+    struct ncard *c = data;
+
+    if(c->touch_id == -1 && (ev->changed & TCHNG_ADDED))
+    {
+        int i;
+        for(i = 0; i < BTN_COUNT; ++i)
+        {
+            if(!(c->active_btns & (1 << i)))
+                continue;
+
+            if(in_rect(ev->x, ev->y, c->btns[i].pos.x, c->btns[i].pos.y, c->btns[i].pos.w, c->btns[i].pos.h))
+            {
+                c->touch_id = ev->id;
+                c->hover_btn = i;
+                break;
+            }
+        }
+    }
+
+    if(c->touch_id != ev->id)
+    {
+        if(c->cancelable)
+        {
+            ncard_hide();
+            return 0;
+        }
+        else
+            return c->pos == NCARD_POS_CENTER ? 0 : -1;
+    }
+
+    if(ev->changed & TCHNG_REMOVED)
+    {
+        struct ncard_btn *b = &c->btns[c->hover_btn];
+        if(b->callback && in_rect(ev->x, ev->y, b->pos.x, b->pos.y, b->pos.w, b->pos.h))
+            b->callback(b->callback_data);
+        c->touch_id = -1;
+    }
+
+    return 0;
+}
 
 static void ncard_move_step(void *data, float interpolated)
 {
     int i;
-    const int diff = ncard.bg->y - ncard.last_y;
-    for(i = 0; ncard.texts && ncard.texts[i]; ++i)
-        ncard.texts[i]->y += diff;
-    ncard.shadow->y += diff;
-    ncard.last_y = ncard.bg->y;
+    struct ncard *c = data;
+    const int diff = c->bg->y - c->last_y;
 
-    if(ncard.alpha_bg && (ncard.alpha_bg->color & (0xFF << 24)) != 0xCC000000)
+    for(i = 0; c->texts && c->texts[i]; ++i)
+        c->texts[i]->y += diff;
+
+    for(i = 0; i < BTN_COUNT; ++i)
+    {
+        if(!(c->active_btns & (1 << i)))
+            continue;
+        c->btns[i].pos.y += diff;
+    }
+
+    c->shadow->y += diff;
+    c->last_y = c->bg->y;
+
+    if(c->alpha_bg && (c->hiding || (c->alpha_bg->color & (0xFF << 24)) != 0xCC000000))
     {
         if(interpolated > 1.f)
             interpolated = 1.f;
-        ncard.alpha_bg->color = (ncard.alpha_bg->color & ~(0xFF << 24)) | (((int)(0xCC*interpolated)) << 24);
+        if(c->hiding)
+            interpolated = 1.f - interpolated;
+        c->alpha_bg->color = (c->alpha_bg->color & ~(0xFF << 24)) | (((int)(0xCC*interpolated)) << 24);
     }
 }
 
 static void ncard_reveal_finished(void *data)
 {
     ncard.bg->h = ncard.targetH;
-}
-
-static void ncard_hide_step(void *data, float interpolated)
-{
-    struct ncard_hide_data *d = data;   
-    int i;
-    const int diff = d->bg->y - d->last_y;
-    for(i = 0; d->texts && d->texts[i]; ++i)
-        d->texts[i]->y += diff;
-    d->shadow->y += diff;
-    d->last_y = d->bg->y;
-    if(d->alpha_bg)
-    {
-        if(interpolated > 1)
-            interpolated = 1;
-        interpolated = 1 - interpolated;
-        d->alpha_bg->color = (d->alpha_bg->color & ~(0xFF << 24)) | (((int)(0xCC*interpolated)) << 24);
-    }
+    ncard.shadow->h = ncard.targetH;
 }
 
 static void ncard_hide_finished(void *data)
 {
-    struct ncard_hide_data *d = data;
-    list_clear(&d->texts, fb_remove_item);
-    fb_rm_rect(d->shadow);
-    fb_rm_rect(d->alpha_bg);
-    free(d);
+    struct ncard *c = data;
+    list_clear(&c->texts, fb_remove_item);
+    fb_rm_rect(c->shadow);
+    fb_rm_rect(c->alpha_bg);
+    free(c);
 }
 
 void ncard_set_top_offset(int top_offset)
@@ -183,19 +240,23 @@ void ncard_set_top_offset(int top_offset)
 
 void ncard_show(ncard_builder *b, int destroy_builder)
 {
-    int i, items_h, btn_x, btn_h, has_btn = 0, it_y = 0;
+    int i, items_h, btn_x, btn_h, has_btn = 0, it_y = 0, lvl_offset = 0;
     fb_text *title = 0, *text = 0, *btns[BTN_COUNT];
     int interpolator;
 
     if(ncard.bg)
         anim_cancel_for(ncard.bg, 0);
 
+    if(b->pos == NCARD_POS_CENTER)
+        lvl_offset = LEVEL_NCARD_CENTER_OFFSET;
+
     items_h = CARD_PADDING_V*2;
     if(b->title)
     {
         fb_text_proto *p = fb_text_create(CARD_MARGIN + CARD_PADDING_H, 0, WHITE, SIZE_EXTRA, b->title);
-        p->level = LEVEL_NCARD_TEXT;
+        p->level = LEVEL_NCARD_TEXT + lvl_offset;
         p->style = STYLE_MEDIUM;
+        p->wrap_w = CARD_WIDTH - CARD_PADDING_H*2;
         title = fb_text_finalize(p);
         items_h += title->h;
     }
@@ -203,9 +264,13 @@ void ncard_show(ncard_builder *b, int destroy_builder)
     if(b->text)
     {
         fb_text_proto *p = fb_text_create(CARD_MARGIN + CARD_PADDING_H, 0, 0xFFE6E6E6, SIZE_NORMAL, b->text);\
-        p->level = LEVEL_NCARD_TEXT;
+        p->level = LEVEL_NCARD_TEXT + lvl_offset;
+        p->wrap_w = CARD_WIDTH - CARD_PADDING_H*2;
         if(!title)
+        {
             p->style = STYLE_ITALIC;
+            p->justify = JUSTIFY_CENTER;
+        }
         text = fb_text_finalize(p);
         items_h += text->h;
     }
@@ -224,29 +289,36 @@ void ncard_show(ncard_builder *b, int destroy_builder)
         ncard.active_btns |= (1 << i);
 
         fb_text_proto *p = fb_text_create(btn_x, 0, WHITE, SIZE_NORMAL, b->buttons[i]->text);
-        p->level = LEVEL_NCARD_TEXT;
+        p->level = LEVEL_NCARD_TEXT + lvl_offset;
         p->style = STYLE_MEDIUM;
         fb_text *t = fb_text_finalize(p);
-        t->x -= t->w + t->h;
+        t->x -= t->w;
         btn_x -= t->w + t->h*2;
         btn_h = imax(t->h*2, btn_h);
         btns[i] = t;
+
+        ncard.btns[i].callback_data = b->buttons[i]->callback_data;
+        ncard.btns[i].callback = b->buttons[i]->callback;
+        ncard.btns[i].pos.x = btn_x;
+        ncard.btns[i].pos.w = t->w + t->h*2;
+        ncard.btns[i].pos.h = t->h*3;
     }
 
-    items_h += btn_h*1.5;
+    items_h += btn_h*1.25;
 
     int new_pos = ncard_calc_pos(b, ncard.top_offset + items_h + CARD_MARGIN);
 
     if(new_pos != ncard.pos && ncard.bg)
         ncard_hide();
+
     ncard.pos = new_pos;
 
     list_clear(&ncard.texts, fb_remove_item);
     if(!ncard.bg)
     {
-        ncard.bg = fb_add_rect_lvl(LEVEL_NCARD_BG, CARD_MARGIN, 0, CARD_WIDTH, items_h, 0xFF4f4737);
+        ncard.bg = fb_add_rect_lvl(LEVEL_NCARD_BG + lvl_offset, CARD_MARGIN, 0, CARD_WIDTH, items_h, 0xFF4f4737);
         ncard.bg->y = ncard.pos == NCARD_POS_BOTTOM ? fb_height : -items_h;
-        ncard.shadow = fb_add_rect_lvl(LEVEL_NCARD_SHADOW, CARD_MARGIN + CARD_SHADOW_OFF, 0, CARD_WIDTH, items_h, GRAYISH);
+        ncard.shadow = fb_add_rect_lvl(LEVEL_NCARD_SHADOW + lvl_offset, CARD_MARGIN + CARD_SHADOW_OFF, 0, CARD_WIDTH, items_h, GRAYISH);
         interpolator = INTERPOLATOR_OVERSHOOT;
     }
     else
@@ -256,7 +328,7 @@ void ncard_show(ncard_builder *b, int destroy_builder)
     if(ncard.pos != NCARD_POS_CENTER)
         ncard.targetH *= 1.3;
     else if(!ncard.alpha_bg)
-        ncard.alpha_bg = fb_add_rect_lvl(LEVEL_NCARD_SHADOW-1, 0, 0, fb_width, fb_height, 0x00000000);
+        ncard.alpha_bg = fb_add_rect_lvl(LEVEL_NCARD_SHADOW + lvl_offset - 1, 0, 0, fb_width, fb_height, 0x00000000);
 
     if(items_h >= ncard.bg->h)
     {
@@ -271,14 +343,14 @@ void ncard_show(ncard_builder *b, int destroy_builder)
     if(title)
     {
         title->y = it_y;
-        it_y += title->h*2;
+        it_y += title->h*1.5;
         list_add(title, &ncard.texts);
     }
 
     if(text)
     {
         text->y = it_y;
-        it_y += text->h + btn_h*0.5;
+        it_y += text->h + btn_h*0.75;
         if(!title)
             center_text(text, 0, -1, fb_width, -1);
         list_add(text, &ncard.texts);
@@ -289,12 +361,23 @@ void ncard_show(ncard_builder *b, int destroy_builder)
         if(!(ncard.active_btns & (1 << i)))
             continue;
         btns[i]->y = it_y;
+        ncard.btns[i].pos.y = it_y - ncard.btns[i].pos.h/3;
         list_add(btns[i], &ncard.texts);
+    }
+
+    if(ncard.active_btns && !ncard.touch_handler_registered)
+    {
+        add_touch_handler(ncard_touch_handler, &ncard);
+        ncard.touch_handler_registered = 1;
     }
 
     ncard.shadow->y = ncard.pos == NCARD_POS_BOTTOM ? ncard.bg->y - CARD_SHADOW_OFF : ncard.bg->y + CARD_SHADOW_OFF;
 
     ncard.last_y = ncard.bg->y;
+    ncard.cancelable = b->cancelable;
+    ncard.on_hidden_call = b->on_hidden_call;
+    ncard.on_hidden_data = b->on_hidden_data;
+
     item_anim *a = item_anim_create(ncard.bg, 400, interpolator);
     switch(ncard.pos)
     {
@@ -309,6 +392,7 @@ void ncard_show(ncard_builder *b, int destroy_builder)
             break;
     }
     a->on_step_call = ncard_move_step;
+    a->on_step_data = &ncard;
     a->on_finished_call = ncard_reveal_finished;
     item_anim_add(a);
 
@@ -323,25 +407,40 @@ void ncard_hide(void)
 
     anim_cancel_for(ncard.bg, 0);
 
-    struct ncard_hide_data *d = mzalloc(sizeof(struct ncard_hide_data));
-    d->bg = ncard.bg;
-    d->shadow = ncard.shadow;
-    d->texts = ncard.texts;
-    d->last_y = d->bg->y;
-    d->alpha_bg = ncard.alpha_bg;
+    struct ncard *c = mzalloc(sizeof(struct ncard));
+    c->bg = ncard.bg;
+    c->shadow = ncard.shadow;
+    c->texts = ncard.texts;
+    c->last_y = c->bg->y;
+    c->alpha_bg = ncard.alpha_bg;
+    c->hiding = 1;
     ncard.shadow = NULL;
     ncard.bg = NULL;
     ncard.texts = NULL;
     ncard.alpha_bg = NULL;
 
-    item_anim *a = item_anim_create(d->bg, 400, INTERPOLATOR_ACCELERATE);
-    a->targetY = ncard.pos == NCARD_POS_TOP ? -d->bg->h : fb_height + d->bg->h;
+    if(ncard.touch_handler_registered)
+    {
+        rm_touch_handler(ncard_touch_handler, &ncard);
+        ncard.touch_handler_registered = 0;
+    }
+
+    item_anim *a = item_anim_create(c->bg, 400, INTERPOLATOR_ACCELERATE);
+    a->targetY = ncard.pos == NCARD_POS_TOP ? -c->bg->h : fb_height + c->bg->h;
     a->destroy_item_when_finished = 1;
-    a->on_step_call = ncard_hide_step;
-    a->on_step_data = d;
+    a->on_step_call = ncard_move_step;
+    a->on_step_data = c;
     a->on_finished_call = ncard_hide_finished;
-    a->on_finished_data = d;
+    a->on_finished_data = c;
     item_anim_add(a);
+
+    if(ncard.on_hidden_call)
+        ncard.on_hidden_call(ncard.on_hidden_data);
+}
+
+void ncard_hide_callback(void *data)
+{
+    ncard_hide();
 }
 
 void ncard_destroy_builder(ncard_builder *b)
@@ -361,3 +460,12 @@ void ncard_destroy_builder(ncard_builder *b)
     free(b);
 }
 
+int ncard_try_cancel(void)
+{
+    if(ncard.bg && ncard.cancelable)
+    {
+        ncard_hide();
+        return 1;
+    }
+    return 0;
+}

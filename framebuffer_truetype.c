@@ -22,6 +22,7 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <string.h>
+#include <ctype.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_GLYPH_H
@@ -32,7 +33,7 @@
 #include "containers.h"
 #include "multirom.h"
 
-#define LINE_SPACING 1.1
+#define LINE_SPACING 1.15
 
 #if 0
 #define TT_LOG(fmt, x...) INFO("TT: "fmt, ##x)
@@ -94,6 +95,7 @@ typedef struct
     int justify;
     int style;
     int baseline;
+    int wrap_w;
 } text_extra;
 
 static int convert_ft_bitmap(FT_BitmapGlyph bit, px_type color, px_type *res_data, int stride, struct text_line *line, FT_Vector *pos)
@@ -243,9 +245,9 @@ static int unlink_from_caches(text_extra *ex)
     return 0;
 }
 
-static void measure_line(struct text_line *line, struct glyphs_entry *en, int size)
+static int measure_line(struct text_line *line, struct glyphs_entry *en, text_extra *ex)
 {
-    int i, penX, penY, idx, prev_idx, error;
+    int i, penX, penY, idx, prev_idx, error, last_space, wrapped;
     FT_Vector delta;
     FT_Glyph glyph;
     const int use_kerning = FT_HAS_KERNING(en->face);
@@ -253,7 +255,7 @@ static void measure_line(struct text_line *line, struct glyphs_entry *en, int si
     bbox.yMin = LONG_MAX;
     bbox.yMax = LONG_MIN;
 
-    penX = penY = prev_idx = 0;
+    penX = penY = prev_idx = last_space = wrapped = 0;
 
     // Load glyphs and their positions
     for(i = 0; i < line->len; ++i)
@@ -265,6 +267,20 @@ static void measure_line(struct text_line *line, struct glyphs_entry *en, int si
             FT_Get_Kerning(en->face, prev_idx, idx, FT_KERNING_DEFAULT, &delta);
             penX += delta.x >> 6;
         }
+
+        if(ex->wrap_w && penX >= ex->wrap_w)
+        {
+            if(last_space == 0)
+                last_space = i-1;
+            line->len = last_space + 1;
+            if(i-1 != last_space)
+                penX = line->pos[last_space+1].x;
+            wrapped = 1;
+            break;
+        }
+
+        if(isspace(line->text[i]))
+            last_space = i;
 
         glyph = imap_get_val(en->glyphs, (int)line->text[i]);
         if(!glyph)
@@ -297,6 +313,7 @@ static void measure_line(struct text_line *line, struct glyphs_entry *en, int si
     line->w = penX;
     line->h = bbox.yMax - bbox.yMin;
     line->base = bbox.yMax;
+    return wrapped;
 }
 
 static void render_line(struct text_line *line, struct glyphs_entry *en, px_type *res_data, int stride, px_type converted_color)
@@ -376,7 +393,8 @@ static void fb_text_render(fb_img *img)
 
         line->pos = mzalloc(sizeof(FT_Vector)*line->len);
 
-        measure_line(line, en, ex->size);
+        if(measure_line(line, en, ex))
+            start = line->text + line->len;
 
         maxW = imax(maxW, line->w);
         maxH = imax(maxH, line->h);
@@ -487,6 +505,7 @@ fb_img *fb_text_finalize(fb_text_proto *p)
     extras->justify = p->justify;
     extras->style = p->style;
     extras->text = p->text;
+    extras->wrap_w = p->wrap_w;
 
     free(p);
 

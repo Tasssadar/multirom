@@ -181,7 +181,6 @@ int multirom(const char *rom_to_boot)
                 exit = (EXIT_SHUTDOWN | EXIT_UMOUNT);
                 break;
         }
-        exit = EXIT_REBOOT;
     }
 
     if(to_boot)

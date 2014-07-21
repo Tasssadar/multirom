@@ -35,6 +35,7 @@
 #include "log.h"
 #include "workers.h"
 #include "containers.h"
+#include "notification_card.h"
 
 // for touch calculation
 int mt_screen_res[2] = { 0 };
@@ -254,9 +255,10 @@ void touch_commit_events(struct timeval ev_time)
         while(it)
         {
             h = it->handler;
+            it = it->next;
+
             if((*h->callback)(&mt_events[i], h->data) == 0)
                 mt_events[i].consumed = 1;
-            it = it->next;
         }
 
         mt_events[i].consumed = 0;
@@ -596,6 +598,9 @@ int keyaction_handle_keyevent(int key, int press)
         goto exit;
 
     res = 0;
+
+    if(press == 1 && ncard_try_cancel())
+        goto exit;
 
     if(keyaction_ctx.repeat == act && press == 0)
         keyaction_ctx.repeat = KEYACT_NONE;

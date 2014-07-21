@@ -71,13 +71,7 @@ static void init_header(multirom_theme_data *t)
 
     static const char *str[] = { "Internal", "USB", "Misc", "MultiROM" };
 
-    // header background
     fb_add_rect_lvl(100, 0, 0, fb_width, HEADER_HEIGHT, CLR_PRIMARY);
-    //fb_add_rect(0, HEADER_HEIGHT, fb_width, (2*DPI_MUL), 0xFF7F07BC);
-
-    //fb_text *title = fb_add_text(0, 0, WHITE, SIZE_NORMAL, str[3]);
-    //center_text(title, 0, 0, x, STATUS_HEIGHT);
-
     ncard_set_top_offset(HEADER_HEIGHT);
 
     int maxW = 0;
@@ -92,9 +86,9 @@ static void init_header(multirom_theme_data *t)
     maxW += (30*DPI_MUL);
     x = fb_width/2 - (maxW*TAB_COUNT)/2;
 
-    fb_img *l = fb_add_png_img((20*DPI_MUL), HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, "/realdata/media/multirom/miri.png");
+    fb_img *l = fb_add_png_img_lvl(101, (20*DPI_MUL), HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, "/realdata/media/multirom/miri.png");
     if(!l)
-        l = fb_add_png_img((20*DPI_MUL), HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, "/realdata/media/0/multirom/miri.png");
+        l = fb_add_png_img_lvl(101, (20*DPI_MUL), HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, "/realdata/media/0/multirom/miri.png");
 
     if(l)
     {

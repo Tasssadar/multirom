@@ -36,13 +36,13 @@ enum
     NCARD_POS_CENTER,
 };
 
-typedef void (*ncard_btn_callback)(void*);
+typedef void (*ncard_callback)(void*);
 
 typedef struct
 {
     char *text;
     void *callback_data;
-    ncard_btn_callback callback;
+    ncard_callback callback;
 } ncard_builder_btn;
 
 typedef struct 
@@ -52,18 +52,25 @@ typedef struct
     ncard_builder_btn *buttons[BTN_COUNT];
     int pos;
     fb_item_pos *avoid_item;
+    int cancelable;
+    ncard_callback on_hidden_call;
+    void *on_hidden_data;
 } ncard_builder;
 
 ncard_builder *ncard_create_builder(void);
 void ncard_set_title(ncard_builder *b, const char *title);
 void ncard_set_text(ncard_builder *b, const char *text);
 void ncard_set_pos(ncard_builder *b, int pos);
+void ncard_set_cancelable(ncard_builder *b, int cancelable);
 void ncard_avoid_item(ncard_builder *b, void *item);
-void ncard_add_btn(ncard_builder *b, int btn_type, const char *text, ncard_btn_callback callback, void *callback_data);
+void ncard_add_btn(ncard_builder *b, int btn_type, const char *text, ncard_callback callback, void *callback_data);
+void ncard_set_on_hidden(ncard_builder *b, ncard_callback callback, void *data);
 
 void ncard_set_top_offset(int offset);
 void ncard_show(ncard_builder *b, int destroy_builder);
 void ncard_hide(void);
+int ncard_try_cancel(void);
+void ncard_hide_callback(void *data);
 void ncard_destroy_builder(ncard_builder *b);
 
 #endif
