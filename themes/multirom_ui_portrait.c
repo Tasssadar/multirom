@@ -64,13 +64,11 @@ static void init_header(multirom_theme_data *t)
 {
     button **tab_btns = t->tab_btns;
     fb_text **tab_texts = t->tab_texts;
-
     const int TAB_BTN_WIDTH = fb_width*0.21;
-
     int i;
     int x = fb_width - (TAB_BTN_WIDTH*TAB_COUNT);
-
     static const char *str[] = { "Internal", "USB", "Misc", "MultiROM" };
+    char buff[64];
 
     fb_add_rect_lvl(100, 0, 0, fb_width, HEADER_HEIGHT, C_HIGHLIGHT_BG);
     ncard_set_top_offset(HEADER_HEIGHT);
@@ -87,18 +85,15 @@ static void init_header(multirom_theme_data *t)
     maxW += (30*DPI_MUL);
     x = fb_width/2 - (maxW*TAB_COUNT)/2;
 
-    fb_img *l = NULL;
-    /*l = fb_add_png_img_lvl(101, (20*DPI_MUL), HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, "/realdata/media/multirom/miri.png");
-    if(!l)
-        l = fb_add_png_img_lvl(101, (20*DPI_MUL), HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, "/realdata/media/0/multirom/miri.png");*/
-
-    if(l)
+    snprintf(buff, sizeof(buff), ":/miri_%dx%d.png", (int)MIRI_W, (int)MIRI_W);
+    fb_img *logo = fb_add_png_img_lvl(101, x/2 - MIRI_W/2, HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, buff);
+    if(logo)
     {
         pong_btn = mzalloc(sizeof(button));
-        pong_btn->x = l->x;
-        pong_btn->y = l->y;
-        pong_btn->w = l->w;
-        pong_btn->h = l->h;
+        pong_btn->x = logo->x;
+        pong_btn->y = logo->y;
+        pong_btn->w = logo->w;
+        pong_btn->h = logo->h;
         pong_btn->clicked = &multirom_ui_start_pong;
         button_init_ui(pong_btn, NULL, 0);
     }

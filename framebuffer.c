@@ -39,6 +39,7 @@
 #include "util.h"
 #include "containers.h"
 #include "animation.h"
+#include "multirom.h"
 
 #if PIXEL_SIZE == 4
 #define fb_memset(dst, what, len) android_memset32(dst, what, len)
@@ -757,7 +758,17 @@ fb_img *fb_add_img(int level, int x, int y, int w, int h, int img_type, px_type 
 
 fb_img* fb_add_png_img_lvl(int level, int x, int y, int w, int h, const char *path)
 {
-    px_type *data = fb_png_get(path, w, h);
+    px_type *data = NULL;
+    if(strncmp(path, ":/", 2) == 0)
+    {
+        const int full_path_len = strlen(path) + strlen(multirom_dir) + 4;
+        char *full_path = malloc(full_path_len);
+        snprintf(full_path, full_path_len, "%s/res%s", multirom_dir, path+1);
+        data = fb_png_get(full_path, w, h);
+        free(full_path);
+    }
+    else
+        data = fb_png_get(path, w, h);
     if(!data)
         return NULL;
 
