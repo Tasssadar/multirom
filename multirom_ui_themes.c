@@ -88,8 +88,8 @@ static const struct multirom_color_theme color_themes[] = {
     // 1 - blue/white
     {
         .background = 0xFFDCDCDC,
-        .highlight_bg = 0xFF2F87F7,
-        .highlight_hover = 0xFF7BB3FA,
+        .highlight_bg = 0xFF5677FC,
+        .highlight_hover = 0xFF91A7FF,
         .highlight_text = 0xFFFFFFFF,
         .text = 0xFF000000,
         .text_secondary = 0xFF4D4D4D,
@@ -100,7 +100,7 @@ static const struct multirom_color_theme color_themes[] = {
         .rom_highlight = 0xFFFFFFFF,
         .rom_highlight_shadow = 0xFFBEBEBE,
     },
-    // 1 - green/white
+    // 2 - green/white
     {
         .background = 0xFFDCDCDC,
         .highlight_bg = 0xFF259B24,
@@ -114,6 +114,36 @@ static const struct multirom_color_theme color_themes[] = {
         .ncard_shadow = 0xFFBEBEBE,
         .rom_highlight = 0xFFFFFFFF,
         .rom_highlight_shadow = 0xFFBEBEBE,
+    },
+    // 3 - dark blue
+    {
+        .background = 0xFF263238,
+        .highlight_bg = 0xFF607D8B,
+        .highlight_hover = 0xFF90A4AE,
+        .highlight_text = 0xFFFFFFFF,
+        .text = 0xFFFFFFFF,
+        .text_secondary = 0xFFE6E6E6,
+        .ncard_bg = 0xFF37474F,
+        .ncard_text = 0xFFFFFFFF,
+        .ncard_text_secondary = 0xFFE6E6E6,
+        .ncard_shadow = 0xFFBEBEBE,
+        .rom_highlight = 0xFF607D8B,
+        .rom_highlight_shadow = 0xFFBEBEBE,
+    },
+    // 4 - dark blue/black
+    {
+        .background = 0xFF000000,
+        .highlight_bg = 0xFF263238,
+        .highlight_hover = 0xFF607D8B,
+        .highlight_text = 0xFFFFFFFF,
+        .text = 0xFFFFFFFF,
+        .text_secondary = 0xFFE6E6E6,
+        .ncard_bg = 0xFF37474F,
+        .ncard_text = 0xFFFFFFFF,
+        .ncard_text_secondary = 0xFFE6E6E6,
+        .ncard_shadow = 0xFF607D8B,
+        .rom_highlight = 0xFF263238,
+        .rom_highlight_shadow = 0xFF607D8B,
     },
 };
 

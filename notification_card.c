@@ -26,7 +26,7 @@
 #include "log.h"
 #include "input.h"
 #include "multirom_ui_themes.h"
- 
+
 enum
 {
     LEVEL_NCARD_SHADOW = 49,
@@ -214,6 +214,7 @@ static void ncard_move_step(void *data, float interpolated)
     }
 
     c->shadow->y += diff;
+    c->shadow->h = c->bg->h;
     c->last_y = c->bg->y;
 
     if(c->alpha_bg && (c->hiding || (c->alpha_bg->color & (0xFF << 24)) != 0xCC000000))
@@ -407,6 +408,7 @@ void ncard_show(ncard_builder *b, int destroy_builder)
             a->targetY = fb_height/2 - items_h/2;
             break;
     }
+    a->targetH = ncard.targetH;
     a->on_step_call = ncard_move_step;
     a->on_step_data = &ncard;
     a->on_finished_call = ncard_reveal_finished;

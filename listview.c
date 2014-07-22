@@ -621,7 +621,9 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
     const int item_h = rom_item_height(it);
     if(!d->text_it)
     {
-        d->text_it = fb_add_text(x+ROM_TEXT_PADDING, 0, C_TEXT, d->rom_name_size, d->text);
+        fb_text_proto *p = fb_text_create(x+ROM_TEXT_PADDING, 0, C_TEXT, d->rom_name_size, d->text);
+        p->style = STYLE_CONDENSED;
+        d->text_it = fb_text_finalize(p);
         d->text_it->parent = it->parent_rect;
 
         while(d->text_it->w + ROM_TEXT_PADDING >= w && d->rom_name_size > 3)
