@@ -69,12 +69,6 @@ static void listview_bounceback(uint32_t diff, void *data)
 
 void listview_init_ui(listview *view)
 {
-    int x = view->x + view->w - PADDING/2 - LINE_W/2;
-
-    fb_rect *scroll_line = fb_add_rect(x, view->y, LINE_W, view->h, GRAY);
-    scroll_line->parent = (fb_item_pos*)view;
-    list_add(scroll_line, &view->ui_items);
-
     view->keyact_item_selected = -1;
 
     view->touch.id = -1;
@@ -95,6 +89,7 @@ void listview_destroy(listview *view)
     fb_rm_rect(view->scroll_mark);
     fb_rm_rect(view->overscroll_marks[0]);
     fb_rm_rect(view->overscroll_marks[1]);
+    fb_rm_rect(view->scroll_line);
 
     free(view);
 }
@@ -171,6 +166,10 @@ void listview_enable_scroll(listview *view, int enable)
         view->scroll_mark = fb_add_rect(x, view->y, MARK_W, MARK_H, GRAY);
         view->scroll_mark->parent = (fb_item_pos*)view;
 
+        x = view->x + view->w - PADDING/2 - LINE_W/2;
+        view->scroll_line = fb_add_rect(x, view->y, LINE_W, view->h, GRAY);
+        view->scroll_line->parent = (fb_item_pos*)view;
+
         view->overscroll_marks[0] = fb_add_rect(view->x, view->y, 0, OVERSCROLL_MARK_H, C_HIGHLIGHT_BG);
         view->overscroll_marks[0]->parent = (fb_item_pos*)view;
         view->overscroll_marks[1] = fb_add_rect(view->x, view->y+view->h-OVERSCROLL_MARK_H,
@@ -183,10 +182,12 @@ void listview_enable_scroll(listview *view, int enable)
         workers_remove(listview_bounceback, view);
 
         fb_rm_rect(view->scroll_mark);
+        fb_rm_rect(view->scroll_line);
         fb_rm_rect(view->overscroll_marks[0]);
         fb_rm_rect(view->overscroll_marks[1]);
 
         view->scroll_mark = NULL;
+        view->scroll_line = NULL;
         view->overscroll_marks[0] = NULL;
         view->overscroll_marks[1] = NULL;
     }

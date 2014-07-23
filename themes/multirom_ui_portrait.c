@@ -28,14 +28,10 @@
 #include "../notification_card.h"
 
 #define HEADER_HEIGHT (110*DPI_MUL)
-#define STATUS_HEIGHT (33*DPI_MUL)
 #define TABS_HEIGHT (HEADER_HEIGHT - STATUS_HEIGHT)
 #define MIRI_W (90*DPI_MUL)
 
-#define ROMS_HEADER_H (20*DPI_MUL)
-
-#define BOOTBTN_W (280*DPI_MUL)
-#define BOOTBTN_H (80*DPI_MUL)
+#define LISTVIEW_MARGIN (20*DPI_MUL)
 
 #define REFRESHBTN_W (400*DPI_MUL)
 #define REFRESHBTN_H (60*DPI_MUL)
@@ -46,7 +42,7 @@
 #define CLRBTN_W (50*DPI_MUL)
 #define CLRBTN_B (10*DPI_MUL)
 #define CLRBTN_TOTAL (CLRBTN_W+CLRBTN_B)
-#define CLRBTN_Y (1150*DPI_MUL)
+#define CLRBTN_Y (1100*DPI_MUL)
 #define CLRBTN_MARGIN (8*DPI_MUL)
 
 #define SELECTED_RECT_H (10*DPI_MUL)
@@ -139,10 +135,10 @@ static void header_select(multirom_theme_data *t, int tab)
 
 static void tab_rom_init(multirom_theme_data *t, tab_data_roms *d, int tab_type)
 {
-    d->list->x = ROMS_HEADER_H;
-    d->list->y = HEADER_HEIGHT+ROMS_HEADER_H;
-    d->list->w = fb_width - ROMS_HEADER_H;
-    d->list->h = fb_height - d->list->y - ROMS_HEADER_H;
+    d->list->x = LISTVIEW_MARGIN;
+    d->list->y = HEADER_HEIGHT+LISTVIEW_MARGIN;
+    d->list->w = fb_width - LISTVIEW_MARGIN;
+    d->list->h = fb_height - d->list->y - LISTVIEW_MARGIN;
 }
 
 static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_scheme)

@@ -637,7 +637,6 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
     assert(empty == 0 || empty == 1);
 
     tab_data_roms *t = (tab_data_roms*)data;
-    int width = cur_theme->get_tab_width(themes_info->data);
 
     if(t->boot_btn)
         button_enable(t->boot_btn, !empty);
@@ -650,10 +649,10 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
         t->usb_text = fb_text_finalize(p);
         list_add(t->usb_text, &t->ui_elements);
 
-        center_text(t->usb_text, t->list->x, -1, width, -1);
+        center_text(t->usb_text, t->list->x, -1, t->list->w, -1);
         t->usb_text->y = t->list->y + t->list->h*0.2;
 
-        int x = t->list->x + ((width/2) - (PROGDOTS_W/2));
+        int x = t->list->x + ((t->list->w/2) - (PROGDOTS_W/2));
         t->usb_prog = progdots_create(x, t->usb_text->y+100*DPI_MUL);
     }
     else if(!empty && t->usb_text)
