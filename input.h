@@ -69,7 +69,6 @@ enum
 };
 
 #define KEYACT_FRAME_W (8*DPI_MUL)
-#define KEYACT_FRAME_CLR (0xFFFF0000)
 
 typedef int (*keyaction_call)(void *, int); // data, action
 void keyaction_add(int x, int y, keyaction_call call, void *data);

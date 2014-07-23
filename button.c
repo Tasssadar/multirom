@@ -39,8 +39,11 @@ void button_init_ui(button *b, const char *text, int size)
         b->c[CLR_CHECK][0] = C_HIGHLIGHT_BG;
         b->c[CLR_CHECK][1] = C_HIGHLIGHT_TEXT;
 
-        b->rect = fb_add_rect(b->x, b->y, b->w, b->h, b->c[CLR_NORMAL][0]);
-        b->text = fb_add_text(0, 0, b->c[CLR_NORMAL][1], size, text);
+        b->rect = fb_add_rect_lvl(b->level_off + LEVEL_RECT, b->x, b->y, b->w, b->h, b->c[CLR_NORMAL][0]);
+
+        fb_text_proto *p = fb_text_create(0, 0, b->c[CLR_NORMAL][1], size, text);
+        p->level = b->level_off + LEVEL_TEXT;
+        b->text = fb_text_finalize(p);
         center_text(b->text, b->x, b->y, b->w, b->h);
     }
     else
@@ -193,7 +196,7 @@ int button_keyaction_call(void *data, int act)
         {
             if(act != KEYACT_CLEAR && b->keyact_frame == NULL)
             {
-                fb_add_rect_notfilled(b->x, b->y, b->w, b->h, KEYACT_FRAME_CLR, KEYACT_FRAME_W, &b->keyact_frame);
+                fb_add_rect_notfilled(b->level_off + LEVEL_RECT, b->x, b->y, b->w, b->h, C_KEYACT_FRAME, KEYACT_FRAME_W, &b->keyact_frame);
                 fb_request_draw();
                 return 0;
             }

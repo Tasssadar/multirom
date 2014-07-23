@@ -257,7 +257,7 @@ void fb_text_destroy(fb_img *i);
 
 fb_rect *fb_add_rect_lvl(int level, int x, int y, int w, int h, uint32_t color);
 #define fb_add_rect(x, y, w, h, color) fb_add_rect_lvl(LEVEL_RECT, x, y, w, h, color)
-void fb_add_rect_notfilled(int x, int y, int w, int h, uint32_t color, int thickness, fb_rect ***list);
+void fb_add_rect_notfilled(int level, int x, int y, int w, int h, uint32_t color, int thickness, fb_rect ***list);
 
 fb_img *fb_add_img(int level, int x, int y, int w, int h, int img_type, px_type *data);
 fb_img *fb_add_png_img_lvl(int level, int x, int y, int w, int h, const char *path);

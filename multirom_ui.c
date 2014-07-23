@@ -132,7 +132,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     workers_start();
     anim_init();
 
-    multirom_ui_init_theme();
+    multirom_ui_init_theme(TAB_INTERNAL);
 
     add_touch_handler(&multirom_ui_touch_handler, NULL);
     start_input_thread();
@@ -194,8 +194,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
             multirom_ui_destroy_theme();
             multirom_ui_select_color(s->colors);
-            multirom_ui_init_theme();
-            multirom_ui_switch(TAB_MISC);
+            multirom_ui_init_theme(TAB_MISC);
 
             fb_freeze(0);
             fb_request_draw();
@@ -259,13 +258,13 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     return exit_ui_code;
 }
 
-void multirom_ui_init_theme(void)
+void multirom_ui_init_theme(int tab)
 {
     memset(themes_info->data, 0, sizeof(multirom_theme_data));
     themes_info->data->selected_tab = -1;
 
     multirom_ui_init_header();
-    multirom_ui_switch(TAB_INTERNAL);
+    multirom_ui_switch(tab);
     fb_set_background(C_BACKGROUND);
 }
 

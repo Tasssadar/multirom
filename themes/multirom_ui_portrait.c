@@ -77,7 +77,7 @@ static void init_header(multirom_theme_data *t)
     for(i = 0; i < TAB_COUNT; ++i)
     {
         fb_text_proto *p = fb_text_create(0, 0, C_HIGHLIGHT_TEXT, SIZE_BIG, str[i]);
-        p->level = 101;
+        p->level = 110;
         tab_texts[i] = fb_text_finalize(p);
         maxW = imax(maxW, tab_texts[i]->w);
     }
@@ -86,7 +86,7 @@ static void init_header(multirom_theme_data *t)
     x = fb_width/2 - (maxW*TAB_COUNT)/2;
 
     snprintf(buff, sizeof(buff), ":/miri_%dx%d.png", (int)MIRI_W, (int)MIRI_W);
-    fb_img *logo = fb_add_png_img_lvl(101, x/2 - MIRI_W/2, HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, buff);
+    fb_img *logo = fb_add_png_img_lvl(110, x/2 - MIRI_W/2, HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, buff);
     if(logo)
     {
         pong_btn = mzalloc(sizeof(button));
@@ -102,15 +102,15 @@ static void init_header(multirom_theme_data *t)
     {
         center_text(tab_texts[i], x, 0, maxW, HEADER_HEIGHT);
 
-        tab_btns[i] = malloc(sizeof(button));
-        memset(tab_btns[i], 0, sizeof(button));
+        tab_btns[i] = mzalloc(sizeof(button));
         tab_btns[i]->x = x;
         tab_btns[i]->y = 0;
         tab_btns[i]->w = maxW;
         tab_btns[i]->h = HEADER_HEIGHT;
         tab_btns[i]->action = i;
         tab_btns[i]->clicked = &multirom_ui_switch;
-        button_init_ui(tab_btns[i], NULL, 0);
+        tab_btns[i]->level_off = 100;
+        button_init_ui(tab_btns[i], "", 0);
 
         keyaction_add(tab_btns[i]->x, tab_btns[i]->y, button_keyaction_call, tab_btns[i]);
 
@@ -125,7 +125,7 @@ static void header_select(multirom_theme_data *t, int tab)
 
     int dest_x = t->tab_btns[tab]->x;
     if(!t->selected_tab_rect)
-        t->selected_tab_rect = fb_add_rect_lvl(101, dest_x, HEADER_HEIGHT-SELECTED_RECT_H, TAB_BTN_WIDTH, SELECTED_RECT_H, C_HIGHLIGHT_TEXT);
+        t->selected_tab_rect = fb_add_rect_lvl(110, dest_x, HEADER_HEIGHT-SELECTED_RECT_H, TAB_BTN_WIDTH, SELECTED_RECT_H, C_HIGHLIGHT_TEXT);
     else
     {
         anim_cancel_for(t->selected_tab_rect, 0);

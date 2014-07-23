@@ -95,6 +95,7 @@ struct multirom_color_theme
     uint32_t ncard_shadow;
     uint32_t rom_highlight;
     uint32_t rom_highlight_shadow;
+    uint32_t keyaction_frame;
 };
 
 extern const struct multirom_color_theme *color_theme;
@@ -110,6 +111,7 @@ extern const struct multirom_color_theme *color_theme;
 #define C_NCARD_SHADOW (color_theme->ncard_shadow)
 #define C_ROM_HIGHLIGHT (color_theme->rom_highlight)
 #define C_ROM_HIGHLIGHT_SHADOW (color_theme->rom_highlight_shadow)
+#define C_KEYACT_FRAME (color_theme->keyaction_frame)
 
 void multirom_ui_select_color(size_t color_theme_idx);
 const struct multirom_color_theme *multirom_ui_get_color_theme(size_t color_theme_idx);

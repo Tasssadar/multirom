@@ -84,6 +84,7 @@ static const struct multirom_color_theme color_themes[] = {
         .ncard_shadow = 0xFFBEBEBE,
         .rom_highlight = 0xFFFFFFFF,
         .rom_highlight_shadow = 0xFFBEBEBE,
+        .keyaction_frame = 0xFF0000FF,
     },
     // 1 - blue/white
     {
@@ -99,6 +100,7 @@ static const struct multirom_color_theme color_themes[] = {
         .ncard_shadow = 0xFFBEBEBE,
         .rom_highlight = 0xFFFFFFFF,
         .rom_highlight_shadow = 0xFFBEBEBE,
+        .keyaction_frame = 0xFFFF0000,
     },
     // 2 - green/white
     {
@@ -114,6 +116,7 @@ static const struct multirom_color_theme color_themes[] = {
         .ncard_shadow = 0xFFBEBEBE,
         .rom_highlight = 0xFFFFFFFF,
         .rom_highlight_shadow = 0xFFBEBEBE,
+        .keyaction_frame = 0xFFFF0000,
     },
     // 3 - dark blue
     {
@@ -129,6 +132,7 @@ static const struct multirom_color_theme color_themes[] = {
         .ncard_shadow = 0xFFBEBEBE,
         .rom_highlight = 0xFF607D8B,
         .rom_highlight_shadow = 0xFFBEBEBE,
+        .keyaction_frame = 0xFFFF0000,
     },
     // 4 - dark blue/black
     {
@@ -144,6 +148,7 @@ static const struct multirom_color_theme color_themes[] = {
         .ncard_shadow = 0xFF607D8B,
         .rom_highlight = 0xFF263238,
         .rom_highlight_shadow = 0xFF607D8B,
+        .keyaction_frame = 0xFFFF0000,
     },
 };
 
