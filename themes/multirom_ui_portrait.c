@@ -47,6 +47,7 @@
 #define CLRBTN_B (10*DPI_MUL)
 #define CLRBTN_TOTAL (CLRBTN_W+CLRBTN_B)
 #define CLRBTN_Y (1150*DPI_MUL)
+#define CLRBTN_MARGIN (8*DPI_MUL)
 
 #define SELECTED_RECT_H (10*DPI_MUL)
 
@@ -86,7 +87,7 @@ static void init_header(multirom_theme_data *t)
     x = fb_width/2 - (maxW*TAB_COUNT)/2;
 
     snprintf(buff, sizeof(buff), ":/miri_%dx%d.png", (int)MIRI_W, (int)MIRI_W);
-    fb_img *logo = fb_add_png_img_lvl(110, x/2 - MIRI_W/2, HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, buff);
+    fb_img *logo = fb_add_png_img_lvl(110, 10*DPI_MUL, HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, buff);
     if(logo)
     {
         pong_btn = mzalloc(sizeof(button));
@@ -203,17 +204,14 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
     list_add(text, &d->ui_elements);
 
     const int max_colors = multirom_ui_get_color_theme_count();
-    x = fb_width/2 - (max_colors*CLRBTN_TOTAL)/2;
+    x = fb_width/2 - (max_colors*(CLRBTN_TOTAL+CLRBTN_MARGIN))/2;
     fb_rect *r;
     for(i = 0; i < max_colors; ++i)
     {
         const struct multirom_color_theme *th = multirom_ui_get_color_theme(i);
 
-        if(i == color_scheme)
-        {
-            r = fb_add_rect(x, CLRBTN_Y, CLRBTN_TOTAL, CLRBTN_TOTAL, C_TEXT_SECONDARY);
-            list_add(r, &d->ui_elements);
-        }
+        r = fb_add_rect(x, CLRBTN_Y, CLRBTN_TOTAL, CLRBTN_TOTAL, i == color_scheme ? 0xFFFFCC00 : WHITE);
+        list_add(r, &d->ui_elements);
 
         r = fb_add_rect(x+CLRBTN_B/2, CLRBTN_Y+CLRBTN_B/2, CLRBTN_W, CLRBTN_W, th->highlight_bg);
         list_add(r, &d->ui_elements);
@@ -228,7 +226,7 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
         button_init_ui(b, NULL, 0);
         list_add(b, &d->buttons);
 
-        x += CLRBTN_TOTAL;
+        x += CLRBTN_TOTAL + CLRBTN_MARGIN;
     }
 
     for(i = 0; d->buttons[i]; ++i)
