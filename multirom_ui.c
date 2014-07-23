@@ -243,13 +243,15 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     ncard_show(b, 1);
     anim_stop(1);
-    workers_stop();
-    stop_input_thread();
     fb_freeze(1);
+    fb_force_draw();
 
     multirom_ui_destroy_theme();
     multirom_ui_free_themes(themes_info);
     themes_info = NULL;
+
+    stop_input_thread();
+    workers_stop();
     
 #if MR_DEVICE_HOOKS >= 2
     mrom_hook_before_fb_close();

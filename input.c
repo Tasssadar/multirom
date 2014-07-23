@@ -297,7 +297,6 @@ static void *input_thread_work(void *cookie)
         usleep(10000);
     }
     ev_exit();
-    pthread_exit(NULL);
     return NULL;
 }
 

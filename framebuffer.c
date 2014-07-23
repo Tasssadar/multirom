@@ -72,9 +72,10 @@ static fb_context_t **inactive_ctx = NULL;
 static uint8_t **fb_rot_helpers = NULL;
 static pthread_t fb_draw_thread;
 static pthread_mutex_t fb_update_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t fb_draw_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t fb_draw_cond = PTHREAD_COND_INITIALIZER;
 static volatile int fb_draw_requested = 0;
 static volatile int fb_draw_run = 0;
-static volatile int fb_draw_futex = 0;
 static void *fb_draw_thread_work(void*);
 
 static void fb_destroy_item(void *item); // private!
@@ -894,19 +895,24 @@ void *fb_draw_thread_work(void *cookie)
         clock_gettime(CLOCK_MONOTONIC, &curr);
         diff = timespec_diff(&last, &curr);
 
+        pthread_mutex_lock(&fb_draw_mutex);
+
         if(__atomic_cmpxchg(1, 0, &fb_draw_requested) == 0)
         {
             fb_draw();
-            __futex_wake(&fb_draw_futex, INT_MAX);
+            pthread_cond_broadcast(&fb_draw_cond);
+            pthread_mutex_unlock(&fb_draw_mutex);
         }
-#ifdef MR_CONTINUOUS_FB_UPDATE
         else
         {
+            pthread_mutex_unlock(&fb_draw_mutex);
+#ifdef MR_CONTINUOUS_FB_UPDATE
             pthread_mutex_lock(&fb_update_mutex);
             fb_update();
             pthread_mutex_unlock(&fb_update_mutex);
-        }
 #endif
+        }
+
 
         last = curr;
         if(diff <= SLEEP_CONST+prevSleepTime)
@@ -928,6 +934,8 @@ void fb_request_draw(void)
 
 void fb_force_draw(void)
 {
-    __atomic_swap(1, &fb_draw_requested);
-    __futex_wait(&fb_draw_futex, 0, NULL);
+    pthread_mutex_lock(&fb_draw_mutex);
+    __atomic_cmpxchg(0, 1, &fb_draw_requested);
+    pthread_cond_wait(&fb_draw_cond, &fb_draw_mutex);
+    pthread_mutex_unlock(&fb_draw_mutex);
 }
