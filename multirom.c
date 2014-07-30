@@ -61,8 +61,6 @@
 
 #define BATTERY_CAP "/sys/class/power_supply/battery/capacity"
 
-#define T_FOLDER 4
-
 char multirom_dir[64] = { 0 };
 static char busybox_path[64] = { 0 };
 static char kexec_path[64] = { 0 };
@@ -407,7 +405,7 @@ int multirom_default_status(struct multirom_status *s)
         if(dr->d_name[0] == '.')
             continue;
 
-        if(dr->d_type != T_FOLDER)
+        if(dr->d_type != DT_DIR)
             continue;
 
         if(strlen(dr->d_name) > MAX_ROM_NAME_LEN)
