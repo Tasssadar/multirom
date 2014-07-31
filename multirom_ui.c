@@ -223,7 +223,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
             ncard_set_title(b, "Booting...");
 
             char buff[64];
-            snprintf(buff, sizeof(buff), "%s", selected_rom->name);
+            snprintf(buff, sizeof(buff), "<i>%s</i>", selected_rom->name);
             ncard_set_text(b, buff);
             break;
         }
@@ -438,7 +438,7 @@ static void multirom_ui_auto_boot_tick(void *data)
     }
     else
     {
-        snprintf(buff, sizeof(buff), "ROM: %s\n\nBooting in %d second%s.", mrom_status->auto_boot_rom->name, d->seconds, d->seconds != 1 ? "s" : "");
+        snprintf(buff, sizeof(buff), "\n<b>ROM:</b> <y>%s</y>\n\nBooting in %d second%s.", mrom_status->auto_boot_rom->name, d->seconds, d->seconds != 1 ? "s" : "");
         ncard_set_text(d->b, buff);
         ncard_show(d->b, 0);
 
@@ -708,7 +708,7 @@ void multirom_ui_tab_misc_copy_log(int action)
 
     int res = multirom_copy_log(NULL, "../multirom_log.txt");
 
-    static const char *text[] = { "Failed to copy log to sdcard!", "Error log was saved to: \n/sdcard/multirom_log.txt" };
+    static const char *text[] = { "Failed to copy log to sdcard!", "Error log was saved to:\n\n<s>/sdcard/multirom_log.txt</s>" };
 
     ncard_builder *b = ncard_create_builder();
     ncard_set_pos(b, NCARD_POS_CENTER);
