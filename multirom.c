@@ -618,7 +618,7 @@ int multirom_save_status(struct multirom_status *s)
     fprintf(f, "int_display_name=%s\n", s->int_display_name ? s->int_display_name : "");
     fprintf(f, "rotation=%d\n", s->rotation);
     fprintf(f, "force_generic_fb=%d\n", s->force_generic_fb);
-    fprintf(f, "anim_duration_coef_pct=%d\n", (int)s->anim_duration_coef*100);
+    fprintf(f, "anim_duration_coef_pct=%d\n", (int)(s->anim_duration_coef*100));
 
     fclose(f);
     return 0;
