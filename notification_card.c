@@ -31,6 +31,7 @@ enum
 {
     LEVEL_NCARD_SHADOW = 49,
     LEVEL_NCARD_BG = 50,
+    LEVEL_NCARD_BTN_HOVER = 55,
     LEVEL_NCARD_TEXT = 60,
 
     LEVEL_NCARD_CENTER_OFFSET = 1000,
@@ -40,7 +41,7 @@ enum
 #define CARD_PADDING_V (30*DPI_MUL)
 #define CARD_MARGIN  (40*DPI_MUL)
 #define CARD_WIDTH (fb_width - CARD_MARGIN*2)
-#define CARD_SHADOW_OFF (5*DPI_MUL)
+#define CARD_SHADOW_OFF (7*DPI_MUL)
 
 ncard_builder *ncard_create_builder(void)
 {
@@ -124,6 +125,7 @@ struct ncard
     fb_rect *shadow;
     fb_rect *alpha_bg;
     fb_text **texts;
+    fb_rect *hover_rect;
     struct ncard_btn btns[BTN_COUNT];
     int active_btns;
     int pos;
@@ -145,6 +147,7 @@ struct ncard
     .active_btns = 0,
     .top_offset = 0,
     .hiding = 0,
+    .hover_rect = NULL,
     .touch_handler_registered = 0,
     .touch_id = -1,
     .hover_btn = 0,
@@ -168,6 +171,12 @@ static int ncard_touch_handler(touch_event *ev, void *data)
 
             if(in_rect(ev->x, ev->y, c->btns[i].pos.x, c->btns[i].pos.y, c->btns[i].pos.w, c->btns[i].pos.h))
             {
+                fb_rm_rect(c->hover_rect);
+                int level = LEVEL_NCARD_BTN_HOVER;
+                if(c->pos == NCARD_POS_CENTER)
+                    level += LEVEL_NCARD_CENTER_OFFSET;
+                c->hover_rect = fb_add_rect_lvl(level, c->btns[i].pos.x, c->btns[i].pos.y, c->btns[i].pos.w, c->btns[i].pos.h, C_NCARD_SHADOW);
+
                 c->touch_id = ev->id;
                 c->hover_btn = i;
                 break;
@@ -191,6 +200,11 @@ static int ncard_touch_handler(touch_event *ev, void *data)
         struct ncard_btn *b = &c->btns[c->hover_btn];
         if(b->callback && in_rect(ev->x, ev->y, b->pos.x, b->pos.y, b->pos.w, b->pos.h))
             b->callback(b->callback_data);
+        else
+        {
+            fb_rm_rect(c->hover_rect);
+            c->hover_rect = NULL;
+        }
         c->touch_id = -1;
     }
 
@@ -215,6 +229,8 @@ static void ncard_move_step(void *data, float interpolated)
 
     c->shadow->y += diff;
     c->shadow->h = c->bg->h;
+    if(c->hover_rect)
+        c->hover_rect->y += diff;
     c->last_y = c->bg->y;
 
     if(c->alpha_bg && (c->hiding || (c->alpha_bg->color & (0xFF << 24)) != 0xCC000000))
@@ -243,6 +259,7 @@ static void ncard_hide_finished(void *data)
     list_clear(&c->texts, fb_remove_item);
     fb_rm_rect(c->shadow);
     fb_rm_rect(c->alpha_bg);
+    fb_rm_rect(c->hover_rect);
     free(c);
 }
 
@@ -312,9 +329,9 @@ void ncard_show(ncard_builder *b, int destroy_builder)
 
         ncard.btns[i].callback_data = b->buttons[i]->callback_data;
         ncard.btns[i].callback = b->buttons[i]->callback;
-        ncard.btns[i].pos.x = btn_x;
         ncard.btns[i].pos.w = t->w + t->h*2;
         ncard.btns[i].pos.h = t->h*3;
+        ncard.btns[i].pos.x = btn_x + t->h;
     }
 
     items_h += btn_h*1.25;
@@ -327,6 +344,9 @@ void ncard_show(ncard_builder *b, int destroy_builder)
     ncard.pos = new_pos;
 
     list_clear(&ncard.texts, fb_remove_item);
+    fb_rm_rect(ncard.hover_rect);
+    ncard.hover_rect = NULL;
+
     if(!ncard.bg)
     {
         ncard.bg = fb_add_rect_lvl(LEVEL_NCARD_BG + lvl_offset, CARD_MARGIN, 0, CARD_WIDTH, items_h, C_NCARD_BG);
@@ -428,11 +448,13 @@ void ncard_hide(void)
     struct ncard *c = mzalloc(sizeof(struct ncard));
     c->bg = ncard.bg;
     c->shadow = ncard.shadow;
+    c->hover_rect = ncard.hover_rect;
     c->texts = ncard.texts;
     c->last_y = c->bg->y;
     c->alpha_bg = ncard.alpha_bg;
     c->hiding = 1;
     ncard.shadow = NULL;
+    ncard.hover_rect = NULL;
     ncard.bg = NULL;
     ncard.texts = NULL;
     ncard.alpha_bg = NULL;

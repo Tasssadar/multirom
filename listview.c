@@ -518,20 +518,6 @@ static void rom_item_deselect_finished(void *data)
     d->sel_rect_sh = NULL;
 }
 
-static void rom_item_alpha(void *data, float interpolated)
-{
-    rom_item_data *d = data;
-    if(!d->sel_rect || !d->sel_rect_sh)
-        return;
-
-    uint32_t alpha = 0xFF*interpolated;
-    if(d->deselect_anim_started)
-        alpha = 0xFF - alpha;
-    alpha <<= 24;
-    d->sel_rect->color = (d->sel_rect->color & ~(0xFF << 24)) | alpha;
-    d->sel_rect_sh->color = (d->sel_rect_sh->color & ~(0xFF << 24)) | alpha;
-}
-
 static void rom_item_sel_step(void *data, float interpolated)
 {
     rom_item_data *d = data;
@@ -556,13 +542,10 @@ static void rom_item_select(int x, int y, int w, int item_h, listview_item *it, 
 
     d->deselect_anim_started = 0;
 
-    d->sel_rect_sh = fb_add_rect(baseX+ROM_ITEM_SHADOW, baseY+ROM_ITEM_SHADOW, 1, 1, C_ROM_HIGHLIGHT_SHADOW & ~(0xFF << 24));
+    d->sel_rect_sh = fb_add_rect(baseX+ROM_ITEM_SHADOW, baseY+ROM_ITEM_SHADOW, 1, 1, C_ROM_HIGHLIGHT_SHADOW);
     d->sel_rect_sh->parent = it->parent_rect;
-    d->sel_rect = fb_add_rect(baseX, baseY, 1, 1, C_ROM_HIGHLIGHT & ~(0xFF << 24));
+    d->sel_rect = fb_add_rect(baseX, baseY, 1, 1, C_ROM_HIGHLIGHT);
     d->sel_rect->parent = it->parent_rect;
-
-    call_anim *canim = call_anim_create(d, rom_item_alpha, 300, INTERPOLATOR_ACCEL_DECEL);
-    call_anim_add(canim);
 
     item_anim *anim = item_anim_create(d->sel_rect, 300, INTERPOLATOR_ACCEL_DECEL);
     anim->start_offset = 0;
@@ -605,15 +588,9 @@ static void rom_item_deselect(int x, int y, int w, int item_h, listview_item *it
     anim->targetH = 0;
     anim->on_step_data = d;
     anim->on_step_call = rom_item_sel_step;
+    anim->on_finished_data = d;
+    anim->on_finished_call = rom_item_deselect_finished;
     item_anim_add_after(anim);
-
-    call_anim *canim = call_anim_create(d, rom_item_alpha, 150, INTERPOLATOR_ACCELERATE);
-    canim->start_offset = anim->start_offset;
-    canim->cancel_check_data = d->sel_rect;
-    canim->cancel_check = anim_item_cancel_check;
-    canim->on_finished_data = d;
-    canim->on_finished_call = rom_item_deselect_finished;
-    call_anim_add(canim);
 }
 
 void rom_item_draw(int x, int y, int w, listview_item *it)
