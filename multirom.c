@@ -373,6 +373,7 @@ int multirom_default_status(struct multirom_status *s)
     s->brightness = 40;
     s->enable_adb = 0;
     s->rotation = MULTIROM_DEFAULT_ROTATION;
+    s->anim_duration_coef = 1.f;
 
     s->fstab = fstab_auto_load();
     if(!s->fstab)
@@ -519,6 +520,8 @@ int multirom_load_status(struct multirom_status *s)
             s->rotation = atoi(arg);
         else if(strstr(name, "force_generic_fb"))
             s->force_generic_fb = atoi(arg);
+        else if(strstr(name, "anim_duration_coef_pct"))
+            s->anim_duration_coef = ((float)atoi(arg)) / 100;
     }
 
     fclose(f);
@@ -577,6 +580,9 @@ int multirom_load_status(struct multirom_status *s)
 
     fb_force_generic_impl(s->force_generic_fb);
 
+    if(s->anim_duration_coef == 0)
+        s->anim_duration_coef = 1.f;
+
     return 0;
 }
 
@@ -612,6 +618,7 @@ int multirom_save_status(struct multirom_status *s)
     fprintf(f, "int_display_name=%s\n", s->int_display_name ? s->int_display_name : "");
     fprintf(f, "rotation=%d\n", s->rotation);
     fprintf(f, "force_generic_fb=%d\n", s->force_generic_fb);
+    fprintf(f, "anim_duration_coef_pct=%d\n", (int)s->anim_duration_coef*100);
 
     fclose(f);
     return 0;
@@ -642,6 +649,7 @@ void multirom_dump_status(struct multirom_status *s)
     INFO("  enable_adb=%d\n", s->enable_adb);
     INFO("  rotation=%d\n", s->rotation);
     INFO("  force_generic_fb=%d\n", s->force_generic_fb);
+    INFO("  anim_duration_coef=%f\n", s->anim_duration_coef);
     INFO("  hide_internal=%d\n", s->hide_internal);
     INFO("  int_display_name=%s\n", s->int_display_name ? s->int_display_name : "NULL");
     INFO("  auto_boot_seconds=%d\n", s->auto_boot_seconds);

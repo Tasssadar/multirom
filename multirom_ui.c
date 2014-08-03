@@ -130,7 +130,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     }
 
     workers_start();
-    anim_init();
+    anim_init(s->anim_duration_coef);
 
     multirom_ui_init_theme(TAB_INTERNAL);
 
@@ -444,6 +444,7 @@ static void multirom_ui_auto_boot_tick(void *data)
 
         call_anim *a = call_anim_create(NULL, NULL, 1000, INTERPOLATOR_LINEAR);
         d->anim_id = a->id;
+        a->duration = 1000; // in call_anim_create, duration is multiplied by coef - we don't want that here
         a->on_finished_call = multirom_ui_auto_boot_tick;
         a->on_finished_data = d;
         call_anim_add(a);

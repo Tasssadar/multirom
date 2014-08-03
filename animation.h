@@ -78,7 +78,7 @@ typedef struct
     void *data;
 } call_anim;
 
-void anim_init(void);
+void anim_init(float duration_coef);
 void anim_stop(int wait_for_finished);
 void anim_cancel(uint32_t id, int only_not_started);
 void anim_cancel_for(void *fb_item, int only_not_started);

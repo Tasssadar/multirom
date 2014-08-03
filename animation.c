@@ -44,6 +44,7 @@ struct anim_list
     struct anim_list_it **inactive_ctx;
 
     int running;
+    float duration_coef;
     volatile int in_update_loop;
     pthread_mutex_t mutex;
 };
@@ -55,6 +56,7 @@ static struct anim_list anim_list = {
     .last = NULL,
     .inactive_ctx = NULL,
     .running = 0,
+    .duration_coef = 1.f,
     .in_update_loop = 0,
     .mutex = PTHREAD_MUTEX_INITIALIZER,
 };
@@ -270,12 +272,13 @@ static uint32_t anim_generate_id(void)
     return id++;
 }
 
-void anim_init(void)
+void anim_init(float duration_coef)
 {
     if(anim_list.running)
         return;
 
     anim_list.running = 1;
+    anim_list.duration_coef = duration_coef;
     workers_add(&anim_update, &anim_list);
 }
 
@@ -413,7 +416,7 @@ item_anim *item_anim_create(void *fb_item, int duration, int interpolator)
     item_anim *anim = mzalloc(sizeof(item_anim));
     anim->id = anim_generate_id();
     anim->item = fb_item;
-    anim->duration = duration;
+    anim->duration = duration * anim_list.duration_coef;
     anim->interpolator = interpolator;
     anim->cancel_check_data = fb_item;
     anim->cancel_check = anim_item_cancel_check;
@@ -457,7 +460,7 @@ call_anim *call_anim_create(void *data, call_anim_callback callback, int duratio
     anim->id = anim_generate_id();
     anim->data = data;
     anim->callback = callback;
-    anim->duration = duration;
+    anim->duration = duration * anim_list.duration_coef;
     anim->interpolator = interpolator;
     return anim;
 }
