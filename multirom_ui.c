@@ -560,6 +560,9 @@ void *multirom_ui_tab_rom_init(int tab_type)
 void multirom_ui_tab_rom_destroy(void *data)
 {
     multirom_set_usb_refresh_thread(mrom_status, 0);
+    pthread_mutex_lock(&exit_code_mutex);
+    loop_act &= ~(LOOP_UPDATE_USB);
+    pthread_mutex_unlock(&exit_code_mutex);
 
     tab_data_roms *t = (tab_data_roms*)data;
 
@@ -651,9 +654,6 @@ void multirom_ui_tab_rom_update_usb(void *data)
 {
     tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data;
     listview_clear(t->list);
-
-    fb_rm_text(t->rom_name);
-    t->rom_name = NULL;
 
     multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
     listview_update_ui(t->list);

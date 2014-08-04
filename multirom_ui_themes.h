@@ -34,7 +34,6 @@ typedef struct
     listview *list;
     button **buttons;
     void **ui_elements;
-    fb_text *rom_name;
     fb_text *title_text;
     fb_text *usb_text;
     button *boot_btn;
