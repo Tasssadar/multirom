@@ -133,6 +133,40 @@ static void workaround_rc_restorecon(const char *rc_file_name)
     free(name_out);
 }
 
+static void workaround_mount_in_sh(const char *path)
+{
+    char line[512];
+    char *tmp_name = NULL;
+    FILE *f_in, *f_out;
+
+    f_in = fopen(path, "r");
+    if(!f_in)
+        return;
+
+    const int size = strlen(path) + 5;
+    tmp_name = malloc(size);
+    snprintf(tmp_name, size, "%s-new", path);
+    f_out = fopen(tmp_name, "w");
+    if(!f_out)
+    {
+        fclose(f_in);
+        free(tmp_name);
+        return;
+    }
+
+    while(fgets(line, sizeof(line), f_in))
+    {
+        if(strstr(line, "mount ") && strstr(line, "/system"))
+            fputc('#', f_out);
+        fputs(line, f_out);
+    }
+
+    fclose(f_in);
+    fclose(f_out);
+    rename(tmp_name, path);
+    free(tmp_name);
+}
+
 void rom_quirks_on_android_mounted_fs(struct multirom_rom *rom)
 {
     // CyanogenMod has init script 50selinuxrelabel which calls
@@ -171,4 +205,8 @@ void rom_quirks_on_android_mounted_fs(struct multirom_rom *rom)
         }
         closedir(d);
     }
+
+    // franco.Kernel includes script init.fk.sh which remounts /system as read only
+    if((M(rom->type) & MASK_ANDROID) && rom->type != ROM_ANDROID_USB_IMG)
+        workaround_mount_in_sh("/init.fk.sh");
 }
