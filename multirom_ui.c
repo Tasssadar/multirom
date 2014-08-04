@@ -404,14 +404,32 @@ struct auto_boot_data
     ncard_builder *b;
     int seconds;
     uint32_t anim_id;
+    pthread_mutex_t mutex;
+    int destroy;
 };
+
+static void multirom_ui_destroy_auto_boot_data(struct auto_boot_data *d)
+{
+    ncard_destroy_builder(d->b);
+    pthread_mutex_destroy(&d->mutex);
+    free(d);
+}
 
 static void multirom_ui_auto_boot_hidden(void *data)
 {
     struct auto_boot_data *d = data;
-    anim_cancel(d->anim_id, 0);
-    ncard_destroy_builder(d->b);
-    free(d);
+    pthread_mutex_lock(&d->mutex);
+    if(d->anim_id == UINT_MAX)
+    {
+        pthread_mutex_unlock(&d->mutex);
+        multirom_ui_destroy_auto_boot_data(d);
+        return;
+    }
+    else
+    {
+        d->destroy = 1;
+    }
+    pthread_mutex_unlock(&d->mutex);
 }
 
 static void multirom_ui_auto_boot_now(void *data)
@@ -429,8 +447,19 @@ static void multirom_ui_auto_boot_tick(void *data)
     char buff[128];
     struct auto_boot_data *d = data;
 
+    pthread_mutex_lock(&d->mutex);
+
+    if(d->destroy)
+    {
+        pthread_mutex_unlock(&d->mutex);
+        multirom_ui_destroy_auto_boot_data(d);
+        return;
+    }
+
     if(--d->seconds == 0)
     {
+        d->anim_id = UINT_MAX;
+
         pthread_mutex_lock(&exit_code_mutex);
         selected_rom = mrom_status->auto_boot_rom;
         exit_ui_code = UI_EXIT_BOOT_ROM;
@@ -438,17 +467,19 @@ static void multirom_ui_auto_boot_tick(void *data)
     }
     else
     {
-        snprintf(buff, sizeof(buff), "\n<b>ROM:</b> <y>%s</y>\n\nBooting in %d second%s.", mrom_status->auto_boot_rom->name, d->seconds, d->seconds != 1 ? "s" : "");
-        ncard_set_text(d->b, buff);
-        ncard_show(d->b, 0);
-
         call_anim *a = call_anim_create(NULL, NULL, 1000, INTERPOLATOR_LINEAR);
         d->anim_id = a->id;
         a->duration = 1000; // in call_anim_create, duration is multiplied by coef - we don't want that here
         a->on_finished_call = multirom_ui_auto_boot_tick;
         a->on_finished_data = d;
         call_anim_add(a);
+
+        snprintf(buff, sizeof(buff), "\n<b>ROM:</b> <y>%s</y>\n\nBooting in %d second%s.", mrom_status->auto_boot_rom->name, d->seconds, d->seconds != 1 ? "s" : "");
+        ncard_set_text(d->b, buff);
+        ncard_show(d->b, 0);
     }
+
+    pthread_mutex_unlock(&d->mutex);
 }
 
 void multirom_ui_auto_boot(void)
@@ -458,6 +489,7 @@ void multirom_ui_auto_boot(void)
     struct auto_boot_data *d = mzalloc(sizeof(struct auto_boot_data));
     d->b = b;
     d->seconds = mrom_status->auto_boot_seconds + 1;
+    pthread_mutex_init(&d->mutex, NULL);
 
     ncard_set_pos(b, NCARD_POS_CENTER);
     ncard_set_cancelable(b, 1);
