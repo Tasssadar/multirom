@@ -182,11 +182,7 @@ void rom_quirks_on_android_mounted_fs(struct multirom_rom *rom)
         remove("/system/etc/init.d/50selinuxrelabel");
     }
 
-    // The Android L preview (and presumably later releases) have SELinux
-    // set to "enforcing" and "restorecon_recursive /data" line in init.rc.
-    // Restorecon on /data goes into /data/media/0/multirom/roms/ and changes
-    // context of all secondary ROMs files to that of /data, including the files
-    // in secondary ROMs /system dirs. We need to prevent that.
+    // walk over all _regular_ files in /
     DIR *d = opendir("/");
     if(d)
     {
@@ -197,16 +193,25 @@ void rom_quirks_on_android_mounted_fs(struct multirom_rom *rom)
             if(dt->d_type != DT_REG)
                 continue;
 
+            // The Android L preview (and presumably later releases) have SELinux
+            // set to "enforcing" and "restorecon_recursive /data" line in init.rc.
+            // Restorecon on /data goes into /data/media/0/multirom/roms/ and changes
+            // context of all secondary ROMs files to that of /data, including the files
+            // in secondary ROMs /system dirs. We need to prevent that.
             if(strstr(dt->d_name, ".rc"))
             {
                 snprintf(buff, sizeof(buff), "/%s", dt->d_name);
                 workaround_rc_restorecon(buff);
             }
+
+            // franco.Kernel includes script init.fk.sh which remounts /system as read only
+            // comment out lines with mount and /system in all .sh scripts in /
+            if(strstr(dt->d_name, ".sh") && (M(rom->type) & MASK_ANDROID) && rom->type != ROM_ANDROID_USB_IMG)
+            {
+                snprintf(buff, sizeof(buff), "/%s", dt->d_name);
+                workaround_mount_in_sh(buff);
+            }
         }
         closedir(d);
     }
-
-    // franco.Kernel includes script init.fk.sh which remounts /system as read only
-    if((M(rom->type) & MASK_ANDROID) && rom->type != ROM_ANDROID_USB_IMG)
-        workaround_mount_in_sh("/init.fk.sh");
 }
