@@ -59,15 +59,15 @@ static void write_changed_restorecons(const char *path, FILE *rc)
             {
                 if(strlen(next_path) != strlen(MULTIROM_DIR_ANDROID))
                 {
-                    fprintf(rc, "    restorecon %s/%s\n", path, dt->d_name);
+                    fprintf(rc, "    restorecon \"%s/%s\"\n", path, dt->d_name);
                     write_changed_restorecons(next_path, rc);
                 }
             }
             else
-                fprintf(rc, "    restorecon_recursive %s/%s\n", path, dt->d_name);
+                fprintf(rc, "    restorecon_recursive \"%s/%s\"\n", path, dt->d_name);
         }
         else
-            fprintf(rc, "    restorecon %s/%s\n", path, dt->d_name);
+            fprintf(rc, "    restorecon \"%s/%s\"\n", path, dt->d_name);
     }
 
     closedir(d);
