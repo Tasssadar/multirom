@@ -21,6 +21,8 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <sys/types.h>
+#include <sys/xattr.h>
 
 #include "multirom.h"
 #include "rom_quirks.h"
@@ -28,6 +30,10 @@
 #include "util.h"
 
 #define MULTIROM_DIR_ANDROID "/data/media/0/multirom"
+#define MULTIROM_DIR_ANDROID_LEN 22
+#define RESTORECON_LAST "security.restorecon_last"
+#define RESTORECON_LAST_HACK_PATH "/data/media"
+#define RESTORECON_LAST_HACK_PATH_LEN 11
 
 static void write_changed_restorecons(const char *path, FILE *rc)
 {
@@ -54,17 +60,30 @@ static void write_changed_restorecons(const char *path, FILE *rc)
             }
 
             snprintf(next_path, allocd, "%s/%s", path, dt->d_name);
+            const int next_path_len = strlen(next_path);
 
-            if(strncmp(next_path, MULTIROM_DIR_ANDROID, strlen(next_path)) == 0)
+            if(strncmp(next_path, MULTIROM_DIR_ANDROID, next_path_len) == 0)
             {
-                if(strlen(next_path) != strlen(MULTIROM_DIR_ANDROID))
+                if(next_path_len != MULTIROM_DIR_ANDROID_LEN)
                 {
                     fprintf(rc, "    restorecon \"%s/%s\"\n", path, dt->d_name);
                     write_changed_restorecons(next_path, rc);
                 }
             }
             else
+            {
                 fprintf(rc, "    restorecon_recursive \"%s/%s\"\n", path, dt->d_name);
+
+                // restorecon_recursive works only if RESTORECON_LAST xattr contains hash
+                // different from current file_contexts. Because /data/media/ is shared
+                // among multiple ROMs, this doesn't work well because some ROMs don't
+                // set this xattr, so restorecon thinks nothing changed but it did.
+                if (strncmp(next_path, RESTORECON_LAST_HACK_PATH, RESTORECON_LAST_HACK_PATH_LEN) == 0 &&
+                    (next_path[RESTORECON_LAST_HACK_PATH_LEN] == 0 || next_path[RESTORECON_LAST_HACK_PATH_LEN] == '/'))
+                {
+                    removexattr(next_path, RESTORECON_LAST);
+                }
+            }
         }
         else
             fprintf(rc, "    restorecon \"%s/%s\"\n", path, dt->d_name);
@@ -107,10 +126,15 @@ static void workaround_rc_restorecon(const char *rc_file_name)
         if(r)
         {
             r += strlen("restorecon_recursive");
-            while(*r && isspace(*r)) ++r;
-            if(strncmp(r, "/data", 5) == 0)
+
+            while(*r && isspace(*r))
+                ++r;
+
+            if(strcmp(r, "/data\n") == 0)
             {
                 changed = 1;
+                fputc('#', f_out);
+                fputs(line, f_out);
                 write_changed_restorecons("/data", f_out);
             }
             else
