@@ -617,13 +617,9 @@ char *strtoupper(const char *str)
     return res;
 }
 
-static int loop_dev_counter = 0;
 int create_loop_device(const char *dev_path, const char *img_path, int loop_num, int loop_chmod)
 {
     int file_fd, device_fd, res = -1;
-
-    if(loop_num == -1)
-        loop_num = loop_dev_counter++;
 
     file_fd = open(img_path, O_RDWR | O_CLOEXEC);
     if (file_fd < 0) {
@@ -653,7 +649,7 @@ int create_loop_device(const char *dev_path, const char *img_path, int loop_num,
 
     if (ioctl(device_fd, LOOP_SET_FD, file_fd) < 0)
     {
-        ERROR("ioctl LOOP_SET_FD failed on %s\n", dev_path);
+        ERROR("ioctl LOOP_SET_FD failed on %s (%d: %s)\n", dev_path, errno, strerror(errno));
         goto close_dev;
     }
 
@@ -665,18 +661,42 @@ close_file:
     return res;
 }
 
+#define MAX_LOOP_NUM 1023
 int mount_image(const char *src, const char *dst, const char *fs, int flags, const void *data)
 {
-    int file_fd, device_fd, loop_num, res = -1;
-
     char path[64];
-    loop_num = loop_dev_counter;
-    sprintf(path, "/dev/block/loop%d", loop_num);
+    int device_fd;
+    int loop_num = 0;
+    int res = -1;
+    struct stat info;
+    struct loop_info64 lo_info;
+
+    for(; loop_num < MAX_LOOP_NUM; ++loop_num)
+    {
+        sprintf(path, "/dev/block/loop%d", loop_num);
+        if(stat(path, &info) < 0)
+        {
+            if(errno == ENOENT)
+                break;
+        }
+        else if(S_ISBLK(info.st_mode) && (device_fd = open(path, O_RDWR | O_CLOEXEC)) >= 0)
+        {
+            int ioctl_res = ioctl(device_fd, LOOP_GET_STATUS64, &lo_info);
+            close(device_fd);
+
+            if (ioctl_res < 0 && errno == ENXIO)
+                break;
+        }
+    }
+
+    if(loop_num == MAX_LOOP_NUM)
+    {
+        ERROR("mount_image: failed to find suitable loop device number!");
+        return -1;
+    }
 
     if(create_loop_device(path, src, loop_num, 0777) < 0)
         return -1;
-
-    ++loop_dev_counter;
 
     if(mount(path, dst, fs, flags, data) < 0)
         ERROR("Failed to mount loop (%d: %s)\n", errno, strerror(errno));
