@@ -28,14 +28,18 @@ int main(int argc, char *argv[])
 {
     struct fstab *f = fstab_load(FW_MOUNTER_FSTAB, 0);
     if(!f)
+    {
+        LOG("Failed to load %s\n", FW_MOUNTER_FSTAB);
         return -1;
+    }
 
     struct fstab_part *fw_part = fstab_find_by_path(f, "/firmware");
     if(!fw_part)
     {
-        ERROR("Unable to find partition /firmware in %s!\n", FW_MOUNTER_FSTAB);
+        LOG("Unable to find partition /firmware in %s!\n", FW_MOUNTER_FSTAB);
         return -1;
     }
 
+    LOG("Mounting %s to %s\n", fw_part->device, fw_part->path);
     return mount_image(fw_part->device, fw_part->path, fw_part->type, fw_part->mountflags, fw_part->options);
 }
