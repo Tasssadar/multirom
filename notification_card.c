@@ -17,6 +17,7 @@
 
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include "util.h"
 #include "animation.h"
@@ -140,6 +141,7 @@ struct ncard
     ncard_callback on_hidden_call;
     void *on_hidden_data;
     int reveal_from_black;
+    pthread_mutex_t mutex;
 } ncard = {
     .bg = NULL,
     .shadow = NULL,
@@ -155,11 +157,14 @@ struct ncard
     .on_hidden_call = NULL,
     .on_hidden_data = NULL,
     .reveal_from_black = 0,
+    .mutex = PTHREAD_MUTEX_INITIALIZER,
 };
 
 static int ncard_touch_handler(touch_event *ev, void *data)
 {
     struct ncard *c = data;
+
+    pthread_mutex_lock(&c->mutex);
 
     if(c->touch_id == -1 && (ev->changed & TCHNG_ADDED))
     {
@@ -188,18 +193,28 @@ static int ncard_touch_handler(touch_event *ev, void *data)
     {
         if(c->cancelable)
         {
+            pthread_mutex_unlock(&c->mutex);
             ncard_hide();
             return 0;
         }
         else
+        {
+            pthread_mutex_unlock(&c->mutex);
             return c->pos == NCARD_POS_CENTER ? 0 : -1;
+        }
     }
 
     if(ev->changed & TCHNG_REMOVED)
     {
         struct ncard_btn *b = &c->btns[c->hover_btn];
         if(b->callback && in_rect(ev->x, ev->y, b->pos.x, b->pos.y, b->pos.w, b->pos.h))
-            b->callback(b->callback_data);
+        {
+            ncard_callback call = b->callback;
+            void *call_data = b->callback_data;
+            pthread_mutex_unlock(&c->mutex);
+            call(call_data);
+            pthread_mutex_lock(&c->mutex);
+        }
         else
         {
             fb_rm_rect(c->hover_rect);
@@ -208,6 +223,7 @@ static int ncard_touch_handler(touch_event *ev, void *data)
         c->touch_id = -1;
     }
 
+    pthread_mutex_unlock(&c->mutex);
     return 0;
 }
 
@@ -215,6 +231,9 @@ static void ncard_move_step(void *data, float interpolated)
 {
     int i;
     struct ncard *c = data;
+
+    pthread_mutex_lock(&c->mutex);
+
     const int diff = c->bg->y - c->last_y;
 
     for(i = 0; c->texts && c->texts[i]; ++i)
@@ -245,12 +264,16 @@ static void ncard_move_step(void *data, float interpolated)
         else
             c->alpha_bg->color = (c->alpha_bg->color & ~(0xFF << 24)) | (((int)(0xCC*interpolated)) << 24);
     }
+
+    pthread_mutex_unlock(&c->mutex);
 }
 
 static void ncard_reveal_finished(void *data)
 {
+    pthread_mutex_lock(&ncard.mutex);
     ncard.bg->h = ncard.targetH;
     ncard.shadow->h = ncard.targetH;
+    pthread_mutex_unlock(&ncard.mutex);
 }
 
 static void ncard_hide_finished(void *data)
@@ -265,7 +288,9 @@ static void ncard_hide_finished(void *data)
 
 void ncard_set_top_offset(int top_offset)
 {
+    pthread_mutex_lock(&ncard.mutex);
     ncard.top_offset = top_offset;
+    pthread_mutex_unlock(&ncard.mutex);
 }
 
 void ncard_show(ncard_builder *b, int destroy_builder)
@@ -273,6 +298,8 @@ void ncard_show(ncard_builder *b, int destroy_builder)
     int i, items_h, btn_x, btn_h, has_btn = 0, it_y = 0, lvl_offset = 0;
     fb_text *title = 0, *text = 0, *btns[BTN_COUNT];
     int interpolator;
+
+    pthread_mutex_lock(&ncard.mutex);
 
     if(ncard.bg)
         anim_cancel_for(ncard.bg, 0);
@@ -339,7 +366,11 @@ void ncard_show(ncard_builder *b, int destroy_builder)
     int new_pos = ncard_calc_pos(b, ncard.top_offset + items_h + CARD_MARGIN);
 
     if(new_pos != ncard.pos && ncard.bg)
+    {
+        pthread_mutex_unlock(&ncard.mutex);
         ncard_hide();
+        pthread_mutex_lock(&ncard.mutex);
+    }
 
     ncard.pos = new_pos;
 
@@ -439,6 +470,8 @@ void ncard_show(ncard_builder *b, int destroy_builder)
     a->on_finished_call = ncard_reveal_finished;
     item_anim_add(a);
 
+    pthread_mutex_unlock(&ncard.mutex);
+
     if(destroy_builder)
         ncard_destroy_builder(b);
 }
@@ -451,6 +484,7 @@ void ncard_hide(void)
     anim_cancel_for(ncard.bg, 0);
 
     struct ncard *c = mzalloc(sizeof(struct ncard));
+    pthread_mutex_lock(&ncard.mutex);
     c->bg = ncard.bg;
     c->shadow = ncard.shadow;
     c->hover_rect = ncard.hover_rect;
@@ -469,6 +503,8 @@ void ncard_hide(void)
         rm_touch_handler(ncard_touch_handler, &ncard);
         ncard.touch_handler_registered = 0;
     }
+
+    pthread_mutex_unlock(&ncard.mutex);
 
     item_anim *a = item_anim_create(c->bg, 400, INTERPOLATOR_ACCELERATE);
     a->targetY = ncard.pos == NCARD_POS_TOP ? -c->bg->h : fb_height + c->bg->h;
