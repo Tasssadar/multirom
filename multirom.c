@@ -48,6 +48,7 @@
 #include "containers.h"
 #include "rom_quirks.h"
 #include "kexec.h"
+#include "fw_mounter/fw_mounter_defines.h"
 
 #define REALDATA "/realdata"
 #define BUSYBOX_BIN "busybox"
@@ -1030,13 +1031,91 @@ char *multirom_find_fstab_in_rc(const char *rcfile)
     return NULL;
 }
 
+// On L dev preview and presumably later android releases, the firmware image
+// has mount option "context=...", which sets SELinux context for that whole
+// mount. It needs initialized SELinux in order to successfully mount, which
+// means it can't be done while in multirom (SELinux is initalized in real
+// init, after multirom exits). Workaround as follows:
+//  * inject 'start mrom_fw_mounter' before mount_all command in .rc file
+//  * append service mrom_fw_mounter block into said .rc file. This service
+//    starts binary 'fw_mounter', which is part of MultiROM and it just
+//    mounts the FW image file.
+//  * Copy fw_mounter to /sbin/ and setup its fstab
+//  * Real init starts mrom_fw_mounter service which mounts the image
+//
+// SELinux compains about the fw_mounter not having context set, but it still
+// works. There is a chance Google will disable all services which don't have
+// context set in sepolicy. That will be a problem.
+
+static int multirom_inject_fw_mounter(char *rc_with_mount_all, struct fstab_part *fw_part)
+{
+    static const char *trigger_line = "    start mrom_fw_mounter\n";
+    static const char *service_block =
+        "\nservice mrom_fw_mounter "FW_MOUNTER_PATH"\n"
+        "    disabled\n"
+        "    oneshot\n"
+        "    user root\n"
+        "    group root\n";
+
+    char *rc_file, *p;
+    size_t rc_len, alloc_size;
+    char line[512];
+    FILE *f = fopen(rc_with_mount_all, "r+");
+    if(!f)
+    {
+        ERROR("Failed to open file \"%s\" to inject fw_mounter!", rc_with_mount_all);
+        fstab_destroy_part(fw_part);
+        return -1;
+    }
+
+    fseek(f, 0, SEEK_END);
+    rc_len = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    alloc_size = rc_len + 1 + strlen(trigger_line);
+    rc_file = malloc(alloc_size);
+    rc_file[0] = 0;
+
+    while(fgets(line, sizeof(line), f))
+    {
+        for(p = line; isspace(*p); ++p);
+
+        if(*p && *p != '#' && line[strlen(line)-1] == '\n' && strncmp(p, "mount_all", 9) == 0)
+            strcat(rc_file, trigger_line);
+        strcat(rc_file, line);
+    }
+
+    fseek(f, 0, SEEK_SET);
+    fputs(rc_file, f);
+    fputs(service_block, f);
+
+    free(rc_file);
+    fclose(f);
+
+    // copy fw_mounter to /sbin
+    snprintf(line, sizeof(line), "%s/%s", multirom_dir, FW_MOUNTER_BIN);
+    copy_file(line, FW_MOUNTER_PATH);
+    chmod(FW_MOUNTER_PATH, 0755);
+
+    // prepare fstab for it
+    struct fstab *fw_fstab = fstab_create_empty(1);
+    fstab_add_part_struct(fw_fstab, fw_part);
+    fstab_save(fw_fstab, FW_MOUNTER_FSTAB);
+    fstab_destroy(fw_fstab);
+
+    return 0;
+}
+
 int multirom_prep_android_mounts(struct multirom_rom *rom)
 {
     char in[128];
     char out[128];
     char path[256];
+    char rc_with_mount_all[128] = { 0 };
     char *fstab_name = NULL;
     int has_fw = 0;
+    struct fstab_part *fw_part = NULL;
+    int res = -1;
 
     sprintf(path, "%s/firmware.img", rom->base_path);
     has_fw = (access(path, R_OK) >= 0);
@@ -1068,13 +1147,17 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
             chmod(out, EXEC_MASK);
 
             if(!fstab_name && strcmp(dp->d_name, "init."TARGET_DEVICE".rc") == 0)
+            {
                 fstab_name = multirom_find_fstab_in_rc(out);
+                if(fstab_name)
+                    snprintf(rc_with_mount_all, sizeof(rc_with_mount_all), "%s", out);
+            }
         }
     }
     closedir(d);
 
-    if(multirom_process_android_fstab(fstab_name, has_fw) != 0)
-        return -1;
+    if(multirom_process_android_fstab(fstab_name, has_fw, &fw_part) != 0)
+        goto exit;
 
     mkdir_with_perms("/system", 0755, NULL, NULL);
     mkdir_with_perms("/data", 0771, "system", "system");
@@ -1107,41 +1190,52 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
             if(mount(from, to, "ext4", flags[img][i], "discard,nomblk_io_submit") < 0)
             {
                 ERROR("Failed to mount %s to %s (%d: %s)", from, to, errno, strerror(errno));
-                return -1;
+                goto exit;
             }
         }
         else
         {
-            if(multirom_mount_loop(from, to, "ext4", flags[img][i], NULL) < 0)
-                return -1;
+            if(mount_image(from, to, "ext4", flags[img][i], NULL) < 0)
+                goto exit;
         }
     }
 
-    if(has_fw)
+    if(has_fw && fw_part)
     {
         INFO("Mounting ROM's FW image instead of FW partition\n");
         sprintf(from, "%s/firmware.img", rom->base_path);
-        if(multirom_mount_loop(from, "/firmware", "vfat", MS_RDONLY,
-            "shortname=lower,uid=1000,gid=1000,dmask=227,fmask=337") < 0)
+        if(strstr(fw_part->options, "context="))
         {
-            return -1;
+            INFO("Firmware's mount options contain 'context=...', injecting fw_mounter hack instead!\n");
+            fw_part->device = realloc(fw_part->device, strlen(from)+1);
+            strcpy(fw_part->device, from);
+            multirom_inject_fw_mounter(rc_with_mount_all, fw_part);
+            fw_part = NULL;
         }
+        else if(mount_image(from, "/firmware", fw_part->type, fw_part->mountflags, fw_part->options) < 0)
+            goto exit;
     }
 
 #if MR_DEVICE_HOOKS >= 1
-    int res = mrom_hook_after_android_mounts(busybox_path, rom->base_path, rom->type);
-    if(res < 0)
+    int hooks_res = mrom_hook_after_android_mounts(busybox_path, rom->base_path, rom->type);
+    if(hooks_res < 0)
     {
-        ERROR("mrom_hook_after_android_mounts returned %d!\n", res);
-        return -1;
+        ERROR("mrom_hook_after_android_mounts returned %d!\n", hooks_res);
+        goto exit;
     }
 #endif
 
-    return 0;
+    res = 0;
+exit:
+    if(fw_part)
+        fstab_destroy_part(fw_part);
+    return res;
 }
 
-int multirom_process_android_fstab(char *fstab_name, int has_fw)
+int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_part **fw_part)
 {
+    int res = -1;
+
     if(fstab_name != NULL)
         INFO("Using fstab %s from rc files\n", fstab_name);
     else
@@ -1175,80 +1269,37 @@ int multirom_process_android_fstab(char *fstab_name, int has_fw)
     }
 
     ERROR("Modifying fstab: %s\n", fstab_name);
-
-    FILE *fstab = NULL;
-    long len = 0;
-    char *line = NULL;
-    char *out = NULL;
-    int res = -1;
-    int counter = 0;
-    int has_fstab_line = 0;
-
-    static const char *dummy_fstab_line =
-        "# Android considers empty fstab invalid, so MultiROM has to add _something_ to process triggers\n"
-        "tmpfs\t/dummy_tmpfs\ttmpfs\tro,nosuid,nodev\tdefaults\n";
-
-    fstab = fopen(fstab_name, "r");
-    if(!fstab)
-    {
-        ERROR("Failed to open %s\n", fstab_name);
+    struct fstab *tab = fstab_load(fstab_name, 0);
+    if(!tab)
         goto exit;
-    }
 
-    fseek(fstab, 0, SEEK_END);
-    len = ftell(fstab);
-    fseek(fstab, 0, SEEK_SET);
+    if(fstab_disable_part(tab, "/system") || fstab_disable_part(tab, "/data") || fstab_disable_part(tab, "/cache"))
+        goto exit;
 
-#define FSTAB_LINE_LEN 2048
-    line = malloc(FSTAB_LINE_LEN);
-    out = malloc(len + 5 + sizeof(dummy_fstab_line));
-    out[0] = 0;
-
-    while((fgets(line, FSTAB_LINE_LEN, fstab)))
+    if(has_fw)
     {
-        if(line[0] != '#')
+        struct fstab_part *p = fstab_find_by_path(tab, "/firmware");
+        if(p)
         {
-            if (strstr(line, "/system") || strstr(line, "/cache") || strstr(line, "/data") ||
-                (has_fw && strstr(line, "/firmware")))
-            {
-                strcat(out, "#");
-                if(++counter > 3 + has_fw)
-                {
-                    ERROR("Commented %u lines instead of 3 in fstab, stopping boot!\n", counter);
-                    fclose(fstab);
-                    goto exit;
-                }
-            }
-            else if(line[0] != '\n' && line[0] != ' ')
-                has_fstab_line = 1;
+            *fw_part = fstab_clone_part(p);
+            p->disabled = 1;
         }
-
-        strcat(out, line);
     }
-    fclose(fstab);
 
     // Android considers empty fstab invalid
-    if(has_fstab_line == 0)
+    if(tab->count == 3 + has_fw)
     {
         INFO("fstab would be empty, adding dummy line\n");
-        strcat(out, dummy_fstab_line);
+        fstab_add_part(tab, "tmpfs", "/dummy_tmpfs", "tmpfs", "ro,nosuid,nodev", "defaults");
         mkdir("/dummy_tmpfs", 0644);
     }
 
-    fstab = fopen(fstab_name, "w");
-    if(!fstab)
-    {
-        ERROR("Failed to open %s for writing!", fstab_name);
-        goto exit;
-    }
+    if(fstab_save(tab, fstab_name) == 0)
+        res = 0;
 
-    fputs(out, fstab);
-    fclose(fstab);
-
-    res = 0;
 exit:
-    free(line);
-    free(out);
+    if(tab)
+        fstab_destroy(tab);
     free(fstab_name);
     return res;
 }
@@ -1761,7 +1812,7 @@ int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *ro
             // mount the image file
             mkdir("/mnt", 0777);
             mkdir("/mnt/image", 0777);
-            if(multirom_mount_loop(path, "/mnt/image", img_fs ? img_fs : "ext4", MS_NOATIME, NULL) < 0)
+            if(mount_image(path, "/mnt/image", img_fs ? img_fs : "ext4", MS_NOATIME, NULL) < 0)
                 goto exit;
 
             loop_mounted = 1;
@@ -2320,52 +2371,6 @@ void multirom_set_usb_refresh_thread(struct multirom_status *s, int run)
 void multirom_set_usb_refresh_handler(void (*handler)(void))
 {
     usb_refresh_handler = handler;
-}
-
-int multirom_mount_loop(const char *src, const char *dst, const char *fs, int flags, const void *data)
-{
-    int file_fd, device_fd, res = -1;
-
-    file_fd = open(src, O_RDWR);
-    if (file_fd < 0) {
-        ERROR("Failed to open image %s\n", src);
-        return -1;
-    }
-
-    static int loop_devs = 0;
-    char path[64];
-    sprintf(path, "/dev/loop%d", loop_devs);
-    if(mknod(path, S_IFBLK | 0777, makedev(7, loop_devs)) < 0)
-    {
-        ERROR("Failed to create loop file (%d: %s)\n", errno, strerror(errno));
-        goto close_file;
-    }
-
-    ++loop_devs;
-
-    device_fd = open(path, O_RDWR);
-    if (device_fd < 0)
-    {
-        ERROR("Failed to open loop file (%d: %s)\n", errno, strerror(errno));
-        goto close_file;
-    }
-
-    if (ioctl(device_fd, LOOP_SET_FD, file_fd) < 0)
-    {
-        ERROR("ioctl LOOP_SET_FD failed on %s\n", path);
-        goto close_dev;
-    }
-
-    if(mount(path, dst, fs, flags, data) < 0)
-        ERROR("Failed to mount loop (%d: %s)\n", errno, strerror(errno));
-    else
-        res = 0;
-
-close_dev:
-    close(device_fd);
-close_file:
-    close(file_fd);
-    return res;
 }
 
 char *multirom_get_klog(void)

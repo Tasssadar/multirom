@@ -176,6 +176,9 @@ include $(BUILD_EXECUTABLE)
 # Trampoline
 include $(multirom_local_path)/trampoline/Android.mk
 
+# fw_mounter
+include $(multirom_local_path)/fw_mounter/Android.mk
+
 # ZIP installer
 include $(multirom_local_path)/install_zip/Android.mk
 

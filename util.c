@@ -34,6 +34,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
+#include <sys/mount.h>
+#include <linux/loop.h>
 
 #include <private/android_filesystem_config.h>
 
@@ -612,5 +614,74 @@ char *strtoupper(const char *str)
             res[i] -= 'a'-'A';
     }
     res[i] = 0;
+    return res;
+}
+
+static int loop_dev_counter = 0;
+int create_loop_device(const char *dev_path, const char *img_path, int loop_num, int loop_chmod)
+{
+    int file_fd, device_fd, res = -1;
+
+    if(loop_num == -1)
+        loop_num = loop_dev_counter++;
+
+    file_fd = open(img_path, O_RDWR);
+    if (file_fd < 0) {
+        ERROR("Failed to open image %s\n", img_path);
+        return -1;
+    }
+
+    INFO("create_loop_device: loop_num = %d", loop_num);
+
+    if(mknod(dev_path, S_IFBLK | loop_chmod, makedev(7, loop_num)) < 0)
+    {
+        if(errno != EEXIST)
+        {
+            ERROR("Failed to create loop file (%d: %s)\n", errno, strerror(errno));
+            goto close_file;
+        }
+        else
+            INFO("Loop file %s already exists, using it.\n", dev_path);
+    }
+
+    device_fd = open(dev_path, O_RDWR);
+    if (device_fd < 0)
+    {
+        ERROR("Failed to open loop file (%d: %s)\n", errno, strerror(errno));
+        goto close_file;
+    }
+
+    if (ioctl(device_fd, LOOP_SET_FD, file_fd) < 0)
+    {
+        ERROR("ioctl LOOP_SET_FD failed on %s\n", dev_path);
+        goto close_dev;
+    }
+
+    res = 0;
+close_dev:
+    close(device_fd);
+close_file:
+    close(file_fd);
+    return res;
+}
+
+int mount_image(const char *src, const char *dst, const char *fs, int flags, const void *data)
+{
+    int file_fd, device_fd, loop_num, res = -1;
+
+    char path[64];
+    loop_num = loop_dev_counter;
+    sprintf(path, "/dev/block/loop%d", loop_num);
+
+    if(create_loop_device(path, src, loop_num, 0777) < 0)
+        return -1;
+
+    ++loop_dev_counter;
+
+    if(mount(path, dst, fs, flags, data) < 0)
+        ERROR("Failed to mount loop (%d: %s)\n", errno, strerror(errno));
+    else
+        res = 0;
+
     return res;
 }
