@@ -251,15 +251,18 @@ void touch_commit_events(struct timeval ev_time)
         if(mt_events[i].changed & TCHNG_POS)
             mt_recalc_pos_rotation(&mt_events[i]);
 
+        pthread_mutex_lock(&touch_mutex);
         it = mt_handlers;
         while(it)
         {
             h = it->handler;
-            it = it->next;
 
             if((*h->callback)(&mt_events[i], h->data) == 0)
                 mt_events[i].consumed = 1;
+
+            it = it->next;
         }
+        pthread_mutex_unlock(&touch_mutex);
 
         mt_events[i].consumed = 0;
         mt_events[i].changed = 0;
@@ -338,7 +341,8 @@ void stop_input_thread(void)
     pthread_join(input_thread, NULL);
 }
 
-void add_touch_handler(touch_callback callback, void *data)
+
+static void add_touch_handler_priv(touch_callback callback, void *data)
 {
     touch_handler *handler = mzalloc(sizeof(touch_handler));
     handler->data = data;
@@ -358,7 +362,7 @@ void add_touch_handler(touch_callback callback, void *data)
     pthread_mutex_unlock(&touch_mutex);
 }
 
-void rm_touch_handler(touch_callback callback, void *data)
+static void rm_touch_handler_priv(touch_callback callback, void *data)
 {
     pthread_mutex_lock(&touch_mutex);
 
@@ -385,6 +389,48 @@ void rm_touch_handler(touch_callback callback, void *data)
     }
 
     pthread_mutex_unlock(&touch_mutex);
+}
+
+typedef void (*handler_call)(touch_callback, void*);
+struct handler_thread_data
+{
+    handler_call handler;
+    touch_callback callback;
+    void *data;
+};
+
+static void *touch_handler_thread_work(void *data)
+{
+    struct handler_thread_data *d = data;
+    d->handler(d->callback, d->data);
+    free(d);
+    return NULL;
+}
+
+static void touch_handler_thread_dispatcher(handler_call h_c, touch_callback callback, void *data)
+{
+    if(pthread_self() == input_thread)
+    {
+        struct handler_thread_data *d = mzalloc(sizeof(struct handler_thread_data));
+        d->handler = h_c;
+        d->callback = callback;
+        d->data = data;
+
+        pthread_t handler_thread;
+        pthread_create(&handler_thread, NULL, touch_handler_thread_work, d);
+    }
+    else
+        h_c(callback, data);
+}
+
+void add_touch_handler(touch_callback callback, void *data)
+{
+   touch_handler_thread_dispatcher(add_touch_handler_priv, callback, data);
+}
+
+void rm_touch_handler(touch_callback callback, void *data)
+{
+    touch_handler_thread_dispatcher(rm_touch_handler_priv, callback, data);
 }
 
 void input_push_context(void)
