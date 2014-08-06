@@ -88,7 +88,7 @@ int vt_set_mode(int graphics)
 {
     int fd, r;
     mknod("/dev/tty0", (0600 | S_IFCHR), makedev(4, 0));
-    fd = open("/dev/tty0", O_RDWR | O_SYNC);
+    fd = open("/dev/tty0", O_RDWR | O_SYNC | O_CLOEXEC);
     if (fd < 0)
         return -1;
     r = ioctl(fd, KDSETMODE, (void*) (graphics ? KD_GRAPHICS : KD_TEXT));
@@ -134,7 +134,7 @@ int fb_open(int rotation)
 {
     memset(&fb, 0, sizeof(struct framebuffer));
 
-    fb.fd = open("/dev/graphics/fb0", O_RDWR);
+    fb.fd = open("/dev/graphics/fb0", O_RDWR | O_CLOEXEC);
     if (fb.fd < 0)
         return -1;
 

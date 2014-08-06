@@ -114,7 +114,7 @@ static int ev_init(void)
         if(strncmp(de->d_name,"event",5))
             continue;
 
-        fd = openat(dirfd(dir), de->d_name, O_RDONLY);
+        fd = openat(dirfd(dir), de->d_name, O_RDONLY | O_CLOEXEC);
         if(fd < 0)
             continue;
 

@@ -106,7 +106,7 @@ static void init_single_path(const char *path)
 
     dfd = dirfd(d);
 
-    fd = openat(dfd, "uevent", O_WRONLY);
+    fd = openat(dfd, "uevent", O_WRONLY | O_CLOEXEC);
     if(fd >= 0)
     {
         write(fd, "add\n", 4);
@@ -896,18 +896,18 @@ static void process_firmware_event(struct uevent *uevent)
     if (l == -1)
         goto data_free_out;
 
-    loading_fd = open(loading, O_WRONLY);
+    loading_fd = open(loading, O_WRONLY | O_CLOEXEC);
     if(loading_fd < 0)
         goto file_free_out;
 
-    data_fd = open(data, O_WRONLY);
+    data_fd = open(data, O_WRONLY | O_CLOEXEC);
     if(data_fd < 0)
         goto loading_close_out;
 
 try_loading_again:
-    fw_fd = open(file1, O_RDONLY);
+    fw_fd = open(file1, O_RDONLY | O_CLOEXEC);
     if(fw_fd < 0) {
-        fw_fd = open(file2, O_RDONLY);
+        fw_fd = open(file2, O_RDONLY | O_CLOEXEC);
         if (fw_fd < 0) {
             if (booting) {
                     /* If we're not fully booted, we may be missing

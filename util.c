@@ -268,7 +268,7 @@ int write_file(const char *path, const char *value)
 {
     int fd, ret, len;
 
-    fd = open(path, O_WRONLY|O_CREAT, 0622);
+    fd = open(path, O_WRONLY|O_CREAT|O_CLOEXEC, 0622);
 
     if (fd < 0)
     {
@@ -335,7 +335,7 @@ int remove_dir(const char *dir)
 
 void stdio_to_null(void)
 {
-    int fd = open("/dev/null", O_RDWR);
+    int fd = open("/dev/null", O_RDWR|O_CLOEXEC);
     if(fd >= 0)
     {
         dup2(fd, 0);
@@ -545,7 +545,7 @@ void emergency_remount_ro(void)
     /* Trigger the remount of the filesystems as read-only,
      * which also marks them clean.
      */
-    fd = open("/proc/sysrq-trigger", O_WRONLY);
+    fd = open("/proc/sysrq-trigger", O_WRONLY|O_CLOEXEC);
     if (fd < 0) {
         return;
     }
@@ -625,7 +625,7 @@ int create_loop_device(const char *dev_path, const char *img_path, int loop_num,
     if(loop_num == -1)
         loop_num = loop_dev_counter++;
 
-    file_fd = open(img_path, O_RDWR);
+    file_fd = open(img_path, O_RDWR | O_CLOEXEC);
     if (file_fd < 0) {
         ERROR("Failed to open image %s\n", img_path);
         return -1;
@@ -644,7 +644,7 @@ int create_loop_device(const char *dev_path, const char *img_path, int loop_num,
             INFO("Loop file %s already exists, using it.\n", dev_path);
     }
 
-    device_fd = open(dev_path, O_RDWR);
+    device_fd = open(dev_path, O_RDWR | O_CLOEXEC);
     if (device_fd < 0)
     {
         ERROR("Failed to open loop file (%d: %s)\n", errno, strerror(errno));

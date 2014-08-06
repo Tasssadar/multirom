@@ -70,7 +70,7 @@ static int alloc_ion_mem(struct fb_qcom_overlay_data *data, unsigned int size)
     struct ion_fd_data fd_data;
     struct ion_allocation_data ionAllocData;
 
-    data->ion_fd = open("/dev/ion", O_RDWR|O_DSYNC);
+    data->ion_fd = open("/dev/ion", O_RDWR|O_DSYNC|O_CLOEXEC);
     if (data->ion_fd < 0)
     {
         ERROR("ERROR: Can't open ion ");
