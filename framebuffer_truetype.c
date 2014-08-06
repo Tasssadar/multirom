@@ -693,10 +693,10 @@ inline void center_text(fb_img *text, int targetX, int targetY, int targetW, int
 {
     text_extra *ex = text->extra;
 
-    if(targetX != -1)
+    if(targetX != -1 || targetW != -1)
         text->x = targetX + (targetW/2 - text->w/2);
 
-    if(targetY != -1)
+    if(targetY != -1 || targetH != -1)
         text->y = targetY + (targetH/2 - ex->baseline/2);
 }
 
