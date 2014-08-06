@@ -406,6 +406,11 @@ void ncard_show(ncard_builder *b, int destroy_builder)
         add_touch_handler(ncard_touch_handler, &ncard);
         ncard.touch_handler_registered = 1;
     }
+    else if(!ncard.active_btns && ncard.touch_handler_registered)
+    {
+        rm_touch_handler(ncard_touch_handler, &ncard);
+        ncard.touch_handler_registered = 0;
+    }
 
     ncard.shadow->y = ncard.pos == NCARD_POS_BOTTOM ? ncard.bg->y - CARD_SHADOW_OFF : ncard.bg->y + CARD_SHADOW_OFF;
 
