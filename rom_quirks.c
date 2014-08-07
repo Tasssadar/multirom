@@ -21,6 +21,8 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <sys/types.h>
+#include <sys/xattr.h>
 
 #include "multirom.h"
 #include "rom_quirks.h"
@@ -28,6 +30,10 @@
 #include "util.h"
 
 #define MULTIROM_DIR_ANDROID "/data/media/0/multirom"
+#define MULTIROM_DIR_ANDROID_LEN 22
+#define RESTORECON_LAST "security.restorecon_last"
+#define RESTORECON_LAST_HACK_PATH "/data/media"
+#define RESTORECON_LAST_HACK_PATH_LEN 11
 
 static void write_changed_restorecons(const char *path, FILE *rc)
 {
@@ -54,20 +60,33 @@ static void write_changed_restorecons(const char *path, FILE *rc)
             }
 
             snprintf(next_path, allocd, "%s/%s", path, dt->d_name);
+            const int next_path_len = strlen(next_path);
 
-            if(strncmp(next_path, MULTIROM_DIR_ANDROID, strlen(next_path)) == 0)
+            if(strncmp(next_path, MULTIROM_DIR_ANDROID, next_path_len) == 0)
             {
-                if(strlen(next_path) != strlen(MULTIROM_DIR_ANDROID))
+                if(next_path_len != MULTIROM_DIR_ANDROID_LEN)
                 {
-                    fprintf(rc, "    restorecon %s/%s\n", path, dt->d_name);
+                    fprintf(rc, "    restorecon \"%s/%s\"\n", path, dt->d_name);
                     write_changed_restorecons(next_path, rc);
                 }
             }
             else
-                fprintf(rc, "    restorecon_recursive %s/%s\n", path, dt->d_name);
+            {
+                fprintf(rc, "    restorecon_recursive \"%s/%s\"\n", path, dt->d_name);
+
+                // restorecon_recursive works only if RESTORECON_LAST xattr contains hash
+                // different from current file_contexts. Because /data/media/ is shared
+                // among multiple ROMs, this doesn't work well because some ROMs don't
+                // set this xattr, so restorecon thinks nothing changed but it did.
+                if (strncmp(next_path, RESTORECON_LAST_HACK_PATH, RESTORECON_LAST_HACK_PATH_LEN) == 0 &&
+                    (next_path[RESTORECON_LAST_HACK_PATH_LEN] == 0 || next_path[RESTORECON_LAST_HACK_PATH_LEN] == '/'))
+                {
+                    removexattr(next_path, RESTORECON_LAST);
+                }
+            }
         }
         else
-            fprintf(rc, "    restorecon %s/%s\n", path, dt->d_name);
+            fprintf(rc, "    restorecon \"%s/%s\"\n", path, dt->d_name);
     }
 
     closedir(d);
@@ -107,10 +126,15 @@ static void workaround_rc_restorecon(const char *rc_file_name)
         if(r)
         {
             r += strlen("restorecon_recursive");
-            while(*r && isspace(*r)) ++r;
-            if(strncmp(r, "/data", 5) == 0)
+
+            while(*r && isspace(*r))
+                ++r;
+
+            if(strcmp(r, "/data\n") == 0)
             {
                 changed = 1;
+                fputc('#', f_out);
+                fputs(line, f_out);
                 write_changed_restorecons("/data", f_out);
             }
             else
@@ -133,6 +157,40 @@ static void workaround_rc_restorecon(const char *rc_file_name)
     free(name_out);
 }
 
+static void workaround_mount_in_sh(const char *path)
+{
+    char line[512];
+    char *tmp_name = NULL;
+    FILE *f_in, *f_out;
+
+    f_in = fopen(path, "r");
+    if(!f_in)
+        return;
+
+    const int size = strlen(path) + 5;
+    tmp_name = malloc(size);
+    snprintf(tmp_name, size, "%s-new", path);
+    f_out = fopen(tmp_name, "w");
+    if(!f_out)
+    {
+        fclose(f_in);
+        free(tmp_name);
+        return;
+    }
+
+    while(fgets(line, sizeof(line), f_in))
+    {
+        if(strstr(line, "mount ") && strstr(line, "/system"))
+            fputc('#', f_out);
+        fputs(line, f_out);
+    }
+
+    fclose(f_in);
+    fclose(f_out);
+    rename(tmp_name, path);
+    free(tmp_name);
+}
+
 void rom_quirks_on_android_mounted_fs(struct multirom_rom *rom)
 {
     // CyanogenMod has init script 50selinuxrelabel which calls
@@ -148,11 +206,7 @@ void rom_quirks_on_android_mounted_fs(struct multirom_rom *rom)
         remove("/system/etc/init.d/50selinuxrelabel");
     }
 
-    // The Android L preview (and presumably later releases) have SELinux
-    // set to "enforcing" and "restorecon_recursive /data" line in init.rc.
-    // Restorecon on /data goes into /data/media/0/multirom/roms/ and changes
-    // context of all secondary ROMs files to that of /data, including the files
-    // in secondary ROMs /system dirs. We need to prevent that.
+    // walk over all _regular_ files in /
     DIR *d = opendir("/");
     if(d)
     {
@@ -163,10 +217,23 @@ void rom_quirks_on_android_mounted_fs(struct multirom_rom *rom)
             if(dt->d_type != DT_REG)
                 continue;
 
+            // The Android L preview (and presumably later releases) have SELinux
+            // set to "enforcing" and "restorecon_recursive /data" line in init.rc.
+            // Restorecon on /data goes into /data/media/0/multirom/roms/ and changes
+            // context of all secondary ROMs files to that of /data, including the files
+            // in secondary ROMs /system dirs. We need to prevent that.
             if(strstr(dt->d_name, ".rc"))
             {
                 snprintf(buff, sizeof(buff), "/%s", dt->d_name);
                 workaround_rc_restorecon(buff);
+            }
+
+            // franco.Kernel includes script init.fk.sh which remounts /system as read only
+            // comment out lines with mount and /system in all .sh scripts in /
+            if(strstr(dt->d_name, ".sh") && (M(rom->type) & MASK_ANDROID) && rom->type != ROM_ANDROID_USB_IMG)
+            {
+                snprintf(buff, sizeof(buff), "/%s", dt->d_name);
+                workaround_mount_in_sh(buff);
             }
         }
         closedir(d);

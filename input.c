@@ -35,6 +35,7 @@
 #include "log.h"
 #include "workers.h"
 #include "containers.h"
+#include "notification_card.h"
 
 // for touch calculation
 int mt_screen_res[2] = { 0 };
@@ -56,7 +57,6 @@ static pthread_t input_thread;
 
 static handler_list_it *mt_handlers = NULL;
 static handlers_ctx **inactive_ctx = NULL;
-static int mt_handlers_mode = HANDLERS_FIRST;
 
 #define DIV_ROUND_UP(n,d)  (((n) + (d) - 1) / (d))
 #define BIT(nr)            (1UL << (nr))
@@ -114,7 +114,7 @@ static int ev_init(void)
         if(strncmp(de->d_name,"event",5))
             continue;
 
-        fd = openat(dirfd(dir), de->d_name, O_RDONLY);
+        fd = openat(dirfd(dir), de->d_name, O_RDONLY | O_CLOEXEC);
         if(fd < 0)
             continue;
 
@@ -251,15 +251,20 @@ void touch_commit_events(struct timeval ev_time)
         if(mt_events[i].changed & TCHNG_POS)
             mt_recalc_pos_rotation(&mt_events[i]);
 
+        pthread_mutex_lock(&touch_mutex);
         it = mt_handlers;
         while(it)
         {
             h = it->handler;
-            if((*h->callback)(&mt_events[i], h->data) == 0 && mt_handlers_mode == HANDLERS_FIRST)
-                break;
+
+            if((*h->callback)(&mt_events[i], h->data) == 0)
+                mt_events[i].consumed = 1;
+
             it = it->next;
         }
+        pthread_mutex_unlock(&touch_mutex);
 
+        mt_events[i].consumed = 0;
         mt_events[i].changed = 0;
     }
 }
@@ -295,7 +300,6 @@ static void *input_thread_work(void *cookie)
         usleep(10000);
     }
     ev_exit();
-    pthread_exit(NULL);
     return NULL;
 }
 
@@ -337,32 +341,28 @@ void stop_input_thread(void)
     pthread_join(input_thread, NULL);
 }
 
-void add_touch_handler(touch_callback callback, void *data)
+
+static void add_touch_handler_priv(touch_callback callback, void *data)
 {
-    touch_handler *handler = malloc(sizeof(touch_handler));
+    touch_handler *handler = mzalloc(sizeof(touch_handler));
     handler->data = data;
     handler->callback = callback;
 
-    handler_list_it *new_it = malloc(sizeof(handler_list_it));
-    memset(new_it, 0, sizeof(handler_list_it));
+    handler_list_it *new_it = mzalloc(sizeof(handler_list_it));
     new_it->handler = handler;
 
     pthread_mutex_lock(&touch_mutex);
 
-    handler_list_it **it = &mt_handlers;
-    while(*it)
-    {
-        if(!(*it)->next)
-            new_it->prev = *it;
-
-        it = &((*it)->next);
-    }
-    *it = new_it;
+    handler_list_it *it = mt_handlers;
+    if(mt_handlers)
+        it->prev = new_it;
+    new_it->next = it;
+    mt_handlers = new_it;
 
     pthread_mutex_unlock(&touch_mutex);
 }
 
-void rm_touch_handler(touch_callback callback, void *data)
+static void rm_touch_handler_priv(touch_callback callback, void *data)
 {
     pthread_mutex_lock(&touch_mutex);
 
@@ -391,24 +391,55 @@ void rm_touch_handler(touch_callback callback, void *data)
     pthread_mutex_unlock(&touch_mutex);
 }
 
-void set_touch_handlers_mode(int mode)
+typedef void (*handler_call)(touch_callback, void*);
+struct handler_thread_data
 {
-    mt_handlers_mode = mode;
+    handler_call handler;
+    touch_callback callback;
+    void *data;
+};
+
+static void *touch_handler_thread_work(void *data)
+{
+    struct handler_thread_data *d = data;
+    d->handler(d->callback, d->data);
+    free(d);
+    return NULL;
+}
+
+static void touch_handler_thread_dispatcher(handler_call h_c, touch_callback callback, void *data)
+{
+    if(pthread_self() == input_thread)
+    {
+        struct handler_thread_data *d = mzalloc(sizeof(struct handler_thread_data));
+        d->handler = h_c;
+        d->callback = callback;
+        d->data = data;
+
+        pthread_t handler_thread;
+        pthread_create(&handler_thread, NULL, touch_handler_thread_work, d);
+    }
+    else
+        h_c(callback, data);
+}
+
+void add_touch_handler(touch_callback callback, void *data)
+{
+   touch_handler_thread_dispatcher(add_touch_handler_priv, callback, data);
+}
+
+void rm_touch_handler(touch_callback callback, void *data)
+{
+    touch_handler_thread_dispatcher(rm_touch_handler_priv, callback, data);
 }
 
 void input_push_context(void)
 {
-    handlers_ctx *ctx = malloc(sizeof(handlers_ctx));
-    memset(ctx, 0, sizeof(handlers_ctx));
+    handlers_ctx *ctx = mzalloc(sizeof(handlers_ctx));
 
     pthread_mutex_lock(&touch_mutex);
-
-    ctx->handlers_mode = mt_handlers_mode;
     ctx->handlers = mt_handlers;
-
-    mt_handlers_mode = HANDLERS_FIRST;
     mt_handlers = NULL;
-
     pthread_mutex_unlock(&touch_mutex);
 
     list_add(ctx, &inactive_ctx);
@@ -423,10 +454,7 @@ void input_pop_context(void)
     handlers_ctx *ctx = inactive_ctx[idx];
 
     pthread_mutex_lock(&touch_mutex);
-
-    mt_handlers_mode = ctx->handlers_mode;
     mt_handlers = ctx->handlers;
-
     pthread_mutex_unlock(&touch_mutex);
 
     list_rm_noreorder(ctx, &inactive_ctx, &free);
@@ -448,7 +476,6 @@ struct keyaction_ctx
     uint32_t repeat_timer;
     int repeat;
     int enable;
-    int (*destroy_msgbox)(void);
 };
 
 static struct keyaction_ctx keyaction_ctx = {
@@ -458,11 +485,10 @@ static struct keyaction_ctx keyaction_ctx = {
     .lock = PTHREAD_MUTEX_INITIALIZER,
     .repeat = KEYACT_NONE,
     .enable = 0,
-    .destroy_msgbox = NULL,
 };
 
 #define REPEAT_TIME_FIRST 500
-#define REPEAT_TIME 100
+#define REPEAT_TIME 150
 
 static int compare_keyactions(const void* k1, const void* k2)
 {
@@ -618,7 +644,7 @@ int keyaction_handle_keyevent(int key, int press)
 
     res = 0;
 
-    if(press == 1 && keyaction_ctx.destroy_msgbox() == 1)
+    if(press == 1 && ncard_try_cancel())
         goto exit;
 
     if(keyaction_ctx.repeat == act && press == 0)
@@ -660,12 +686,5 @@ void keyaction_enable(int enable)
         else
             workers_remove(&keyaction_repeat_worker, &keyaction_ctx);
     }
-    pthread_mutex_unlock(&keyaction_ctx.lock);
-}
-
-void keyaction_set_destroy_msgbox_handle(int (*handler)(void))
-{
-    pthread_mutex_lock(&keyaction_ctx.lock);
-    keyaction_ctx.destroy_msgbox = handler;
     pthread_mutex_unlock(&keyaction_ctx.lock);
 }

@@ -21,6 +21,7 @@
 #include "input.h"
 #include "util.h"
 #include "multirom_ui.h"
+#include "multirom_ui_themes.h"
 #include "log.h"
 
 void button_init_ui(button *b, const char *text, int size)
@@ -29,20 +30,21 @@ void button_init_ui(button *b, const char *text, int size)
 
     if(text != NULL)
     {
-        b->c[CLR_NORMAL][0] = CLR_PRIMARY;
-        b->c[CLR_NORMAL][1] = WHITE;
-        b->c[CLR_HOVER][0] = CLR_SECONDARY;
-        b->c[CLR_HOVER][1] = WHITE;
+        b->c[CLR_NORMAL][0] = C_HIGHLIGHT_BG;
+        b->c[CLR_NORMAL][1] = C_HIGHLIGHT_TEXT;
+        b->c[CLR_HOVER][0] = C_HIGHLIGHT_HOVER;
+        b->c[CLR_HOVER][1] = C_HIGHLIGHT_TEXT;
         b->c[CLR_DIS][0] = GRAY;
         b->c[CLR_DIS][1] = WHITE;
-        b->c[CLR_CHECK][0] = CLR_SECONDARY;
-        b->c[CLR_CHECK][1] = WHITE;
+        b->c[CLR_CHECK][0] = C_HIGHLIGHT_BG;
+        b->c[CLR_CHECK][1] = C_HIGHLIGHT_TEXT;
 
-        b->rect = fb_add_rect(b->x, b->y, b->w, b->h, b->c[CLR_NORMAL][0]);
+        b->rect = fb_add_rect_lvl(b->level_off + LEVEL_RECT, b->x, b->y, b->w, b->h, b->c[CLR_NORMAL][0]);
 
-        int text_x = center_x(b->x, b->w, size, text);
-        int text_y = center_y(b->y, b->h, size);
-        b->text = fb_add_text(text_x, text_y, b->c[CLR_NORMAL][1], size, text);
+        fb_text_proto *p = fb_text_create(0, 0, b->c[CLR_NORMAL][1], size, text);
+        p->level = b->level_off + LEVEL_TEXT;
+        b->text = fb_text_finalize(p);
+        center_text(b->text, b->x, b->y, b->w, b->h);
     }
     else
     {
@@ -74,11 +76,10 @@ void button_move(button *b, int x, int y)
 
     if(b->text)
     {
-        b->rect->head.x = x;
-        b->rect->head.y = y;
+        b->rect->x = x;
+        b->rect->y = y;
 
-        b->text->head.x = center_x(x, b->w, b->text->size, b->text->text);
-        b->text->head.y = center_y(y, b->h, b->text->size);
+        center_text(b->text, b->x, b->y, b->w, b->h);
     }
 }
 
@@ -123,7 +124,7 @@ int button_touch_handler(touch_event *ev, void *data)
     if(b->flags & BTN_DISABLED)
         return -1;
 
-    if(b->touch_id == -1 && (ev->changed & TCHNG_ADDED))
+    if(b->touch_id == -1 && (ev->changed & TCHNG_ADDED) && !ev->consumed)
     {
         if(!in_rect(ev->x, ev->y, b->x, b->y, b->w, b->h))
             return -1;
@@ -166,7 +167,7 @@ void button_update_colors(button *b)
     if(b->text)
     {
         b->rect->color = b->c[state][0];
-        b->text->color = b->c[state][1];
+        fb_text_set_color(b->text, b->c[state][1]);
     }
 }
 
@@ -195,7 +196,7 @@ int button_keyaction_call(void *data, int act)
         {
             if(act != KEYACT_CLEAR && b->keyact_frame == NULL)
             {
-                fb_add_rect_notfilled(b->x, b->y, b->w, b->h, KEYACT_FRAME_CLR, KEYACT_FRAME_W, &b->keyact_frame);
+                fb_add_rect_notfilled(b->level_off + LEVEL_RECT, b->x, b->y, b->w, b->h, C_KEYACT_FRAME, KEYACT_FRAME_W, &b->keyact_frame);
                 fb_request_draw();
                 return 0;
             }

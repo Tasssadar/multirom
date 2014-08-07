@@ -25,6 +25,7 @@ fi
 
 rm "$base/boot.img-ubuntu"*
 rm "$base/infos/"*
+rm "$base/res/"*
 cp -r /tmp/multirom/* "$base/"
 chmod 755 "$base/multirom"
 chmod 755 "$base/busybox"

@@ -15,18 +15,11 @@
  * along with MultiROM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef WORKERS_H
-#define WORKERS_H
+ #ifndef FW_MOUNTER_DEFINES_H
+ #define FW_MOUNTER_DEFINES_H
 
-#include <stdint.h>
-#include <pthread.h>
+ #define FW_MOUNTER_FSTAB "/sbin/fw_mounter.fstab"
+ #define FW_MOUNTER_BIN "fw_mounter"
+ #define FW_MOUNTER_PATH "/sbin/"FW_MOUNTER_BIN
 
-typedef void (*worker_call)(uint32_t, void *); // ms_diff, data
-
-void workers_start(void);
-void workers_stop(void);
-void workers_add(worker_call call, void *data);
-void workers_remove(worker_call call, void *data);
-pthread_t workers_get_thread_id(void);
-
-#endif
+ #endif

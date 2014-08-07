@@ -36,9 +36,10 @@
 
 #include "log.h"
 #include "framebuffer.h"
-#include "iso_font.h"
 #include "util.h"
 #include "containers.h"
+#include "animation.h"
+#include "multirom.h"
 
 #if PIXEL_SIZE == 4
 #define fb_memset(dst, what, len) android_memset32(dst, what, len)
@@ -51,18 +52,30 @@ uint32_t fb_width = 0;
 uint32_t fb_height = 0;
 int fb_rotation = 0; // in degrees, clockwise
 
+fb_item_pos DEFAULT_FB_PARENT = {
+    .x = 0,
+    .y = 0,
+};
+
 static struct framebuffer fb;
 static int fb_frozen = 0;
 static int fb_force_generic = 0;
-static fb_items_t fb_items = { NULL, NULL, NULL, NULL };
-static fb_items_t **inactive_ctx = NULL;
+
+static fb_context_t fb_ctx = { 
+    .first_item = NULL,
+    .batch_started = 0,
+    .background_color = BLACK,
+    .mutex = PTHREAD_MUTEX_INITIALIZER
+};
+
+static fb_context_t **inactive_ctx = NULL;
 static uint8_t **fb_rot_helpers = NULL;
-static pthread_mutex_t fb_items_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t fb_update_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t fb_draw_thread;
+static pthread_mutex_t fb_update_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t fb_draw_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t fb_draw_cond = PTHREAD_COND_INITIALIZER;
 static volatile int fb_draw_requested = 0;
 static volatile int fb_draw_run = 0;
-static volatile int fb_draw_futex = 0;
 static void *fb_draw_thread_work(void*);
 
 static void fb_destroy_item(void *item); // private!
@@ -75,7 +88,7 @@ int vt_set_mode(int graphics)
 {
     int fd, r;
     mknod("/dev/tty0", (0600 | S_IFCHR), makedev(4, 0));
-    fd = open("/dev/tty0", O_RDWR | O_SYNC);
+    fd = open("/dev/tty0", O_RDWR | O_SYNC | O_CLOEXEC);
     if (fd < 0)
         return -1;
     r = ioctl(fd, KDSETMODE, (void*) (graphics ? KD_GRAPHICS : KD_TEXT));
@@ -121,7 +134,7 @@ int fb_open(int rotation)
 {
     memset(&fb, 0, sizeof(struct framebuffer));
 
-    fb.fd = open("/dev/graphics/fb0", O_RDWR);
+    fb.fd = open("/dev/graphics/fb0", O_RDWR | O_CLOEXEC);
     if (fb.fd < 0)
         return -1;
 
@@ -178,6 +191,9 @@ int fb_open(int rotation)
 #if 0
     fb_dump_info();
 #endif
+
+    DEFAULT_FB_PARENT.w = fb_width;
+    DEFAULT_FB_PARENT.h = fb_height;
 
     fb_update();
 
@@ -344,9 +360,9 @@ int fb_clone(char **buff)
     int len = fb.size;
     *buff = malloc(len);
 
-    pthread_mutex_lock(&fb_items_mutex);
+    pthread_mutex_lock(&fb_update_mutex);
     memcpy(*buff, fb.buffer, len);
-    pthread_mutex_unlock(&fb_items_mutex);
+    pthread_mutex_unlock(&fb_update_mutex);
 
     return len;
 }
@@ -359,94 +375,128 @@ void fb_fill(uint32_t color)
 px_type fb_convert_color(uint32_t c)
 {
 #ifdef RECOVERY_BGRA
-    //             A              R                    G                  B
-    return (c & 0xFF000000) | ((c & 0xFF) << 16) | (c & 0xFF00) | ((c & 0xFF0000) >> 16);
-#elif defined(RECOVERY_RGBX)
     return c;
+#elif defined(RECOVERY_RGBX)
+    //             A              B                   G                  R
+    return (c & 0xFF000000) | ((c & 0xFF) << 16) | (c & 0xFF00) | ((c & 0xFF0000) >> 16);
 #elif defined(RECOVERY_RGB_565)
     //            R                                G                              B
-    return (((c & 0xFF) >> 3) << 11) | (((c & 0xFF00) >> 10) << 5) | ((c & 0xFF0000) >> 19);
+    return (((c & 0xFF0000) >> 19) << 11) | (((c & 0xFF00) >> 10) << 5) | ((c & 0xFF) >> 3);
 #else
 #error "Unknown pixel format"
 #endif
 }
 
-void fb_draw_text(fb_text *t)
+void fb_set_background(uint32_t color)
 {
-    int c_width = ISO_CHAR_WIDTH * t->size;
-    int c_height = ISO_CHAR_HEIGHT * t->size; 
-
-    int linelen = fb_width/(c_width);
-    int x = t->head.x;
-    int y = t->head.y;
-
-    px_type color = fb_convert_color(t->color);
-
-    int i;
-    for(i = 0; t->text[i] != 0; ++i)
-    {
-        switch(t->text[i])
-        {
-            case '\n':
-                y += c_height;
-                x = t->head.x;
-                continue;
-            case '\r':
-                x = t->head.x;
-                continue;
-            case '\f':
-                x = t->head.x; 
-                y = t->head.y;
-                continue;
-        }
-        if(x < (int)fb_width)
-            fb_draw_char(x, y, t->text[i], color, t->size);
-        x += c_width;
-    }
+    fb_ctx.background_color = color;
 }
 
-void fb_draw_char(int x, int y, char c, px_type color, int size)
+void fb_batch_start(void)
 {
-    int line = 0;
-    uint8_t bit = 0;
-    unsigned char *f = (unsigned char*)iso_font + (ISO_CHAR_HEIGHT*c);
-
-    for(; line < ISO_CHAR_HEIGHT; ++line)
-    {
-        for(bit = 0; bit < ISO_CHAR_WIDTH; ++bit)
-        {
-            if(*f & (1 << bit))
-                fb_draw_square(x+(bit*size), y, color, size);
-        }
-        y += size;
-        ++f;
-    }
+    pthread_mutex_lock(&fb_ctx.mutex);
+    fb_ctx.batch_thread = pthread_self();
+    fb_ctx.batch_started = 1;
 }
 
-void fb_draw_square(int x, int y, px_type color, int size)
+void fb_batch_end(void)
 {
-    px_type *bits = fb.buffer + (fb.stride*y) + x;
-    int i;
-    for(i = 0; i < size; ++i)
+    fb_ctx.batch_started = 0;
+    pthread_mutex_unlock(&fb_ctx.mutex);
+}
+
+void fb_items_lock(void)
+{
+    if(!fb_ctx.batch_started || !pthread_equal(fb_ctx.batch_thread, pthread_self()))
+        pthread_mutex_lock(&fb_ctx.mutex);
+}
+
+void fb_items_unlock(void)
+{
+    if(!fb_ctx.batch_started || !pthread_equal(fb_ctx.batch_thread, pthread_self()))
+        pthread_mutex_unlock(&fb_ctx.mutex);
+}
+
+static void fb_ctx_put_it_before(fb_item_header *new_it, fb_item_header *next_it)
+{
+    if(next_it->prev)
     {
-        fb_memset(bits, color, size*PIXEL_SIZE);
-        bits += fb.stride;
+        next_it->prev->next = new_it;
+        new_it->prev = next_it->prev;
     }
+    new_it->next = next_it;
+    next_it->prev = new_it;
+}
+
+static void fb_ctx_put_it_after(fb_item_header *new_it, fb_item_header *prev_it)
+{
+    if(prev_it->next)
+    {
+        prev_it->next->prev = new_it;
+        new_it->next = prev_it->next;
+    }
+    new_it->prev = prev_it;
+    prev_it->next = new_it;
+}
+
+void fb_ctx_add_item(void *item)
+{
+    fb_item_header *h = item;
+
+    fb_items_lock();
+
+    if(!fb_ctx.first_item)
+        fb_ctx.first_item = item;
+    else
+    {
+        fb_item_header *itr = fb_ctx.first_item;
+        while(1)
+        {
+            if(itr->level > h->level)
+            {
+                if(itr == fb_ctx.first_item)
+                    fb_ctx.first_item = h;
+                fb_ctx_put_it_before(h, itr);
+                itr = NULL;
+                break;
+            }
+
+            if(itr->next)
+                itr = itr->next;
+            else
+                break;
+        }
+
+        if(itr)
+            fb_ctx_put_it_after(h, itr);
+    }
+
+    fb_items_unlock();
+}
+
+void fb_ctx_rm_item(void *item)
+{
+    fb_item_header *h = item;
+
+    fb_items_lock();
+
+    if(!h->prev)
+        fb_ctx.first_item = h->next;
+    else
+        h->prev->next = h->next;
+
+    if(h->next)
+        h->next->prev = h->prev;
+
+    fb_items_unlock();
 }
 
 void fb_remove_item(void *item)
 {
     switch(((fb_item_header*)item)->type)
     {
-        case FB_IT_TEXT:
-            fb_rm_text((fb_text*)item);
-            break;
         case FB_IT_RECT:
             fb_rm_rect((fb_rect*)item);
-            break;
-        case FB_IT_BOX:
-            // fb_destroy_msgbox must be used
-            assert(0);
             break;
         case FB_IT_IMG:
             fb_rm_img((fb_img*)item);
@@ -456,16 +506,11 @@ void fb_remove_item(void *item)
 
 void fb_destroy_item(void *item)
 {
+    anim_cancel_for(item, 0);
+
     switch(((fb_item_header*)item)->type)
     {
-        case FB_IT_TEXT:
-            free(((fb_text*)item)->text);
-            break;
         case FB_IT_RECT:
-            break;
-        case FB_IT_BOX:
-            // fb_destroy_msgbox must be used
-            assert(0);
             break;
         case FB_IT_IMG:
         {
@@ -477,6 +522,9 @@ void fb_destroy_item(void *item)
                     break;
                 case FB_IMG_TYPE_GENERIC:
                     free(i->data);
+                    break;
+                case FB_IMG_TYPE_TEXT:
+                    fb_text_destroy(i);
                     break;
                 default:
                     ERROR("fb_destroy_item(): unknown fb_img type %d\n", i->img_type);
@@ -491,15 +539,77 @@ void fb_destroy_item(void *item)
 
 void fb_draw_rect(fb_rect *r)
 {
-    px_type *bits = fb.buffer + (fb.stride*r->head.y) + r->head.x;
-    px_type color = fb_convert_color(r->color);
-    const int w = r->w*PIXEL_SIZE;
+    const uint8_t alpha = (r->color >> 24) & 0xFF;
+    const uint8_t inv_alpha = 0xFF - ((r->color >> 24) & 0xFF);
+    const px_type color = fb_convert_color(r->color);
 
-    int i;
-    for(i = 0; i < r->h; ++i)
+    if(alpha == 0)
+        return;
+
+#ifdef RECOVERY_RGBX
+    const uint32_t premult_color_rb = ((color & 0xFF00FF) * (alpha)) >> 8;
+    const uint32_t premult_color_g = ((color & 0x00FF00) * (alpha)) >> 8;
+#elif defined(RECOVERY_BGRA)
+    const uint32_t premult_color_rb = (((color >> 8) & 0xFF00FF) * (alpha)) >> 8;
+    const uint32_t premult_color_g = (((color >> 8) & 0x00FF00) * (alpha)) >> 8;
+#elif defined(RECOVERY_RGB_565)
+    const uint8_t alpha5b = (alpha >> 3) + 1;
+    const uint8_t alpha6b = (alpha >> 2) + 1;
+    const uint8_t inv_alpha5b = 32 - alpha5b;
+    const uint8_t inv_alpha6b = 64 - alpha6b;
+    const uint16_t premult_color_rb = ((color & 0xF81F) * alpha5b) >> 5;
+    const uint16_t premult_color_g = ((color & 0x7E0) * alpha6b) >> 6;
+#endif
+
+    const int min_x = r->x >= r->parent->x ? 0 : r->parent->x - r->x;
+    const int min_y = r->y >= r->parent->y ? 0 : r->parent->y - r->y;
+    const int max_x = imin(r->w, r->parent->x + r->parent->w - r->x);
+    const int max_y = imin(r->h, r->parent->y + r->parent->h - r->y);
+    const int rendered_w = max_x - min_x;
+
+    const int w = rendered_w*PIXEL_SIZE;
+
+    px_type *bits = fb.buffer + (fb.stride*(r->y + min_y)) + r->x + min_x;
+
+    int i, x;
+    uint8_t *comps_bits;
+    const uint8_t *comps_clr = (uint8_t*)&color;
+    for(i = min_y; i < max_y; ++i)
     {
-        fb_memset(bits, color, w);
-        bits += fb.stride;
+        if(alpha == 0xFF)
+        {
+            fb_memset(bits, color, w);
+            bits += fb.stride;
+        }
+        // Do the blending
+        else
+        {
+#ifdef MR_DISABLE_ALPHA
+            fb_memset(bits, color, w);
+            bits += fb.stride;
+#else
+            for(x = 0; x < rendered_w; ++x)
+            {
+  #ifdef RECOVERY_RGBX
+                const uint32_t rb = (premult_color_rb & 0xFF00FF) + ((inv_alpha * (*bits & 0xFF00FF)) >> 8);
+                const uint32_t g = (premult_color_g & 0x00FF00) + ((inv_alpha * (*bits & 0x00FF00)) >> 8);
+                *bits = 0xFF000000 | (rb & 0xFF00FF) | (g & 0x00FF00);
+  #elif defined(RECOVERY_BGRA)
+                const uint32_t rb = (premult_color_rb & 0xFF00FF) + ((inv_alpha * ((*bits >> 8) & 0xFF00FF)) >> 8);
+                const uint32_t g = (premult_color_g & 0x00FF00) + ((inv_alpha * ((*bits >> 8) & 0x00FF00)) >> 8);
+                *bits = 0xFF000000 | (rb & 0xFF00FF) | (g & 0x00FF00);
+  #elif defined(RECOVERY_RGB_565)
+                const uint16_t rb = (premult_color_rb & 0xF81F) + ((inv_alpha5b * (*bits & 0xF81F)) >> 5);
+                const uint16_t g = (premult_color_g & 0x7E0) + ((inv_alpha6b * (*bits & 0x7E0)) >> 6);
+                *bits = (rb & 0xF81F) | (g & 0x7E0);
+  #else
+    #error "No alpha blending implementation for this format!"
+  #endif
+                ++bits;
+            }
+            bits += fb.stride - rendered_w;
+#endif // MR_DISABLE_ALPHA
+        }
     }
 }
 
@@ -511,8 +621,6 @@ static inline int blend_png(int value1, int value2, int alpha) {
 void fb_draw_img(fb_img *i)
 {
     int y, x;
-    px_type *bits = fb.buffer + (fb.stride*i->head.y) + i->head.x;
-    px_type *img = i->data;
     const int w = i->w*PIXEL_SIZE;
     uint8_t alpha;
     uint8_t *comps_img, *comps_bits;
@@ -523,9 +631,18 @@ void fb_draw_img(fb_img *i)
     const uint8_t max_alpha = 31;
 #endif
 
-    for(y = 0; y < i->h; ++y)
+    const int min_x = i->x >= i->parent->x ? 0 : i->parent->x - i->x;
+    const int min_y = i->y >= i->parent->y ? 0 : i->parent->y - i->y;
+    const int max_x = imin(i->w, i->parent->x + i->parent->w - i->x);
+    const int max_y = imin(i->h, i->parent->y + i->parent->h - i->y);
+    const int rendered_w = max_x - min_x;
+
+    px_type *bits = fb.buffer + (fb.stride*(i->y + min_y)) + i->x + min_x;
+    px_type *img = (px_type*)(((uint32_t*)i->data) + (min_y * i->w) + min_x);
+
+    for(y = min_y; y < max_y; ++y)
     {
-        for(x = 0; x < i->w; ++x)
+        for(x = min_x; x < max_x; ++x)
         {
             // Colors, 0xAABBGGRR
 #if PIXEL_SIZE == 4
@@ -568,133 +685,95 @@ void fb_draw_img(fb_img *i)
             img += 2;
 #endif
         }
-        bits += fb.stride-i->w;
+        bits += fb.stride - rendered_w;
+        img = (px_type*)(((uint32_t*)img) + (i->w - rendered_w));
     }
 }
 
-int fb_generate_item_id()
+int fb_generate_item_id(void)
 {
-    pthread_mutex_lock(&fb_items_mutex);
+    fb_items_lock();
     static int id = 0;
     int res = id++;
-    pthread_mutex_unlock(&fb_items_mutex);
+    fb_items_unlock();
 
     return res;
 }
 
-static fb_text *fb_create_text_item(int x, int y, uint32_t color, int size, const char *txt)
+fb_rect *fb_add_rect_lvl(int level, int x, int y, int w, int h, uint32_t color)
 {
-    fb_text *t = malloc(sizeof(fb_text));
-    t->head.id = fb_generate_item_id();
-    t->head.type = FB_IT_TEXT;
-    t->head.x = x;
-    t->head.y = y;
+    fb_rect *r = mzalloc(sizeof(fb_rect));
+    r->id = fb_generate_item_id();
+    r->type = FB_IT_RECT;
+    r->parent = &DEFAULT_FB_PARENT;
+    r->level = level;
 
-    t->color = color;
-    t->size = size;
-
-    t->text = malloc(strlen(txt)+1);
-    strcpy(t->text, txt);
-
-    return t;
-}
-
-fb_text *fb_add_text(int x, int y, uint32_t color, int size, const char *fmt, ...)
-{
-    char txt[512];
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(txt, sizeof(txt), fmt, ap);
-    va_end(ap);
-
-    return fb_add_text_long(x, y, color, size, txt);
-}
-
-fb_text *fb_add_text_long(int x, int y, uint32_t color, int size, char *text)
-{
-    fb_text *t = fb_create_text_item(x, y, color, size, text);
-
-    pthread_mutex_lock(&fb_items_mutex);
-    list_add(t, &fb_items.texts);
-    pthread_mutex_unlock(&fb_items_mutex);
-
-    return t;
-}
-
-fb_rect *fb_add_rect(int x, int y, int w, int h, uint32_t color)
-{
-    fb_rect *r = malloc(sizeof(fb_rect));
-    r->head.id = fb_generate_item_id();
-    r->head.type = FB_IT_RECT;
-    r->head.x = x;
-    r->head.y = y;
+    r->x = x;
+    r->y = y;
 
     r->w = w;
     r->h = h;
     r->color = color;
 
-    pthread_mutex_lock(&fb_items_mutex);
-    list_add(r, &fb_items.rects);
-    pthread_mutex_unlock(&fb_items_mutex);
-
+    fb_ctx_add_item(r);
     return r;
 }
 
-void fb_add_rect_notfilled(int x, int y, int w, int h, uint32_t color, int thickness, fb_rect ***list)
+void fb_add_rect_notfilled(int level, int x, int y, int w, int h, uint32_t color, int thickness, fb_rect ***list)
 {
     fb_rect *r;
     // top
-    r = fb_add_rect(x, y, w, thickness, color);
+    r = fb_add_rect_lvl(level, x, y, w, thickness, color);
     list_add(r, list);
 
     // right
-    r = fb_add_rect(x + w - thickness, y, thickness, h, color);
+    r = fb_add_rect_lvl(level, x + w - thickness, y, thickness, h, color);
     list_add(r, list);
 
     // bottom
-    r = fb_add_rect(x, y + h - thickness, w, thickness, color);
+    r = fb_add_rect_lvl(level, x, y + h - thickness, w, thickness, color);
     list_add(r, list);
 
     // left
-    r = fb_add_rect(x, y, thickness, h, color);
+    r = fb_add_rect_lvl(level, x, y, thickness, h, color);
     list_add(r, list);
 }
 
-fb_img *fb_add_img(int x, int y, int w, int h, int img_type, px_type *data)
+fb_img *fb_add_img(int level, int x, int y, int w, int h, int img_type, px_type *data)
 {
     fb_img *result = mzalloc(sizeof(fb_img));
-    result->head.type = FB_IT_IMG;
-    result->head.x = x;
-    result->head.y = y;
+    result->id = fb_generate_item_id();
+    result->type = FB_IT_IMG;
+    result->parent = &DEFAULT_FB_PARENT;
+    result->level = level;
+    result->x = x;
+    result->y = y;
     result->img_type = img_type;
     result->data = data;
     result->w = w;
     result->h = h;
 
-    pthread_mutex_lock(&fb_items_mutex);
-    list_add(result, &fb_items.imgs);
-    pthread_mutex_unlock(&fb_items_mutex);
-
+    fb_ctx_add_item(result);
     return result;
 }
 
-fb_img* fb_add_png_img(int x, int y, int w, int h, const char *path)
+fb_img* fb_add_png_img_lvl(int level, int x, int y, int w, int h, const char *path)
 {
-    px_type *data = fb_png_get(path, w, h);
+    px_type *data = NULL;
+    if(strncmp(path, ":/", 2) == 0)
+    {
+        const int full_path_len = strlen(path) + strlen(multirom_dir) + 4;
+        char *full_path = malloc(full_path_len);
+        snprintf(full_path, full_path_len, "%s/res%s", multirom_dir, path+1);
+        data = fb_png_get(full_path, w, h);
+        free(full_path);
+    }
+    else
+        data = fb_png_get(path, w, h);
     if(!data)
         return NULL;
 
-    return fb_add_img(x, y, w, h, FB_IMG_TYPE_PNG, data);
-}
-
-void fb_rm_text(fb_text *t)
-{
-    if(!t)
-        return;
-
-    pthread_mutex_lock(&fb_items_mutex);
-    list_rm_noreorder(t, &fb_items.texts, &fb_destroy_item);
-    pthread_mutex_unlock(&fb_items_mutex);
+    return fb_add_img(level, x, y, w, h, FB_IMG_TYPE_PNG, data);
 }
 
 void fb_rm_rect(fb_rect *r)
@@ -702,9 +781,13 @@ void fb_rm_rect(fb_rect *r)
     if(!r)
         return;
 
-    pthread_mutex_lock(&fb_items_mutex);
-    list_rm_noreorder(r, &fb_items.rects, &fb_destroy_item);
-    pthread_mutex_unlock(&fb_items_mutex);
+    fb_ctx_rm_item(r);
+    fb_destroy_item(r);
+}
+
+void fb_rm_text(fb_img *i)
+{
+    fb_rm_img(i);
 }
 
 void fb_rm_img(fb_img *i)
@@ -712,202 +795,47 @@ void fb_rm_img(fb_img *i)
     if(!i)
         return;
 
-    pthread_mutex_lock(&fb_items_mutex);
-    list_rm_noreorder(i, &fb_items.imgs, &fb_destroy_item);
-    pthread_mutex_unlock(&fb_items_mutex);
-}
-
-#define BOX_BORDER (2*DPI_MUL)
-#define SHADOW (10*DPI_MUL)
-fb_msgbox *fb_create_msgbox(int w, int h, int bgcolor)
-{
-    if(fb_items.msgbox)
-        return fb_items.msgbox;
-
-    fb_msgbox *box = mzalloc(sizeof(fb_msgbox));
-
-    int x = fb_width/2 - w/2;
-    int y = fb_height/2 - h/2;
-
-    box->head.id = fb_generate_item_id();
-    box->head.type = FB_IT_BOX;
-    box->head.x = x;
-    box->head.y = y;
-    box->w = w;
-    box->h = h;
-
-    box->background[0] = fb_add_rect(x+SHADOW, y+SHADOW, w, h, GRAY); // shadow
-    box->background[1] = fb_add_rect(x, y, w, h, WHITE); // border
-    box->background[2] = fb_add_rect(x+BOX_BORDER, y+BOX_BORDER,
-                                     w-BOX_BORDER*2, h-BOX_BORDER*2, bgcolor);
-
-    pthread_mutex_lock(&fb_items_mutex);
-    fb_items.msgbox = box;
-    pthread_mutex_unlock(&fb_items_mutex);
-    return box;
-}
-
-fb_text *fb_msgbox_add_text(int x, int y, int size, char *fmt, ...)
-{
-    char txt[512];
-    va_list ap;
-    va_start(ap, fmt);
-    vsnprintf(txt, sizeof(txt), fmt, ap);
-    va_end(ap);
-
-    fb_msgbox *box = fb_items.msgbox;
-
-    if(x == -1)
-        x = center_x(0, box->w, size, txt);
-
-    if(y == -1)
-        y = center_y(0, box->h, size);
-
-    x += box->head.x;
-    y += box->head.y;
-
-    fb_text *t = fb_create_text_item(x, y, WHITE, size, txt);
-    pthread_mutex_lock(&fb_items_mutex);
-    list_add(t, &box->texts);
-    pthread_mutex_unlock(&fb_items_mutex);
-
-    return t;
-}
-
-void fb_msgbox_rm_text(fb_text *text)
-{
-    if(!text)
-        return;
-
-    pthread_mutex_lock(&fb_items_mutex);
-    if(fb_items.msgbox)
-        list_rm_noreorder(text, &fb_items.msgbox->texts, &fb_destroy_item);
-    pthread_mutex_unlock(&fb_items_mutex);
-}
-
-void fb_destroy_msgbox(void)
-{
-    pthread_mutex_lock(&fb_items_mutex);
-    if(!fb_items.msgbox)
-    {
-        pthread_mutex_unlock(&fb_items_mutex);
-        return;
-    }
-
-    fb_msgbox *box = fb_items.msgbox;
-    fb_items.msgbox = NULL;
-    pthread_mutex_unlock(&fb_items_mutex);
-
-    list_clear(&box->texts, &fb_destroy_item);
-
-    uint32_t i;
-    for(i = 0; i < ARRAY_SIZE(box->background); ++i)
-        fb_rm_rect(box->background[i]);
-
-    free(box);
+    fb_ctx_rm_item(i);
+    fb_destroy_item(i);
 }
 
 void fb_clear(void)
 {
-    pthread_mutex_lock(&fb_items_mutex);
-    list_clear(&fb_items.texts, &fb_destroy_item);
-    list_clear(&fb_items.rects, &fb_destroy_item);
-    list_clear(&fb_items.imgs, &fb_destroy_item);
-    pthread_mutex_unlock(&fb_items_mutex);
-
-    fb_destroy_msgbox();
+    pthread_mutex_lock(&fb_ctx.mutex);
+    fb_item_header *it, *next;
+    for(it = fb_ctx.first_item; it; it = next)
+    {
+        next = it->next;
+        fb_destroy_item(it);
+    }
+    fb_ctx.first_item = NULL;
+    pthread_mutex_unlock(&fb_ctx.mutex);
 
     fb_png_drop_unused();
-}
-
-#if PIXEL_SIZE == 4
-#define ALPHA 220
-#define BLEND_CLR 0x1B
-static inline int blend(int value1, int value2) {
-    int r = (0xFF-ALPHA)*value1 + ALPHA*value2;
-    return (r+1 + (r >> 8)) >> 8; // divide by 255
-}
-#else
-#ifdef HAS_NEON_BLEND
-extern void scanline_col32cb16blend_neon(uint16_t *dst, uint32_t *col, size_t ct);
-#else
-#define ALPHA5 0x04
-#define ALPHA6 0x08
-#define BLEND_CLR5 0x03
-#define BLEND_CLR6 0x06
-#endif
-#endif
-
-void fb_draw_overlay(void)
-{
-#ifndef MR_DISABLE_ALPHA
- #if PIXEL_SIZE == 4
-    int i;
-    uint8_t *bits = (uint8_t*)fb.buffer;
-    const int size = fb.vi.xres_virtual*fb.vi.yres;
-    for(i = 0; i < size; ++i)
-    {
-        *bits = blend(*bits, BLEND_CLR);
-        ++bits;
-        *bits = blend(*bits, BLEND_CLR);
-        ++bits;
-        *bits = blend(*bits, BLEND_CLR);
-        bits += 2;
-    }
- #else
-  #ifdef HAS_NEON_BLEND
-    uint32_t blend_clr = 0xDC1B1B1B;
-    scanline_col32cb16blend_neon((uint16_t*)fb.buffer, &blend_clr, fb.size >> 1);
-  #else
-    const int size = fb.size >> 1;
-    uint16_t *bits = fb.buffer;
-    int i;
-    for(i = 0; i < size; ++i)
-    {
-        *bits = ((ALPHA5*(*bits & 0x1F) + (ALPHA5*BLEND_CLR5)) / 31) |
-            (((ALPHA6*((*bits & 0x7E0) >> 5) + (ALPHA6*BLEND_CLR6)) / 63) << 5) |
-            (((ALPHA5*((*bits & 0xF800) >> 11) + (ALPHA5*BLEND_CLR5)) / 31) << 11);
-        ++bits;
-    }
-  #endif
- #endif // PIXEL_SIZE
-#endif // MR_DISABLE_ALPHA
+    fb_text_drop_cache_unused();
 }
 
 static void fb_draw(void)
 {
     uint32_t i;
-    pthread_mutex_lock(&fb_items_mutex);
+    fb_item_header *it;
 
-    fb_fill(BLACK);
+    fb_fill(fb_ctx.background_color);
 
-    // rectangles
-    for(i = 0; fb_items.rects && fb_items.rects[i]; ++i)
-        fb_draw_rect(fb_items.rects[i]);
-
-    // texts
-    for(i = 0; fb_items.texts && fb_items.texts[i]; ++i)
-        fb_draw_text(fb_items.texts[i]);
-
-    // images
-    for(i = 0; fb_items.imgs && fb_items.imgs[i]; ++i)
-        fb_draw_img(fb_items.imgs[i]);
-
-    // msg box
-    if(fb_items.msgbox)
+    pthread_mutex_lock(&fb_ctx.mutex);
+    for(it = fb_ctx.first_item; it; it = it->next)
     {
-        fb_draw_overlay();
-
-        fb_msgbox *box = fb_items.msgbox;
-
-        for(i = 0; i < ARRAY_SIZE(box->background); ++i)
-            fb_draw_rect(box->background[i]);
-
-        for(i = 0; box->texts && box->texts[i]; ++i)
-            fb_draw_text(box->texts[i]);
+        switch(it->type)
+        {
+            case FB_IT_RECT:
+                fb_draw_rect((fb_rect*)it);
+                break;
+            case FB_IT_IMG:
+                fb_draw_img((fb_img*)it);
+                break;
+        }
     }
-
-    pthread_mutex_unlock(&fb_items_mutex);
+    pthread_mutex_unlock(&fb_ctx.mutex);
 
     pthread_mutex_lock(&fb_update_mutex);
     fb_update();
@@ -922,29 +850,15 @@ void fb_freeze(int freeze)
         --fb_frozen;
 }
 
-int center_x(int x, int width, int size, const char *text)
-{
-    return x + (width/2 - (strlen(text)*ISO_CHAR_WIDTH*size)/2);
-}
-
-int center_y(int y, int height, int size)
-{
-    return y + (height/2 - (ISO_CHAR_HEIGHT*size)/2);
-}
-
 void fb_push_context(void)
 {
-    fb_items_t *ctx = mzalloc(sizeof(fb_items_t));
+    fb_context_t *ctx = mzalloc(sizeof(fb_context_t));
 
-    pthread_mutex_lock(&fb_items_mutex);
-
-    list_move(&fb_items.texts, &ctx->texts);
-    list_move(&fb_items.rects, &ctx->rects);
-    list_move(&fb_items.imgs, &ctx->imgs);
-    ctx->msgbox = fb_items.msgbox;
-    fb_items.msgbox = NULL;
-
-    pthread_mutex_unlock(&fb_items_mutex);
+    pthread_mutex_lock(&fb_ctx.mutex);
+    ctx->first_item = fb_ctx.first_item;
+    ctx->background_color = fb_ctx.background_color;
+    fb_ctx.first_item = NULL;
+    pthread_mutex_unlock(&fb_ctx.mutex);
 
     list_add(ctx, &inactive_ctx);
 }
@@ -957,16 +871,12 @@ void fb_pop_context(void)
     fb_clear();
 
     int idx = list_item_count(inactive_ctx)-1;
-    fb_items_t *ctx = inactive_ctx[idx];
+    fb_context_t *ctx = inactive_ctx[idx];
 
-    pthread_mutex_lock(&fb_items_mutex);
-
-    list_move(&ctx->texts, &fb_items.texts);
-    list_move(&ctx->rects, &fb_items.rects);
-    list_move(&ctx->imgs, &fb_items.imgs);
-    fb_items.msgbox = ctx->msgbox;
-
-    pthread_mutex_unlock(&fb_items_mutex);
+    pthread_mutex_lock(&fb_ctx.mutex);
+    fb_ctx.first_item = ctx->first_item;
+    fb_ctx.background_color = ctx->background_color;
+    pthread_mutex_unlock(&fb_ctx.mutex);
 
     list_rm_noreorder(ctx, &inactive_ctx, &free);
 
@@ -985,19 +895,24 @@ void *fb_draw_thread_work(void *cookie)
         clock_gettime(CLOCK_MONOTONIC, &curr);
         diff = timespec_diff(&last, &curr);
 
+        pthread_mutex_lock(&fb_draw_mutex);
+
         if(__atomic_cmpxchg(1, 0, &fb_draw_requested) == 0)
         {
             fb_draw();
-            __futex_wake(&fb_draw_futex, INT_MAX);
+            pthread_cond_broadcast(&fb_draw_cond);
+            pthread_mutex_unlock(&fb_draw_mutex);
         }
-#ifdef MR_CONTINUOUS_FB_UPDATE
         else
         {
+            pthread_mutex_unlock(&fb_draw_mutex);
+#ifdef MR_CONTINUOUS_FB_UPDATE
             pthread_mutex_lock(&fb_update_mutex);
             fb_update();
             pthread_mutex_unlock(&fb_update_mutex);
-        }
 #endif
+        }
+
 
         last = curr;
         if(diff <= SLEEP_CONST+prevSleepTime)
@@ -1019,6 +934,8 @@ void fb_request_draw(void)
 
 void fb_force_draw(void)
 {
-    __atomic_swap(1, &fb_draw_requested);
-    __futex_wait(&fb_draw_futex, 0, NULL);
+    pthread_mutex_lock(&fb_draw_mutex);
+    __atomic_cmpxchg(0, 1, &fb_draw_requested);
+    pthread_cond_wait(&fb_draw_cond, &fb_draw_mutex);
+    pthread_mutex_unlock(&fb_draw_mutex);
 }

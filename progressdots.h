@@ -21,20 +21,17 @@
 #include <pthread.h>
 #include "framebuffer.h"
 
-#define PROGDOTS_W (300*DPI_MUL)
+#define PROGDOTS_W (400*DPI_MUL)
 #define PROGDOTS_H (10*DPI_MUL)
 #define PROGDOTS_CNT 8
 
 typedef struct
 {
     int x, y;
-    fb_rect *dots[PROGDOTS_CNT];
-    int active_dot;
-    uint32_t switch_timer;
+    fb_rect *rect;
 } progdots;
 
 progdots *progdots_create(int x, int y);
 void progdots_destroy(progdots *p);
-void progdots_set_active(progdots *p, int dot);
 
 #endif

@@ -54,7 +54,14 @@ static struct flag_list mount_flags[] = {
     { 0,            0 },
 };
 
-struct fstab *fstab_load(const char *path)
+struct fstab *fstab_create_empty(int version)
+{
+    struct fstab *t = mzalloc(sizeof(struct fstab));
+    t->version = version;
+    return t;
+}
+
+struct fstab *fstab_load(const char *path, int resolve_symlinks)
 {
     FILE *f = fopen(path, "r");
     if(!f)
@@ -63,9 +70,7 @@ struct fstab *fstab_load(const char *path)
         return NULL;
     }
 
-    struct fstab *t = mzalloc(sizeof(struct fstab));
-    t->version = -1;
-
+    struct fstab *t = fstab_create_empty(-1);
     const char *delim = " \t";
     char *saveptr = NULL;
     char *p;
@@ -99,7 +104,7 @@ struct fstab *fstab_load(const char *path)
         }
 
         if(t->version == 2)
-            part->device = readlink_recursive(p);
+            part->device = resolve_symlinks ? readlink_recursive(p) : strdup(p);
         else
             part->path = strdup (p);
 
@@ -123,10 +128,13 @@ struct fstab *fstab_load(const char *path)
         if(t->version == 2)
             part->type = strdup(p);
         else
-            part->device = readlink_recursive(p);
+            part->device = resolve_symlinks ? readlink_recursive(p) : strdup(p);
 
         if((p = strtok_r(NULL, delim, &saveptr)))
+        {
+            part->options_raw = strdup(p);
             fstab_parse_options(p, part);
+        }
 
         if((p = strtok_r(NULL, delim, &saveptr)))
             part->options2 = strdup(p);
@@ -159,6 +167,35 @@ fail:
     return NULL;
 }
 
+int fstab_save(struct fstab *f, const char *path)
+{
+    int i;
+    FILE *out;
+    struct fstab_part *p;
+
+    out = fopen(path, "w");
+    if(!f)
+    {
+        ERROR("fstab_save: failed to open %s!", path);
+        return -1;
+    }
+
+    for(i = 0; i < f->count; ++i)
+    {
+        p = f->parts[i];
+        if(p->disabled)
+            fputc('#', out);
+
+        if(f->version == 1)
+            fprintf(out, "%s\t%s\t%s\t", p->path, p->type, p->device);
+        else
+            fprintf(out, "%s\t%s\t%s\t", p->device, p->path, p->type);
+        fprintf(out, "%s\t%s\n", p->options_raw, p->options2);
+    }
+    fclose(out);
+    return 0;
+}
+
 void fstab_destroy(struct fstab *f)
 {
     list_clear(&f->parts, fstab_destroy_part);
@@ -171,6 +208,7 @@ void fstab_destroy_part(struct fstab_part *p)
     free(p->type);
     free(p->device);
     free(p->options);
+    free(p->options_raw);
     free(p->options2);
     free(p);
 }
@@ -202,6 +240,18 @@ struct fstab_part *fstab_find_by_path(struct fstab *f, const char *path)
             return f->parts[i];
 
     return NULL;
+}
+
+int fstab_disable_part(struct fstab *f, const char *path)
+{
+    struct fstab_part *p = fstab_find_by_path(f, path);
+    if(!p)
+    {
+        ERROR("Failed to disable partition %s, couldn't find it in fstab!\n", path);
+        return -1;
+    }
+    p->disabled = 1;
+    return 0;
 }
 
 void fstab_parse_options(char *opt, struct fstab_part *part)
@@ -280,8 +330,10 @@ struct fstab *fstab_auto_load(void)
                 strcat(path, dt->d_name);
 
                 // try to find specifically fstab.device
+#ifdef TARGET_DEVICE
                 if(strcmp(dt->d_name, "fstab."TARGET_DEVICE) == 0)
                     break;
+#endif
             }
         }
         closedir(d);
@@ -294,5 +346,40 @@ struct fstab *fstab_auto_load(void)
     }
 
     ERROR("Loading fstab \"%s\"...\n", path);
-    return fstab_load(path);
+    return fstab_load(path, 1);
+}
+
+void fstab_add_part(struct fstab *f, const char *dev, const char *path, const char *type, const char *options, const char *options2)
+{
+    struct fstab_part *p = mzalloc(sizeof(struct fstab_part));
+    p->path = strdup(path);
+    p->device = strdup(dev);
+    p->type = strdup(type);
+    p->options_raw = strdup(options);
+    fstab_parse_options(p->options_raw, p);
+    p->options2 = strdup(options2);
+
+    list_add(p, &f->parts);
+    ++f->count;
+}
+
+struct fstab_part *fstab_clone_part(struct fstab_part *p)
+{
+    struct fstab_part *new_p = mzalloc(sizeof(struct fstab_part));
+    memcpy(new_p, p, sizeof(struct fstab_part));
+
+    new_p->path = strdup(p->path);
+    new_p->device = strdup(p->device);
+    new_p->type = strdup(p->type);
+    new_p->options_raw = strdup(p->options_raw);
+    new_p->options = strdup(p->options);
+    new_p->options2 = strdup(p->options2);
+
+    return new_p;
+}
+
+void fstab_add_part_struct(struct fstab *f, struct fstab_part *p)
+{
+    list_add(p, &f->parts);
+    ++f->count;
 }

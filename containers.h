@@ -41,15 +41,32 @@ typedef struct
 {
     char **keys;
     void **values;
+    size_t size;
 } map;
 
 map *map_create(void);
 void map_destroy(map *m, void (*destroy_callback)(void*));
-void map_add(map *m, char *key, void *val, void (*destroy_callback)(void*));
-void map_add_not_exist(map *m, char *key, void *val);
-void map_rm(map *m, char *key, void (*destroy_callback)(void*));
-int map_find(map *m, char *key);
-void *map_get_val(map *m, char *key);
-void *map_get_ref(map *m, char *key);
+void map_add(map *m, const char *key, void *val, void (*destroy_callback)(void*));
+void map_add_not_exist(map *m, const char *key, void *val);
+void map_rm(map *m, const char *key, void (*destroy_callback)(void*));
+int map_find(map *m, const char *key);
+void *map_get_val(map *m, const char *key);
+void *map_get_ref(map *m, const char *key);
+
+typedef struct
+{
+    int *keys;
+    void **values;
+    size_t size;
+} imap;
+
+imap *imap_create(void);
+void imap_destroy(imap *m, void (*destroy_callback)(void*));
+void imap_add(imap *m, int key, void *val, void (*destroy_callback)(void*));
+void imap_add_not_exist(imap *m, int key, void *val);
+void imap_rm(imap *m, int key, void (*destroy_callback)(void*));
+int imap_find(imap *m, int key);
+void *imap_get_val(imap *m, int key);
+void *imap_get_ref(imap *m, int key);
 
 #endif

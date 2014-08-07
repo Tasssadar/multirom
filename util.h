@@ -43,10 +43,14 @@ void stdio_to_null();
 char *parse_string(char *src);
 uint32_t timespec_diff(struct timespec *f, struct timespec *s);
 void emergency_remount_ro(void);
+int create_loop_device(const char *dev_path, const char *img_path, int loop_num, int loop_chmod);
+int mount_image(const char *src, const char *dst, const char *fs, int flags, const void *data);
 
 inline int imin(int a, int b);
 inline int imax(int a, int b);
 inline int in_rect(int x, int y, int rx, int ry, int rw, int rh);
+
 inline void *mzalloc(size_t size); // alloc and fill with 0s
+char *strtoupper(const char *str);
 
 #endif

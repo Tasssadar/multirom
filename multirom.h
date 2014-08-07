@@ -105,6 +105,7 @@ struct multirom_status
     char *int_display_name;
     int rotation;
     int force_generic_fb;
+    float anim_duration_coef;
     struct multirom_rom *auto_boot_rom;
     struct multirom_rom *current_rom;
     struct multirom_rom **roms;
@@ -112,6 +113,8 @@ struct multirom_status
     char *curr_rom_part;
     struct fstab *fstab;
 };
+
+extern char multirom_dir[64];
 
 int multirom(const char *rom_to_boot);
 int multirom_find_base_dir(void);
@@ -133,7 +136,7 @@ void multirom_free_rom(void *rom);
 int multirom_init_fb(int rotation);
 int multirom_prep_android_mounts(struct multirom_rom *rom);
 int multirom_create_media_link(void);
-int multirom_process_android_fstab(char *fstab_name, int has_fw);
+int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_part **fw_part);
 int multirom_get_api_level(const char *path);
 int multirom_get_rom_type(struct multirom_rom *rom);
 void multirom_take_screenshot(void);
@@ -150,7 +153,6 @@ void multirom_destroy_partition(void *part);
 void multirom_set_usb_refresh_thread(struct multirom_status *s, int run);
 void multirom_set_usb_refresh_handler(void (*handler)(void));
 int multirom_mount_usb(struct usb_partition *part);
-int multirom_mount_loop(const char *src, const char *dst, const char *fs, int flags, const void *data);
 int multirom_copy_log(char *klog, const char *dest_path_relative);
 int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_partition *p);
 struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uuid);

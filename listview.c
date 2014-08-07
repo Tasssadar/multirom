@@ -23,17 +23,20 @@
 #include "log.h"
 #include "checkbox.h"
 #include "multirom_ui.h"
+#include "multirom_ui_themes.h"
 #include "workers.h"
 #include "input.h"
+#include "animation.h"
+#include "notification_card.h"
 
 #define MARK_W (10*DPI_MUL)
 #define MARK_H (50*DPI_MUL)
-#define PADDING (20*DPI_MUL)
+#define PADDING (35*DPI_MUL)
 #define LINE_W (2*DPI_MUL)
 #define SCROLL_DIST (20*DPI_MUL)
 #define OVERSCROLL_H (130*DPI_MUL)
 #define OVERSCROLL_MARK_H (4*DPI_MUL)
-#define OVERSCROLL_RETURN_SPD (15*DPI_MUL)
+#define OVERSCROLL_RETURN_SPD (10*DPI_MUL)
 
 static void listview_bounceback(uint32_t diff, void *data)
 {
@@ -66,11 +69,6 @@ static void listview_bounceback(uint32_t diff, void *data)
 
 void listview_init_ui(listview *view)
 {
-    int x = view->x + view->w - PADDING/2 - LINE_W/2;
-
-    fb_rect *scroll_line = fb_add_rect(x, view->y, LINE_W, view->h, GRAYISH);
-    list_add(scroll_line, &view->ui_items);
-
     view->keyact_item_selected = -1;
 
     view->touch.id = -1;
@@ -91,16 +89,18 @@ void listview_destroy(listview *view)
     fb_rm_rect(view->scroll_mark);
     fb_rm_rect(view->overscroll_marks[0]);
     fb_rm_rect(view->overscroll_marks[1]);
+    fb_rm_rect(view->scroll_line);
 
     free(view);
 }
 
 listview_item *listview_add_item(listview *view, int id, void *data)
 {
-    listview_item *it = malloc(sizeof(listview_item));
+    listview_item *it = mzalloc(sizeof(listview_item));
     it->id = id;
     it->data = data;
     it->flags = 0;
+    it->parent_rect = (fb_item_pos*)view;
 
     if(!view->items)
         keyaction_add(view->x, view->y, listview_keyaction_call, view);
@@ -111,8 +111,10 @@ listview_item *listview_add_item(listview *view, int id, void *data)
 
 void listview_clear(listview *view)
 {
+    if(listview_select_item(view, NULL))
+        listview_update_ui(view);
+
     list_clear(&view->items, view->item_destroy);
-    view->selected = NULL;
 
     keyaction_remove(listview_keyaction_call, view);
 }
@@ -123,16 +125,16 @@ void listview_update_ui(listview *view)
     int i, it_h, visible;
     listview_item *it;
 
+    fb_batch_start();
+
     for(i = 0; view->items && view->items[i]; ++i)
     {
         it = view->items[i];
-        it_h = (*view->item_height)(it->data);
+        it_h = (*view->item_height)(it);
 
-        visible = (int)(view->pos <= y && y+it_h-view->pos <= view->h);
+        visible = (int)(view->pos <= y+it_h && y-view->pos <= view->h);
 
-        if(!visible && (it->flags & IT_VISIBLE))
-            (*view->item_hide)(it->data);
-        else if(visible)
+        if(visible || (it->flags & IT_VISIBLE))
             (*view->item_draw)(view->x, view->y+y-view->pos, view->w - PADDING, it);
 
         if(visible)
@@ -149,6 +151,7 @@ void listview_update_ui(listview *view)
     if(y > view->h)
         listview_update_scroll_mark(view);
 
+    fb_batch_end();
     fb_request_draw();
 }
 
@@ -160,11 +163,18 @@ void listview_enable_scroll(listview *view, int enable)
     if(enable)
     {
         int x = view->x + view->w - PADDING/2 - MARK_W/2;
-        view->scroll_mark = fb_add_rect(x, view->y, MARK_W, MARK_H, GRAYISH);
+        view->scroll_mark = fb_add_rect(x, view->y, MARK_W, MARK_H, GRAY);
+        view->scroll_mark->parent = (fb_item_pos*)view;
 
-        view->overscroll_marks[0] = fb_add_rect(view->x, view->y, 0, OVERSCROLL_MARK_H, CLR_SECONDARY);
+        x = view->x + view->w - PADDING/2 - LINE_W/2;
+        view->scroll_line = fb_add_rect(x, view->y, LINE_W, view->h, GRAY);
+        view->scroll_line->parent = (fb_item_pos*)view;
+
+        view->overscroll_marks[0] = fb_add_rect(view->x, view->y, 0, OVERSCROLL_MARK_H, C_HIGHLIGHT_BG);
+        view->overscroll_marks[0]->parent = (fb_item_pos*)view;
         view->overscroll_marks[1] = fb_add_rect(view->x, view->y+view->h-OVERSCROLL_MARK_H,
-                                                0, OVERSCROLL_MARK_H, CLR_SECONDARY);
+                                                0, OVERSCROLL_MARK_H, C_HIGHLIGHT_BG);
+        view->overscroll_marks[1]->parent = (fb_item_pos*)view;
         workers_add(listview_bounceback, view);
     }
     else
@@ -172,10 +182,12 @@ void listview_enable_scroll(listview *view, int enable)
         workers_remove(listview_bounceback, view);
 
         fb_rm_rect(view->scroll_mark);
+        fb_rm_rect(view->scroll_line);
         fb_rm_rect(view->overscroll_marks[0]);
         fb_rm_rect(view->overscroll_marks[1]);
 
         view->scroll_mark = NULL;
+        view->scroll_line = NULL;
         view->overscroll_marks[0] = NULL;
         view->overscroll_marks[1] = NULL;
     }
@@ -194,14 +206,14 @@ void listview_update_scroll_mark(listview *view)
 
     int pct = (pos*100)/(view->fullH-view->h);
     int y = view->y + ((view->h - MARK_H)*pct)/100;
-    view->scroll_mark->head.y = y;
+    view->scroll_mark->y = y;
 }
 
 void listview_update_overscroll_mark(listview *v, int side, float overscroll)
 {
     int w = v->w * (overscroll / OVERSCROLL_H);
     v->overscroll_marks[side]->w = w;
-    v->overscroll_marks[side]->head.x = v->x + (v->w >> 1) - (w >> 1);
+    v->overscroll_marks[side]->x = v->x + (v->w >> 1) - (w >> 1);
 }
 
 int listview_touch_handler(touch_event *ev, void *data)
@@ -211,6 +223,13 @@ int listview_touch_handler(touch_event *ev, void *data)
     {
         if (ev->x < view->x || ev->y < view->y ||
             ev->x > view->x+view->w || ev->y > view->y+view->h)
+        {
+            if(listview_select_item(view, NULL))
+                listview_update_ui(view);
+            return -1;
+        }
+
+        if(ev->consumed)
             return -1;
 
         view->touch.id = ev->id;
@@ -223,8 +242,11 @@ int listview_touch_handler(touch_event *ev, void *data)
         if(view->touch.hover)
         {
             view->touch.hover->flags |= IT_HOVER;
-            listview_update_ui(view);
+            view->touch.hover->touchX = ev->x;
+            view->touch.hover->touchY = ev->y;
         }
+        else
+            listview_select_item(view, NULL);
         listview_keyaction_call(view, KEYACT_CLEAR);
         listview_update_ui(view);
         return 0;
@@ -261,7 +283,13 @@ int listview_touch_handler(touch_event *ev, void *data)
     {
         if(view->touch.hover)
         {
-            listview_select_item(view, view->touch.hover);
+            if(view->selected == view->touch.hover)
+            {
+                if(view->item_confirmed)
+                    view->item_confirmed(view->selected);
+            }
+            else
+                listview_select_item(view, view->touch.hover);
             view->touch.hover->flags &= ~(IT_HOVER);
         }
         view->touch.id = -1;
@@ -271,21 +299,27 @@ int listview_touch_handler(touch_event *ev, void *data)
     return 0;
 }
 
-void listview_select_item(listview *view, listview_item *it)
+int listview_select_item(listview *view, listview_item *it)
 {
+    if(view->selected == it)
+        return 0;
+
     if(view->item_selected)
         (*view->item_selected)(view->selected, it);
 
     if(view->selected)
         view->selected->flags &= ~(IT_SELECTED);
-    it->flags |= IT_SELECTED;
+
+    if(it)
+        it->flags |= IT_SELECTED;
 
     view->selected = it;
+    return 1;
 }
 
 void listview_scroll_by(listview *view, int y)
 {
-    if(!view->scroll_mark)
+    if(!y || !view->scroll_mark)
         return;
 
     view->pos += y;
@@ -295,6 +329,7 @@ void listview_scroll_by(listview *view, int y)
     else if(view->pos > (view->fullH - view->h) + OVERSCROLL_H)
         view->pos = (view->fullH - view->h) + OVERSCROLL_H;
 
+    listview_select_item(view, NULL);
     listview_update_ui(view);
 }
 
@@ -310,6 +345,7 @@ void listview_scroll_to(listview *view, int pct)
     else if(view->pos > (view->fullH - view->h))
         view->pos = (view->fullH - view->h);
 
+    listview_select_item(view, NULL);
     listview_update_ui(view);
 }
 
@@ -324,10 +360,10 @@ int listview_ensure_visible(listview *view, listview_item *it)
     {
         if(it == view->items[i])
             break;
-        y += view->item_height(view->items[i]->data);
+        y += view->item_height(view->items[i]);
     }
 
-    int last_h = view->items[i] ? view->item_height(view->items[i]->data) : 0;
+    int last_h = view->items[i] ? view->item_height(view->items[i]) : 0;
 
     if((y + last_h) - view->pos > view->h)
         view->pos = (y + last_h) - view->h;
@@ -355,7 +391,7 @@ listview_item *listview_item_at(listview *view, int y_pos)
     for(i = 0; view->items && view->items[i]; ++i)
     {
         it = view->items[i];
-        it_h = (*view->item_height)(it->data);
+        it_h = (*view->item_height)(it);
 
         if(y < y_pos && y+it_h > y_pos)
             return it;
@@ -389,9 +425,13 @@ int listview_keyaction_call(void *data, int act)
         }
         case KEYACT_CLEAR:
         {
-            v->keyact_item_selected = -1;
-            listview_update_keyact_frame(v);
-            fb_request_draw();
+            if(v->keyact_item_selected != -1)
+            {
+                v->keyact_item_selected = -1;
+                listview_select_item(v, NULL);
+                listview_update_ui(v);
+                fb_request_draw();
+            }
             return 0;
         }
         case KEYACT_CONFIRM:
@@ -407,19 +447,15 @@ int listview_keyaction_call(void *data, int act)
 
 void listview_update_keyact_frame(listview *view)
 {
-    if(view->keyact_item_selected == -1 && view->keyact_frame)
+    if(view->keyact_item_selected == -1)
     {
-        list_clear(&view->keyact_frame, &fb_remove_item);
+        if(view->selected)
+        {
+            listview_select_item(view, NULL);
+            listview_update_ui(view);
+        }
         return;
     }
-    else if(view->keyact_item_selected != -1 && !view->keyact_frame)
-    {
-        fb_add_rect_notfilled(view->x, 0, view->w-PADDING, 0,
-                              KEYACT_FRAME_CLR, KEYACT_FRAME_W,
-                              &view->keyact_frame);
-    }
-    else if(view->keyact_item_selected == -1 && !view->keyact_frame)
-        return;
 
     listview_item *it = view->items[view->keyact_item_selected];
     listview_ensure_visible(view, it);
@@ -427,31 +463,22 @@ void listview_update_keyact_frame(listview *view)
     int i;
     int y = view->y;
     for(i = 0; i < view->keyact_item_selected && view->items[i]; ++i)
-        y += view->item_height(view->items[i]->data);
+        y += view->item_height(view->items[i]);
 
-    int h = view->item_height(view->items[i]->data);
+    int h = view->item_height(view->items[i]);
     y -= view->pos;
-
-    // top
-    view->keyact_frame[0]->head.y = y;
-    // right
-    view->keyact_frame[1]->head.y = y;
-    view->keyact_frame[1]->h = h;
-    // bottom
-    view->keyact_frame[2]->head.y = y+h-KEYACT_FRAME_W;
-    // left
-    view->keyact_frame[3]->head.y = y;
-    view->keyact_frame[3]->h = h;
 
     listview_select_item(view, it);
     listview_update_ui(view);
 }
 
-#define ROM_ITEM_H (100*DPI_MUL)
+#define ROM_ITEM_H (110*DPI_MUL)
+#define ROM_ITEM_SHADOW (7*DPI_MUL)
 #define ROM_ITEM_SEL_W (8*DPI_MUL)
-#define ROM_ICON_PADDING (12*DPI_MUL)
-#define ROM_ICON_H (ROM_ITEM_H-(ROM_ICON_PADDING*2))
-#define ROM_TEXT_PADDING (100*DPI_MUL)
+#define ROM_ICON_H (70*DPI_MUL)
+#define ROM_TEXT_PADDING (130*DPI_MUL)
+#define ROM_ICON_PADDING (ROM_TEXT_PADDING/2 - ROM_ICON_H/2)
+
 typedef struct
 {
     char *text;
@@ -459,16 +486,19 @@ typedef struct
     char *icon_path;
     fb_text *text_it;
     fb_text *part_it;
-    fb_rect *bottom_line;
-    fb_rect *hover_rect;
     fb_rect *sel_rect;
+    fb_rect *sel_rect_sh;
     fb_img *icon;
+    int deselect_anim_started;
+    int rom_name_size;
+    int last_y;
 } rom_item_data;
 
 void *rom_item_create(const char *text, const char *partition, const char *icon)
 {
-    rom_item_data *data = malloc(sizeof(rom_item_data));
-    memset(data, 0, sizeof(rom_item_data));
+    rom_item_data *data = mzalloc(sizeof(rom_item_data));
+
+    data->rom_name_size = SIZE_BIG;
 
     data->text = strdup(text);
     if(partition)
@@ -478,53 +508,155 @@ void *rom_item_create(const char *text, const char *partition, const char *icon)
     return data;
 }
 
+static void rom_item_deselect_finished(void *data)
+{
+    rom_item_data *d = data;
+
+    fb_rm_rect(d->sel_rect);
+    fb_rm_rect(d->sel_rect_sh);
+    d->sel_rect = NULL;
+    d->sel_rect_sh = NULL;
+}
+
+static void rom_item_sel_step(void *data, float interpolated)
+{
+    rom_item_data *d = data;
+    if(!d->sel_rect || !d->sel_rect_sh)
+        return;
+
+    d->sel_rect_sh->x = d->sel_rect->x + ROM_ITEM_SHADOW;
+    d->sel_rect_sh->y = d->sel_rect->y + ROM_ITEM_SHADOW;
+    d->sel_rect_sh->w = d->sel_rect->w;
+    d->sel_rect_sh->h = d->sel_rect->h;
+}
+
+static void rom_item_select(int x, int y, int w, int item_h, listview_item *it, rom_item_data *d)
+{
+    int baseX = it->touchX;
+    int baseY = it->touchY;
+    if(!baseX && !baseY)
+    {
+        baseX = x + w/2;
+        baseY = y + item_h/2;
+    }
+
+    d->deselect_anim_started = 0;
+
+    d->sel_rect_sh = fb_add_rect(baseX+ROM_ITEM_SHADOW, baseY+ROM_ITEM_SHADOW, 1, 1, C_ROM_HIGHLIGHT_SHADOW);
+    d->sel_rect_sh->parent = it->parent_rect;
+    d->sel_rect = fb_add_rect(baseX, baseY, 1, 1, C_ROM_HIGHLIGHT);
+    d->sel_rect->parent = it->parent_rect;
+
+    item_anim *anim = item_anim_create(d->sel_rect, 300, INTERPOLATOR_ACCEL_DECEL);
+    anim->start_offset = 0;
+    anim->targetX = x;
+    anim->targetY = y;
+    anim->targetW = w;
+    anim->targetH = item_h;
+    anim->on_step_data = d;
+    anim->on_step_call = rom_item_sel_step;
+    item_anim_add(anim);
+
+    ncard_builder *b = ncard_create_builder();
+    ncard_set_text(b, "Tap again to boot the system");
+    fb_item_pos p;
+    p.y = y;
+    p.h = item_h;
+    ncard_avoid_item(b, &p);
+    ncard_show(b, 1);
+}
+
+static void rom_item_deselect(int x, int y, int w, int item_h, listview_item *it, rom_item_data *d)
+{
+    d->deselect_anim_started = 1;
+
+    if(!((listview*)it->parent_rect)->selected)
+        ncard_hide();
+
+    item_anim *anim = item_anim_create(d->sel_rect, 150, INTERPOLATOR_ACCELERATE);
+    if(it->touchX || it->touchY)
+    {
+        anim->targetX = it->touchX;
+        anim->targetY = it->touchY;
+    }
+    else
+    {
+        anim->targetX = x + w/2;
+        anim->targetY = y + item_h/2;
+    }
+    anim->targetW = 0;
+    anim->targetH = 0;
+    anim->on_step_data = d;
+    anim->on_step_call = rom_item_sel_step;
+    anim->on_finished_data = d;
+    anim->on_finished_call = rom_item_deselect_finished;
+    item_anim_add_after(anim);
+}
+
 void rom_item_draw(int x, int y, int w, listview_item *it)
 {
     rom_item_data *d = (rom_item_data*)it->data;
+    const int item_h = rom_item_height(it);
     if(!d->text_it)
     {
-        d->text_it = fb_add_text(x+ROM_TEXT_PADDING, 0, WHITE, SIZE_BIG, d->text);
-        d->bottom_line = fb_add_rect(x, 0, w, 1, 0xFF1B1B1B);
+        fb_text_proto *p = fb_text_create(x+ROM_TEXT_PADDING, 0, C_TEXT, d->rom_name_size, d->text);
+        p->style = STYLE_CONDENSED;
+        d->text_it = fb_text_finalize(p);
+        d->text_it->parent = it->parent_rect;
+
+        while(d->text_it->w + ROM_TEXT_PADDING >= w && d->rom_name_size > 3)
+            fb_text_set_size(d->text_it, --d->rom_name_size);
 
         if(d->icon_path)
+        {
             d->icon = fb_add_png_img(x+ROM_ICON_PADDING, 0, ROM_ICON_H, ROM_ICON_H, d->icon_path);
+            d->icon->parent = it->parent_rect;
+        }
 
         if(d->partition)
-            d->part_it = fb_add_text(x+ROM_TEXT_PADDING, 0, GRAY, SIZE_SMALL, d->partition);
+        {
+            d->part_it = fb_add_text(x+ROM_TEXT_PADDING, 0, C_TEXT_SECONDARY, SIZE_SMALL, d->partition);
+            d->part_it->parent = it->parent_rect;
+        }
     }
 
-    d->text_it->head.y = center_y(y, ROM_ITEM_H, SIZE_BIG);
-    d->bottom_line->head.y = y+ROM_ITEM_H-2;
+    if(!d->part_it)
+        center_text(d->text_it, -1, y, -1, item_h);
+    else
+    {
+        d->text_it->y = y + (item_h/2 - (d->text_it->h + d->part_it->h + 4*DPI_MUL)/2);
+        d->part_it->y = d->text_it->y + d->text_it->h + 4*DPI_MUL;
+    }
 
     if(d->icon)
-        d->icon->head.y = y + (ROM_ITEM_H/2 - ROM_ICON_H/2);
-
-    if(d->part_it)
-        d->part_it->head.y = d->text_it->head.y + SIZE_BIG*16 + 2;
-
-    if(it->flags & IT_HOVER)
-    {
-        if(!d->hover_rect)
-            d->hover_rect = fb_add_rect(x, 0, w, rom_item_height(it->data), CLR_SECONDARY);
-        d->hover_rect->head.y = y;
-    }
-    else if(d->hover_rect)
-    {
-        fb_rm_rect(d->hover_rect);
-        d->hover_rect = NULL;
-    }
+        d->icon->y = y + (item_h/2 - ROM_ICON_H/2);
 
     if(it->flags & IT_SELECTED)
     {
         if(!d->sel_rect)
-            d->sel_rect = fb_add_rect(x, 0, ROM_ITEM_SEL_W, ROM_ITEM_H, CLR_PRIMARY);
-        d->sel_rect->head.y = y;
+        {
+            rom_item_select(x, y, w, item_h, it, d);
+        }
+        else
+        {
+            d->sel_rect_sh->y += y - d->last_y;
+            d->sel_rect->y += y - d->last_y;
+        }
     }
     else if(d->sel_rect)
     {
-        fb_rm_rect(d->sel_rect);
-        d->sel_rect = NULL;
+        if(!d->deselect_anim_started)
+        {
+            rom_item_deselect(x, y, w, item_h, it, d);
+        }
+        else
+        {
+            d->sel_rect_sh->y += y - d->last_y;
+            d->sel_rect->y += y - d->last_y;
+        }
     }
+
+    d->last_y = y;
 }
 
 void rom_item_hide(void *data)
@@ -535,20 +667,18 @@ void rom_item_hide(void *data)
 
     fb_rm_text(d->text_it);
     fb_rm_text(d->part_it);
-    fb_rm_rect(d->bottom_line);
-    fb_rm_rect(d->hover_rect);
     fb_rm_rect(d->sel_rect);
+    fb_rm_rect(d->sel_rect_sh);
     fb_rm_img(d->icon);
 
     d->text_it = NULL;
     d->part_it = NULL;
-    d->bottom_line = NULL;
-    d->hover_rect = NULL;
     d->sel_rect = NULL;
+    d->sel_rect_sh = NULL;
     d->icon = NULL;
 }
 
-int rom_item_height(void *data)
+int rom_item_height(listview_item *it)
 {
     return ROM_ITEM_H;
 }

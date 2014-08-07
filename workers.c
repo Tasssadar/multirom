@@ -44,7 +44,7 @@ static struct worker_thread worker_thread = {
     .run = 0,
 };
 
-#define SLEEP_CONST 16
+#define SLEEP_CONST 10
 static void *worker_thread_work(void *data)
 {
     struct worker_thread *t = (struct worker_thread*)data;
@@ -142,4 +142,9 @@ void workers_remove(worker_call call, void *data)
         }
     }
     pthread_mutex_unlock(&worker_thread.mutex);
+}
+
+pthread_t workers_get_thread_id(void)
+{
+    return worker_thread.thread;
 }

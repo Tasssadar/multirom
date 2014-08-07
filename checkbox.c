@@ -21,6 +21,7 @@
 #include "input.h"
 #include "util.h"
 #include "multirom_ui.h"
+#include "multirom_ui_themes.h"
 
 #define BORDER_SIZE (2*DPI_MUL)
 #define BORDER_PADDING (2*DPI_MUL)
@@ -84,14 +85,14 @@ void checkbox_set_pos(checkbox *c, int x, int y)
     int i;
     for(i = 0; i < BORDER_MAX; ++i)
     {
-        c->borders[i]->head.x = pos[i][0];
-        c->borders[i]->head.y = pos[i][1];
+        c->borders[i]->x = pos[i][0];
+        c->borders[i]->y = pos[i][1];
     }
 
     if(c->selected)
     {
-        c->selected->head.x = x + SELECTED_PADDING;
-        c->selected->head.y = y + SELECTED_PADDING;
+        c->selected->x = x + SELECTED_PADDING;
+        c->selected->y = y + SELECTED_PADDING;
     }
 }
 
@@ -103,7 +104,7 @@ void checkbox_select(checkbox *c, int select)
     if(select)
     {
         c->selected = fb_add_rect(c->x + SELECTED_PADDING, c->y + SELECTED_PADDING,
-                                  SELECTED_SIZE, SELECTED_SIZE, CLR_PRIMARY);
+                                  SELECTED_SIZE, SELECTED_SIZE, C_HIGHLIGHT_BG);
     }
     else
     {
@@ -122,7 +123,7 @@ int checkbox_touch_handler(touch_event *ev, void *data)
             return -1;
 
         box->touch_id = ev->id;
-        box->hover = fb_add_rect(box->x-TOUCH, box->y-TOUCH, CHECKBOX_SIZE+TOUCH*2, CHECKBOX_SIZE+TOUCH*2, CLR_SECONDARY);
+        box->hover = fb_add_rect(box->x-TOUCH, box->y-TOUCH, CHECKBOX_SIZE+TOUCH*2, CHECKBOX_SIZE+TOUCH*2, C_HIGHLIGHT_HOVER);
         fb_request_draw();
     }
 

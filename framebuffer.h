@@ -20,6 +20,7 @@
 
 #include <linux/fb.h>
 #include <stdarg.h>
+#include <pthread.h>
 
 #if defined(RECOVERY_BGRA) || defined(RECOVERY_RGBX)
 #define PIXEL_SIZE 4
@@ -89,35 +90,22 @@ enum
     FB_IMPL_CNT
 };
 
-#define ISO_CHAR_HEIGHT 16
-#define ISO_CHAR_WIDTH 8
-
-// Colors, 0xAABBGGRR
+// Colors, 0xAARRGGBB
 #define BLACK     0xFF000000
 #define WHITE     0xFFFFFFFF
-#define LBLUE     0xFFCC9900
-#define LBLUE2    0xFFF4DFA8
+#define LBLUE     0xFF0099CC
+#define LBLUE2    0xFFA8DFF4
 #define GRAYISH   0xFFBEBEBE
 #define GRAY      0xFF7F7F7F
-#define DRED      0xFF0000CC
+#define DRED      0xFFCC0000
 
-#if defined(MR_XHDPI)
 enum
 {
-    SIZE_SMALL     = 2,
-    SIZE_NORMAL    = 3,
-    SIZE_BIG       = 4,
-    SIZE_EXTRA     = 6,
+    SIZE_SMALL     = 7,
+    SIZE_NORMAL    = 10,
+    SIZE_BIG       = 13,
+    SIZE_EXTRA     = 15,
 };
-#elif defined(MR_HDPI)
-enum
-{
-    SIZE_SMALL     = 1,
-    SIZE_NORMAL    = 2,
-    SIZE_BIG       = 3,
-    SIZE_EXTRA     = 4,
-};
-#endif
 
 extern uint32_t fb_width;
 extern uint32_t fb_height;
@@ -134,9 +122,7 @@ void fb_force_generic_impl(int force);
 
 enum 
 {
-    FB_IT_TEXT,
     FB_IT_RECT,
-    FB_IT_BOX,
     FB_IT_IMG,
 };
 
@@ -144,31 +130,68 @@ enum
 {
     FB_IMG_TYPE_GENERIC,
     FB_IMG_TYPE_PNG,
+    FB_IMG_TYPE_TEXT,
 };
 
+enum
+{
+    JUSTIFY_LEFT,
+    JUSTIFY_CENTER,
+    JUSTIFY_RIGHT,
+};
+
+enum
+{
+    STYLE_NORMAL,
+    STYLE_ITALIC,
+    STYLE_BOLD,
+    STYLE_BOLD_ITALIC,
+    STYLE_MEDIUM,
+    STYLE_CONDENSED,
+    STYLE_MONOSPACE,
+
+    STYLE_COUNT
+};
+
+enum
+{
+    LEVEL_RECT = 0,
+    LEVEL_PNG  = 1,
+    LEVEL_TEXT = 2,
+};
+
+struct fb_item_header;
+
+#define FB_ITEM_POS \
+    int x, y; \
+    int w, h;
+
+typedef struct 
+{
+    FB_ITEM_POS
+} fb_item_pos;
+
+extern fb_item_pos DEFAULT_FB_PARENT;
+
+#define FB_ITEM_HEAD \
+    FB_ITEM_POS \
+    int id; \
+    int type; \
+    int level; \
+    fb_item_pos *parent; \
+    struct fb_item_header *prev; \
+    struct fb_item_header *next;
+
+struct fb_item_header
+{
+    FB_ITEM_HEAD
+};
+typedef struct fb_item_header fb_item_header;
+
 typedef struct
 {
-    int id;
-    int type;
-    int x;
-    int y;
-} fb_item_header;
+    FB_ITEM_HEAD
 
-typedef struct
-{
-    fb_item_header head;
-
-    uint32_t color;
-    int8_t size;
-    char *text;
-} fb_text;
-
-typedef struct
-{
-    fb_item_header head;
-
-    int w;
-    int h;
     uint32_t color;
 } fb_rect;
 
@@ -188,51 +211,63 @@ typedef struct
  */
 typedef struct
 {
-    fb_item_header head;
-    int w;
-    int h;
+    FB_ITEM_HEAD
+
     int img_type;
     px_type *data;
+    void *extra;
 } fb_img;
 
-typedef struct
-{
-    fb_item_header head;
-    int w, h;
-
-    fb_text **texts;
-    fb_rect *background[3];
-} fb_msgbox;
+typedef fb_img fb_text;
 
 typedef struct
 {
-    fb_text **texts;
-    fb_rect **rects;
-    fb_img **imgs;
-    fb_msgbox *msgbox;
-} fb_items_t;
+    uint32_t background_color;
+    fb_item_header *first_item;
+    pthread_mutex_t mutex;
+    volatile int batch_started;
+    volatile pthread_t batch_thread;
+} fb_context_t;
+
+typedef struct
+{
+    int x, y;
+    int level;
+    fb_item_pos *parent;
+    uint32_t color;
+    int size;
+    int justify;
+    int style;
+    char *text;
+    int wrap_w;
+} fb_text_proto;
 
 void fb_remove_item(void *item);
-int fb_generate_item_id();
-fb_text *fb_add_text(int x, int y, uint32_t color, int size, const char *fmt, ...);
-fb_text *fb_add_text_long(int x, int y, uint32_t color, int size, char *text);
-fb_rect *fb_add_rect(int x, int y, int w, int h, uint32_t color);
-fb_img *fb_add_img(int x, int y, int w, int h, int img_type, px_type *data);
-fb_img *fb_add_png_img(int x, int y, int w, int h, const char *path);
-void fb_add_rect_notfilled(int x, int y, int w, int h, uint32_t color, int thickness, fb_rect ***list);
-fb_msgbox *fb_create_msgbox(int w, int h, int bgcolor);
-fb_text *fb_msgbox_add_text(int x, int y, int size, char *txt, ...);
-void fb_msgbox_rm_text(fb_text *text);
-void fb_destroy_msgbox(void);
-void fb_rm_text(fb_text *t);
-void fb_rm_rect(fb_rect *r);
-void fb_rm_img(fb_img *i);
+int fb_generate_item_id(void);
 px_type fb_convert_color(uint32_t c);
 
-void fb_draw_text(fb_text *t);
-void fb_draw_char(int x, int y, char c, px_type color, int size);
-void fb_draw_square(int x, int y, px_type color, int size);
-void fb_draw_overlay(void);
+fb_img *fb_add_text(int x, int y, uint32_t color, int size, const char *fmt, ...);
+fb_text_proto *fb_text_create(int x, int y, uint32_t color, int size, const char *text);
+fb_img *fb_text_finalize(fb_text_proto *p);
+void fb_text_set_color(fb_img *img, uint32_t color);
+void fb_text_set_size(fb_img *img, int size);
+void fb_text_set_content(fb_img *img, const char *text);
+
+void fb_text_drop_cache_unused(void);
+void fb_text_destroy(fb_img *i);
+
+fb_rect *fb_add_rect_lvl(int level, int x, int y, int w, int h, uint32_t color);
+#define fb_add_rect(x, y, w, h, color) fb_add_rect_lvl(LEVEL_RECT, x, y, w, h, color)
+void fb_add_rect_notfilled(int level, int x, int y, int w, int h, uint32_t color, int thickness, fb_rect ***list);
+
+fb_img *fb_add_img(int level, int x, int y, int w, int h, int img_type, px_type *data);
+fb_img *fb_add_png_img_lvl(int level, int x, int y, int w, int h, const char *path);
+#define fb_add_png_img(x, y, w, h, path) fb_add_png_img_lvl(LEVEL_PNG, x, y, w, h, path)
+
+void fb_rm_text(fb_img *i);
+void fb_rm_rect(fb_rect *r);
+void fb_rm_img(fb_img *i);
+
 void fb_draw_rect(fb_rect *r);
 void fb_draw_img(fb_img *i);
 void fb_fill(uint32_t color);
@@ -245,12 +280,20 @@ int fb_clone(char **buff);
 void fb_push_context(void);
 void fb_pop_context(void);
 
+void fb_batch_start(void);
+void fb_batch_end(void);
+
+void fb_ctx_add_item(void *item);
+void fb_ctx_rm_item(void *item);
+inline void fb_items_lock(void);
+inline void fb_items_unlock(void);
+void fb_set_background(uint32_t color);
+
 px_type *fb_png_get(const char *path, int w, int h);
 void fb_png_release(px_type *data);
 void fb_png_drop_unused(void);
 
-inline int center_x(int x, int width, int size, const char *text);
-inline int center_y(int y, int height, int size);
+inline void center_text(fb_img *text, int targetX, int targetY, int targetW, int targetH);
 
 int vt_set_mode(int graphics);
 
