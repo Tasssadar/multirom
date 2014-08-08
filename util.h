@@ -27,6 +27,7 @@
 time_t gettime(void);
 unsigned int decode_uid(const char *s);
 int mkdir_recursive(const char *pathname, mode_t mode);
+int mkdir_recursive_with_perms(const char *pathname, mode_t mode, const char *owner, const char *group);
 void sanitize(char *p);
 int make_link(const char *oldpath, const char *newpath);
 void remove_link(const char *oldpath, const char *newpath);

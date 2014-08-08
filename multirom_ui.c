@@ -134,7 +134,6 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     multirom_ui_init_theme(TAB_INTERNAL);
 
-    add_touch_handler(&multirom_ui_touch_handler, NULL);
     start_input_thread();
     keyaction_enable(1);
 
@@ -209,8 +208,6 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     keyaction_enable(0);
     keyaction_clear();
-
-    rm_touch_handler(&multirom_ui_touch_handler, NULL);
 
     ncard_builder *b = ncard_create_builder();
     ncard_set_pos(b, NCARD_POS_CENTER);
@@ -379,24 +376,6 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
         if(rom->id == last_selected_int_rom)
             select = it;
     }
-}
-
-int multirom_ui_touch_handler(touch_event *ev, void *data)
-{
-    static int touch_count = 0;
-    if(ev->changed & TCHNG_ADDED)
-    {
-        if(++touch_count == 4)
-        {
-            multirom_take_screenshot();
-            touch_count = 0;
-        }
-    }
-
-    if((ev->changed & TCHNG_REMOVED) && touch_count > 0)
-        --touch_count;
-
-    return -1;
 }
 
 struct auto_boot_data

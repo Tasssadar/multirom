@@ -1391,39 +1391,6 @@ int multirom_get_api_level(const char *path)
     return res;
 }
 
-void multirom_take_screenshot(void)
-{
-    char *buffer = NULL;
-    int len = fb_clone(&buffer);
-
-    int counter;
-    char path[256];
-    struct stat info;
-    FILE *f = NULL;
-
-    for(counter = 0; 1; ++counter)
-    {
-        sprintf(path, "%s/screenshot_%02d.raw", multirom_dir, counter);
-        if(stat(path, &info) >= 0)
-            continue;
-
-        f = fopen(path, "w");
-        if(f)
-        {
-            fwrite(buffer, 1, len, f);
-            fclose(f);
-        }
-        break;
-    }
-
-    free(buffer);
-
-    fb_fill(WHITE);
-    fb_update();
-    usleep(100000);
-    fb_request_draw();
-}
-
 int multirom_get_trampoline_ver(void)
 {
     static int ver = -2;

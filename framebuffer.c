@@ -939,3 +939,56 @@ void fb_force_draw(void)
     pthread_cond_wait(&fb_draw_cond, &fb_draw_mutex);
     pthread_mutex_unlock(&fb_draw_mutex);
 }
+
+int fb_save_screenshot(void)
+{
+    char *r;
+    int c, media_rw_id;
+    char dir[256];
+    char path[256];
+
+    strcpy(dir, multirom_dir);
+    r = strrchr(dir, '/');
+    if(!r)
+    {
+        ERROR("Failed to determine path to save a screenshot!\n");
+        return -1;
+    }
+    *r = 0;
+    strcat(dir, "/Pictures/Screenshots");
+    mkdir_recursive_with_perms(path, 0666, "media_rw", "media_rw");
+
+    for(c = 0; c < 999; ++c)
+    {
+        snprintf(path, sizeof(path), "%s/mrom_screenshot_%03d.png", dir, c);
+        if(access(path, F_OK) < 0)
+            break;
+    }
+
+    pthread_mutex_lock(&fb_draw_mutex);
+    if(fb_png_save_img(path, fb_width, fb_height, fb.stride, fb.buffer) >= 0)
+    {
+        media_rw_id = decode_uid("media_rw");
+        if(media_rw_id != -1)
+            chown(path, (uid_t)media_rw_id, (gid_t)media_rw_id);
+        chmod(path, 0664);
+
+        INFO("Screenshot saved to %s\n", path);
+
+        fb_fill(WHITE);
+        pthread_mutex_lock(&fb_update_mutex);
+        fb_update();
+        usleep(100000);
+        pthread_mutex_unlock(&fb_update_mutex);
+        pthread_mutex_unlock(&fb_draw_mutex);
+
+        fb_request_draw();
+        return 0;
+    }
+    else
+    {
+        pthread_mutex_unlock(&fb_draw_mutex);
+        ERROR("Failed to take screenshot!\n");
+        return -1;
+    }
+}

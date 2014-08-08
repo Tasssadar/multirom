@@ -293,3 +293,85 @@ void fb_png_drop_unused(void)
         }
     }
 }
+
+static inline void convert_fb_px_to_rgb888(px_type src, uint8_t *dest)
+{
+#ifdef RECOVERY_BGRA
+    dest[0] = ((src & 0xFF0000) >> 16); // R
+    dest[1] = ((src & 0xFF00) >> 8);    // G
+    dest[2] = (src & 0xFF);             // B
+#elif defined(RECOVERY_RGBX)
+    dest[0] = (src & 0xFF);             // R
+    dest[1] = ((src & 0xFF00) >> 8);    // G
+    dest[2] = ((src & 0xFF0000) >> 16); // B
+#elif defined(RECOVERY_RGB_565)
+    dest[0] = ((src & 0xF800) >> 8);    // R
+    dest[1] = ((src & 0x7E0) >> 3);     // G
+    dest[2] = ((src & 0x1F) << 3);      // B
+#else
+#error "Unknown pixel format"
+#endif
+}
+
+int fb_png_save_img(const char *path, int w, int h, int stride, px_type *data)
+{
+    FILE *fp = NULL;
+    png_structp png_ptr = NULL;
+    png_infop info_ptr = NULL;
+    int res = -1;
+    int y, x;
+    uint8_t *row = NULL;
+    const int stride_leftover = stride - w;
+    const int w_png_bytes = w * 3;
+    px_type * volatile itr = data;
+
+    fp = fopen(path, "w");
+    if(!fp)
+    {
+        ERROR("Failed to open %s for writing\n", path);
+        return -1;
+    }
+
+    png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    if (!png_ptr)
+        goto exit;
+
+    info_ptr = png_create_info_struct(png_ptr);
+    if (info_ptr == NULL)
+        goto exit;
+
+    if (setjmp(png_jmpbuf(png_ptr)))
+        goto exit;
+
+    png_init_io(png_ptr, fp);
+    png_set_IHDR(png_ptr, info_ptr, w, h,
+         8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
+         PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+    png_write_info(png_ptr, info_ptr);
+
+    row = malloc(w*3);
+    for(y = 0; y < h; ++y)
+    {
+        for(x = 0; x < w_png_bytes; x += 3)
+        {
+            convert_fb_px_to_rgb888(*itr, row + x);
+            ++itr;
+        }
+        itr += stride_leftover;
+
+        png_write_row(png_ptr, row);
+    }
+
+    png_write_end(png_ptr, NULL);
+    res = 0;
+exit:
+    if(info_ptr)
+        png_free_data(png_ptr, info_ptr, PNG_FREE_ALL, -1);
+    if(png_ptr)
+        png_destroy_write_struct(&png_ptr, (png_infopp)NULL);
+    if(fp)
+        fclose(fp);
+    if(row)
+        free(row);
+    return res;
+}

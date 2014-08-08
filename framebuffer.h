@@ -276,6 +276,7 @@ void fb_force_draw(void);
 void fb_clear(void);
 void fb_freeze(int freeze);
 int fb_clone(char **buff);
+int fb_save_screenshot(void);
 
 void fb_push_context(void);
 void fb_pop_context(void);
@@ -292,6 +293,7 @@ void fb_set_background(uint32_t color);
 px_type *fb_png_get(const char *path, int w, int h);
 void fb_png_release(px_type *data);
 void fb_png_drop_unused(void);
+int fb_png_save_img(const char *path, int w, int h, int stride, px_type *data);
 
 inline void center_text(fb_img *text, int targetX, int targetY, int targetW, int targetH);
 

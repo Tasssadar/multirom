@@ -100,6 +100,11 @@ unsigned int decode_uid(const char *s)
 
 int mkdir_recursive(const char *pathname, mode_t mode)
 {
+    return mkdir_recursive_with_perms(pathname, mode, NULL, NULL);
+}
+
+int mkdir_recursive_with_perms(const char *pathname, mode_t mode, const char *owner, const char *group)
+{
     char buf[128];
     const char *slash;
     const char *p = pathname;
@@ -121,7 +126,7 @@ int mkdir_recursive(const char *pathname, mode_t mode)
         memcpy(buf, pathname, width);
         buf[width] = 0;
         if (stat(buf, &info) != 0) {
-            ret = mkdir(buf, mode);
+            ret = mkdir_with_perms(buf, mode, owner, group);
             if (ret && errno != EEXIST)
                 return ret;
         }
@@ -129,6 +134,33 @@ int mkdir_recursive(const char *pathname, mode_t mode)
     ret = mkdir(pathname, mode);
     if (ret && errno != EEXIST)
         return ret;
+    return 0;
+}
+
+int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const char *group)
+{
+    int ret;
+
+    ret = mkdir(path, mode);
+    /* chmod in case the directory already exists */
+    if (ret == -1 && errno == EEXIST) {
+        ret = chmod(path, mode);
+    }
+    if (ret == -1) {
+        return -errno;
+    }
+
+    if(owner)
+    {
+        uid_t uid = decode_uid(owner);
+        gid_t gid = -1;
+
+        if(group)
+            gid = decode_uid(group);
+
+        if(chown(path, uid, gid) < 0)
+            return -errno;
+    }
     return 0;
 }
 
@@ -234,33 +266,6 @@ int copy_file(const char *from, const char *to)
     fclose(in);
     fclose(out);
     free(buff);
-    return 0;
-}
-
-int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const char *group)
-{
-    int ret;
-
-    ret = mkdir(path, mode);
-    /* chmod in case the directory already exists */
-    if (ret == -1 && errno == EEXIST) {
-        ret = chmod(path, mode);
-    }
-    if (ret == -1) {
-        return -errno;
-    }
-
-    if(owner)
-    {
-        uid_t uid = decode_uid(owner);
-        gid_t gid = -1;
-
-        if(group)
-            gid = decode_uid(group);
-
-        if(chown(path, uid, gid) < 0)
-            return -errno;
-    }
     return 0;
 }
 

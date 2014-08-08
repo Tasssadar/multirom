@@ -139,7 +139,6 @@ int multirom_create_media_link(void);
 int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_part **fw_part);
 int multirom_get_api_level(const char *path);
 int multirom_get_rom_type(struct multirom_rom *rom);
-void multirom_take_screenshot(void);
 int multirom_get_trampoline_ver(void);
 int multirom_has_kexec(void);
 int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom);

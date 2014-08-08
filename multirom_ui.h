@@ -44,7 +44,6 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot);
 void multirom_ui_init_header(void);
 void multirom_ui_header_select(int tab);
 void multirom_ui_destroy_tab(int tab);
-int multirom_ui_touch_handler(touch_event *ev, void*);
 int multirom_ui_destroy_msgbox(void);
 void multirom_ui_switch(int tab);
 void multirom_ui_fill_rom_list(listview *view, int mask);

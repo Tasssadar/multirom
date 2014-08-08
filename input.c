@@ -170,9 +170,31 @@ static int ev_get(struct input_event *ev, unsigned dont_wait)
 
 #define IS_KEY_HANDLED(key) (key >= KEY_VOLUMEDOWN && key <= KEY_POWER)
 
+static int screenshot_trigger_handle_keyevent(int code, int pressed)
+{
+    static int power_pressed = 0;
+    switch(code)
+    {
+        case KEY_POWER:
+            power_pressed = pressed;
+            break;
+        case KEY_VOLUMEDOWN:
+            if(power_pressed && pressed)
+            {
+                fb_save_screenshot();
+                return 0;
+            }
+            break;
+    }
+    return -1;
+}
+
 static void handle_key_event(struct input_event *ev)
 {
     if(!IS_KEY_HANDLED(ev->code))
+        return;
+
+    if(screenshot_trigger_handle_keyevent(ev->code, (ev->value != 0)) != -1)
         return;
 
     if(keyaction_handle_keyevent(ev->code, (ev->value != 0)) != -1)
