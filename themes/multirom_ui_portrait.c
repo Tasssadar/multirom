@@ -189,13 +189,13 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
             y += 50*DPI_MUL;
     }
 
-    fb_text *text = fb_add_text(0, 0, C_TEXT_SECONDARY, SIZE_SMALL, "MultiROM v%d"VERSION_DEV_FIX" with trampoline v%d.",
+    fb_text *text = fb_add_text(5*DPI_MUL, 0, C_TEXT_SECONDARY, SIZE_SMALL, "MultiROM v%d"VERSION_DEV_FIX" with trampoline v%d.",
                                VERSION_MULTIROM, multirom_get_trampoline_ver());
     text->y = fb_height - text->h;
     list_add(text, &d->ui_elements);
 
     text = fb_add_text(0, 0, C_TEXT_SECONDARY, SIZE_SMALL, "Battery: %d%%", multirom_get_battery());
-    text->x = fb_width - text->w;
+    text->x = fb_width - text->w - 5*DPI_MUL;
     text->y = fb_height - text->h;
     list_add(text, &d->ui_elements);
 
