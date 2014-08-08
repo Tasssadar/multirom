@@ -381,7 +381,7 @@ void ncard_show(ncard_builder *b, int destroy_builder)
     if(!ncard.bg)
     {
         ncard.bg = fb_add_rect_lvl(LEVEL_NCARD_BG + lvl_offset, CARD_MARGIN, 0, CARD_WIDTH, items_h, C_NCARD_BG);
-        ncard.bg->y = ncard.pos == NCARD_POS_BOTTOM ? fb_height : -items_h;
+        ncard.bg->y = ncard.pos == NCARD_POS_BOTTOM ? (int)fb_height : -items_h;
         ncard.shadow = fb_add_rect_lvl(LEVEL_NCARD_SHADOW + lvl_offset, CARD_MARGIN + CARD_SHADOW_OFF, 0, CARD_WIDTH, items_h, C_NCARD_SHADOW);
         interpolator = INTERPOLATOR_OVERSHOOT;
     }
@@ -507,7 +507,7 @@ void ncard_hide(void)
     pthread_mutex_unlock(&ncard.mutex);
 
     item_anim *a = item_anim_create(c->bg, 400, INTERPOLATOR_ACCELERATE);
-    a->targetY = ncard.pos == NCARD_POS_TOP ? -c->bg->h : fb_height + c->bg->h;
+    a->targetY = ncard.pos == NCARD_POS_TOP ? -c->bg->h : (int)fb_height + c->bg->h;
     a->destroy_item_when_finished = 1;
     a->on_step_call = ncard_move_step;
     a->on_step_data = c;
