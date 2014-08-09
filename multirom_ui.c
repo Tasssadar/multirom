@@ -52,6 +52,19 @@ static int last_int_listview_pos = -1;
 
 static pthread_mutex_t exit_code_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+static struct auto_boot_data
+{
+    ncard_builder *b;
+    int seconds;
+    int destroy;
+    pthread_mutex_t mutex;
+} auto_boot_data = {
+    .b = NULL,
+    .seconds = 0,
+    .destroy = 0,
+    .mutex = PTHREAD_MUTEX_INITIALIZER,
+};
+
 uint32_t CLR_PRIMARY = LBLUE;
 uint32_t CLR_SECONDARY = LBLUE2;
 
@@ -378,37 +391,21 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
     }
 }
 
-struct auto_boot_data
+static void multirom_ui_destroy_auto_boot_data(void)
 {
-    ncard_builder *b;
-    int seconds;
-    uint32_t anim_id;
-    pthread_mutex_t mutex;
-    int destroy;
-};
-
-static void multirom_ui_destroy_auto_boot_data(struct auto_boot_data *d)
-{
-    ncard_destroy_builder(d->b);
-    pthread_mutex_destroy(&d->mutex);
-    free(d);
+    if(auto_boot_data.b)
+    {
+        ncard_destroy_builder(auto_boot_data.b);
+        auto_boot_data.b = NULL;
+    }
+    auto_boot_data.destroy = 1;
 }
 
 static void multirom_ui_auto_boot_hidden(void *data)
 {
-    struct auto_boot_data *d = data;
-    pthread_mutex_lock(&d->mutex);
-    if(d->anim_id == UINT_MAX)
-    {
-        pthread_mutex_unlock(&d->mutex);
-        multirom_ui_destroy_auto_boot_data(d);
-        return;
-    }
-    else
-    {
-        d->destroy = 1;
-    }
-    pthread_mutex_unlock(&d->mutex);
+    pthread_mutex_lock(&auto_boot_data.mutex);
+    multirom_ui_destroy_auto_boot_data();
+    pthread_mutex_unlock(&auto_boot_data.mutex);
 }
 
 static void multirom_ui_auto_boot_now(void *data)
@@ -424,20 +421,19 @@ static void multirom_ui_auto_boot_now(void *data)
 static void multirom_ui_auto_boot_tick(void *data)
 {
     char buff[128];
-    struct auto_boot_data *d = data;
 
-    pthread_mutex_lock(&d->mutex);
+    pthread_mutex_lock(&auto_boot_data.mutex);
 
-    if(d->destroy)
+    if(auto_boot_data.destroy)
     {
-        pthread_mutex_unlock(&d->mutex);
-        multirom_ui_destroy_auto_boot_data(d);
+        pthread_mutex_unlock(&auto_boot_data.mutex);
         return;
     }
 
-    if(--d->seconds == 0)
+    if(--auto_boot_data.seconds == 0)
     {
-        d->anim_id = UINT_MAX;
+        multirom_ui_destroy_auto_boot_data();
+        pthread_mutex_unlock(&auto_boot_data.mutex);
 
         pthread_mutex_lock(&exit_code_mutex);
         selected_rom = mrom_status->auto_boot_rom;
@@ -447,38 +443,35 @@ static void multirom_ui_auto_boot_tick(void *data)
     else
     {
         call_anim *a = call_anim_create(NULL, NULL, 1000, INTERPOLATOR_LINEAR);
-        d->anim_id = a->id;
         a->duration = 1000; // in call_anim_create, duration is multiplied by coef - we don't want that here
         a->on_finished_call = multirom_ui_auto_boot_tick;
-        a->on_finished_data = d;
         call_anim_add(a);
 
-        snprintf(buff, sizeof(buff), "\n<b>ROM:</b> <y>%s</y>\n\nBooting in %d second%s.", mrom_status->auto_boot_rom->name, d->seconds, d->seconds != 1 ? "s" : "");
-        ncard_set_text(d->b, buff);
-        ncard_show(d->b, 0);
+        snprintf(buff, sizeof(buff), "\n<b>ROM:</b> <y>%s</y>\n\nBooting in %d second%s.",
+            mrom_status->auto_boot_rom->name, auto_boot_data.seconds, auto_boot_data.seconds != 1 ? "s" : "");
+        ncard_set_text(auto_boot_data.b, buff);
+        ncard_show(auto_boot_data.b, 0);
     }
 
-    pthread_mutex_unlock(&d->mutex);
+    pthread_mutex_unlock(&auto_boot_data.mutex);
 }
 
 void multirom_ui_auto_boot(void)
 {
     ncard_builder *b = ncard_create_builder();
-
-    struct auto_boot_data *d = mzalloc(sizeof(struct auto_boot_data));
-    d->b = b;
-    d->seconds = mrom_status->auto_boot_seconds + 1;
-    pthread_mutex_init(&d->mutex, NULL);
+    auto_boot_data.b = b;
+    auto_boot_data.seconds = mrom_status->auto_boot_seconds + 1;
+    auto_boot_data.destroy = 0;
 
     ncard_set_pos(b, NCARD_POS_CENTER);
     ncard_set_cancelable(b, 1);
     ncard_set_title(b, "Auto-boot");
     ncard_add_btn(b, BTN_NEGATIVE, "Cancel", ncard_hide_callback, NULL);
-    ncard_add_btn(b, BTN_POSITIVE, "Boot now", multirom_ui_auto_boot_now, d);
-    ncard_set_on_hidden(b, multirom_ui_auto_boot_hidden, d);
+    ncard_add_btn(b, BTN_POSITIVE, "Boot now", multirom_ui_auto_boot_now, NULL);
+    ncard_set_on_hidden(b, multirom_ui_auto_boot_hidden, NULL);
     ncard_set_from_black(b, 1);
 
-    multirom_ui_auto_boot_tick(d);
+    multirom_ui_auto_boot_tick(NULL);
 }
 
 void multirom_ui_refresh_usb_handler(void)

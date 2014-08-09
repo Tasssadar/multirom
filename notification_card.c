@@ -51,12 +51,14 @@ ncard_builder *ncard_create_builder(void)
 
 void ncard_set_title(ncard_builder *b, const char *title)
 {
-    b->title = strdup(title);
+    b->title = realloc(b->title, strlen(title)+1);
+    strcpy(b->title, title);
 }
 
 void ncard_set_text(ncard_builder *b, const char *text)
 {
-    b->text = strdup(text);
+    b->text = realloc(b->text, strlen(text)+1);
+    strcpy(b->text, text);
 }
 
 void ncard_set_pos(ncard_builder *b, int pos)
@@ -81,6 +83,12 @@ void ncard_avoid_item(ncard_builder *b, void *item)
 
 void ncard_add_btn(ncard_builder *b, int btn_type, const char *text, ncard_callback callback, void *callback_data)
 {
+    if(b->buttons[btn_type])
+    {
+        free(b->buttons[btn_type]->text);
+        free(b->buttons[btn_type]);
+    }
+
     ncard_builder_btn *btn = mzalloc(sizeof(ncard_builder_btn));
     btn->text = strtoupper(text);
     btn->callback_data = callback_data;
@@ -434,12 +442,12 @@ void ncard_show(ncard_builder *b, int destroy_builder)
 
     if(ncard.active_btns && !ncard.touch_handler_registered)
     {
-        add_touch_handler(ncard_touch_handler, &ncard);
+        add_touch_handler_async(ncard_touch_handler, &ncard);
         ncard.touch_handler_registered = 1;
     }
     else if(!ncard.active_btns && ncard.touch_handler_registered)
     {
-        rm_touch_handler(ncard_touch_handler, &ncard);
+        rm_touch_handler_async(ncard_touch_handler, &ncard);
         ncard.touch_handler_registered = 0;
     }
 
@@ -528,6 +536,7 @@ void ncard_destroy_builder(ncard_builder *b)
 {
     free(b->title);
     free(b->text);
+    free(b->avoid_item);
 
     int i;
     for(i = 0; i < BTN_COUNT; ++i)

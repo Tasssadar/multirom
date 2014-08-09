@@ -54,6 +54,8 @@ int wait_for_key(void);
 
 void add_touch_handler(touch_callback callback, void *data);
 void rm_touch_handler(touch_callback callback, void *data);
+void add_touch_handler_async(touch_callback callback, void *data);
+void rm_touch_handler_async(touch_callback callback, void *data);
 
 void input_push_context(void);
 void input_pop_context(void);

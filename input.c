@@ -429,9 +429,9 @@ static void *touch_handler_thread_work(void *data)
     return NULL;
 }
 
-static void touch_handler_thread_dispatcher(handler_call h_c, touch_callback callback, void *data)
+static void touch_handler_thread_dispatcher(int force_async, handler_call h_c, touch_callback callback, void *data)
 {
-    if(pthread_self() == input_thread)
+    if(force_async || pthread_self() == input_thread)
     {
         struct handler_thread_data *d = mzalloc(sizeof(struct handler_thread_data));
         d->handler = h_c;
@@ -447,12 +447,22 @@ static void touch_handler_thread_dispatcher(handler_call h_c, touch_callback cal
 
 void add_touch_handler(touch_callback callback, void *data)
 {
-   touch_handler_thread_dispatcher(add_touch_handler_priv, callback, data);
+   touch_handler_thread_dispatcher(0, add_touch_handler_priv, callback, data);
 }
 
 void rm_touch_handler(touch_callback callback, void *data)
 {
-    touch_handler_thread_dispatcher(rm_touch_handler_priv, callback, data);
+    touch_handler_thread_dispatcher(0, rm_touch_handler_priv, callback, data);
+}
+
+void add_touch_handler_async(touch_callback callback, void *data)
+{
+   touch_handler_thread_dispatcher(1, add_touch_handler_priv, callback, data);
+}
+
+void rm_touch_handler_async(touch_callback callback, void *data)
+{
+    touch_handler_thread_dispatcher(1, rm_touch_handler_priv, callback, data);
 }
 
 void input_push_context(void)
@@ -703,10 +713,13 @@ void keyaction_enable(int enable)
     if(enable != keyaction_ctx.enable)
     {
         keyaction_ctx.enable = enable;
+        pthread_mutex_unlock(&keyaction_ctx.lock);
+
         if(enable)
             workers_add(&keyaction_repeat_worker, &keyaction_ctx);
         else
             workers_remove(&keyaction_repeat_worker, &keyaction_ctx);
     }
-    pthread_mutex_unlock(&keyaction_ctx.lock);
+    else
+        pthread_mutex_unlock(&keyaction_ctx.lock);
 }

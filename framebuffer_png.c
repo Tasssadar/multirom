@@ -210,7 +210,7 @@ static px_type *load_png(const char *path, int destW, int destH)
     }
 
     data_dest = scale_png_img(data_dest, width, height, destW, destH);
-
+    free(row_buff);
 exit:
     png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
     fclose(fp);

@@ -428,7 +428,7 @@ static void fb_text_render(fb_img *img)
     char *start, *end;
     px_type *res_data;
     text_extra *ex = img->extra;
-    int8_t *style_map;
+    int8_t *style_map = NULL;
 
     sen = get_cache_for_string(ex);
     if(sen)
@@ -520,6 +520,7 @@ static void fb_text_render(fb_img *img)
     add_to_strings(img);
 
     list_clear(&lines, &destroy_line);
+    free(style_map);
 }
 
 fb_img *fb_add_text(int x, int y, uint32_t color, int size, const char *fmt, ...)
