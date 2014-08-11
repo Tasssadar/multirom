@@ -92,7 +92,7 @@ int kexec_load_exec(struct kexec *k)
 
 void kexec_add_arg(struct kexec *k, const char *arg)
 {
-    list_add(strdup(arg), &k->args);
+    list_add(&k->args, strdup(arg));
 }
 
 void kexec_add_arg_prefix(struct kexec *k, const char *prefix, const char *value)
@@ -101,7 +101,7 @@ void kexec_add_arg_prefix(struct kexec *k, const char *prefix, const char *value
     char *arg = malloc(len);
     snprintf(arg, len, "%s%s", prefix, value);
 
-    list_add(arg, &k->args);
+    list_add(&k->args, arg);
 }
 
 void kexec_add_kernel(struct kexec *k, const char *path, int hardboot)

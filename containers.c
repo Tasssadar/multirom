@@ -33,7 +33,7 @@ int list_size(listItself list)
     return list_item_count(list)+1;
 }
 
-void list_add(void *item, ptrToList list_p)
+void list_add(ptrToList list_p, void *item)
 {
     void ***list = (void***)list_p;
 
@@ -48,7 +48,7 @@ void list_add(void *item, ptrToList list_p)
     (*list)[--i] = item;
 }
 
-int list_add_from_list(listItself src_p, ptrToList list_p)
+int list_add_from_list(ptrToList list_p, listItself src_p)
 {
     void **src = (void**)src_p;
     void ***list = (void***)list_p;
@@ -71,7 +71,7 @@ int list_add_from_list(listItself src_p, ptrToList list_p)
     return len_src-1;
 }
 
-int list_rm_opt(int reorder, void *item, ptrToList list_p, callback destroy_callback_p)
+int list_rm_opt(ptrToList list_p, void *item, callback destroy_callback_p, int reorder)
 {
     void ***list = (void***)list_p;
     callbackPtr destroy_callback = (callbackPtr)destroy_callback_p;
@@ -113,17 +113,17 @@ int list_rm_opt(int reorder, void *item, ptrToList list_p, callback destroy_call
     return -1;
 }
 
-int list_rm(void *item, ptrToList list_p, callback destroy_callback_p)
+int list_rm(ptrToList list_p, void *item, callback destroy_callback_p)
 {
-    return list_rm_opt(1, item, list_p, destroy_callback_p);
+    return list_rm_opt(list_p, item, destroy_callback_p, 1);
 }
 
-int list_rm_noreorder(void *item, ptrToList list_p, callback destroy_callback_p)
+int list_rm_noreorder(ptrToList list_p, void *item, callback destroy_callback_p)
 {
-    return list_rm_opt(0, item, list_p, destroy_callback_p);
+    return list_rm_opt(list_p, item, destroy_callback_p, 0);
 }
 
-int list_rm_at(int idx, ptrToList list_p, callback destroy_callback_p)
+int list_rm_at(ptrToList list_p, int idx, callback destroy_callback_p)
 {
     void ***list = (void***)list_p;
     callbackPtr destroy_callback = (callbackPtr)destroy_callback_p;
@@ -171,7 +171,7 @@ void list_clear(ptrToList list_p, callback destroy_callback_p)
     *list = NULL;
 }
 
-int list_copy(listItself src, ptrToList dest_p)
+int list_copy(ptrToList dest_p, listItself src)
 {
     void **source = (void**)src;
     void ***dest = (void***)dest_p;
@@ -191,7 +191,7 @@ int list_copy(listItself src, ptrToList dest_p)
     return 0;
 }
 
-int list_move(ptrToList source_p, ptrToList dest_p)
+int list_move(ptrToList dest_p, ptrToList source_p)
 {
     void ***source = (void***)source_p;
     void ***dest = (void***)dest_p;
@@ -247,8 +247,8 @@ void map_add(map *m, const char *key, void *val, void (*destroy_callback)(void*)
 
 void map_add_not_exist(map *m, const char *key, void *val)
 {
-    list_add(strdup(key), &m->keys);
-    list_add(val, &m->values);
+    list_add(&m->keys, strdup(key));
+    list_add(&m->values, val);
     ++m->size;
 }
 
@@ -258,8 +258,8 @@ void map_rm(map *m, const char *key, void (*destroy_callback)(void*))
     if(idx < 0)
         return;
 
-    list_rm_at(idx, &m->keys, &free);
-    list_rm_at(idx, &m->values, destroy_callback);
+    list_rm_at(&m->keys, idx, &free);
+    list_rm_at(&m->values, idx, destroy_callback);
     --m->size;
 }
 
@@ -323,7 +323,7 @@ void imap_add_not_exist(imap *m, int key, void *val)
     m->keys = realloc(m->keys, sizeof(int)*(m->size+1));
     m->keys[m->size++] = key;
 
-    list_add(val, &m->values);
+    list_add(&m->values, val);
 }
 
 void imap_rm(imap *m, int key, void (*destroy_callback)(void*))
@@ -338,7 +338,7 @@ void imap_rm(imap *m, int key, void (*destroy_callback)(void*))
 
     --m->size;
     m->keys = realloc(m->keys, sizeof(int)*m->size);
-    list_rm_at(idx, &m->values, destroy_callback);
+    list_rm_at(&m->values, idx, destroy_callback);
 }
 
 int imap_find(imap *m, int key)

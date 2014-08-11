@@ -256,7 +256,7 @@ px_type *fb_png_get(const char *path, int w, int h)
     e->height = h;
     e->refcnt = 1;
 
-    list_add(e, &png_cache);
+    list_add(&png_cache, e);
     PNG_LOG("PNG %s (%dx%d) %p added into cache\n", path, w, h, data);
     return data;
 }
@@ -284,7 +284,7 @@ void fb_png_drop_unused(void)
         if((*itr)->refcnt <= 0)
         {
             PNG_LOG("PNG %s (%dx%d) %p removed from cache\n", (*itr)->path, (*itr)->width, (*itr)->height, data);
-            list_rm(*itr, &png_cache, &destroy_png_cache_entry);
+            list_rm(&png_cache, *itr, &destroy_png_cache_entry);
             itr = png_cache;
         }
         else

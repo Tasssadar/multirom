@@ -24,16 +24,16 @@ typedef void* listItself; // void **
 typedef void* callback;
 typedef void(*callbackPtr)(void*);
 
-void list_add(void *item, ptrToList list_p);
-int list_add_from_list(listItself src_p, ptrToList list_p);
-int list_rm(void *item, ptrToList list_p, callback destroy_callback_p);
-int list_rm_noreorder(void *item, ptrToList list_p, callback destroy_callback_p);
-int list_rm_opt(int reorder, void *item, ptrToList list_p, callback destroy_callback_p);
-int list_rm_at(int idx, ptrToList list_p, callback destroy_callback_p);
+void list_add(ptrToList list_p, void *item);
+int list_add_from_list(ptrToList list_p, listItself src_p);
+int list_rm(ptrToList list_p, void *item, callback destroy_callback_p);
+int list_rm_noreorder(ptrToList list_p, void *item, callback destroy_callback_p);
+int list_rm_opt(ptrToList list_p, void *item, callback destroy_callback_p, int reorder);
+int list_rm_at(ptrToList list_p, int idx, callback destroy_callback_p);
 int list_size(listItself list);
 int list_item_count(listItself list);
-int list_copy(listItself src, ptrToList dest_p);
-int list_move(ptrToList source_p, ptrToList dest_p);
+int list_copy(ptrToList dest_p, listItself src);
+int list_move(ptrToList dest_p, ptrToList source_p);
 void list_clear(ptrToList list_p, callback destroy_callback_p);
 void list_swap(ptrToList a_p, ptrToList b_p);
 

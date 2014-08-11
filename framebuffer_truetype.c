@@ -479,7 +479,7 @@ static void fb_text_render(fb_img *img)
         maxW = imax(maxW, line->w);
         maxH = imax(maxH, line->h);
 
-        list_add(line, &lines);
+        list_add(&lines, line);
         ++lines_cnt;
     }
 

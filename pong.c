@@ -274,7 +274,7 @@ void pong_calc_movement(void)
         step->x = x;
         step->y = y;
         step->collision = pong_get_collision(x, y);
-        list_add(step, &movement_steps);
+        list_add(&movement_steps, step);
     }
 }
 

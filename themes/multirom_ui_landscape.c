@@ -141,7 +141,7 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
     b->h = MISCBTN_H;
     b->clicked = &multirom_ui_tab_misc_copy_log;
     button_init_ui(b, "Copy log to /sdcard", SIZE_BIG);
-    list_add(b, &d->buttons);
+    list_add(&d->buttons, b);
 
     const int max_colors = multirom_ui_get_color_theme_count();
     x += (MISCBTN_W/2 - (max_colors*(CLRBTN_TOTAL+CLRBTN_MARGIN))/2);
@@ -152,10 +152,10 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
         const struct multirom_color_theme *th = multirom_ui_get_color_theme(i);
 
         r = fb_add_rect(x, y, CLRBTN_TOTAL, CLRBTN_TOTAL, i == color_scheme ? 0xFFFFCC00 : WHITE);
-        list_add(r, &d->ui_elements);
+        list_add(&d->ui_elements, r);
 
         r = fb_add_rect(x+CLRBTN_B/2, y+CLRBTN_B/2, CLRBTN_W, CLRBTN_W, th->highlight_bg);
-        list_add(r, &d->ui_elements);
+        list_add(&d->ui_elements, r);
 
         b = mzalloc(sizeof(button));
         b->x = x;
@@ -165,7 +165,7 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
         b->action = i;
         b->clicked = &multirom_ui_tab_misc_change_clr;
         button_init_ui(b, NULL, 0);
-        list_add(b, &d->buttons);
+        list_add(&d->buttons, b);
 
         x += CLRBTN_TOTAL + CLRBTN_MARGIN;
     }
@@ -200,7 +200,7 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
         b->action = exit_codes[i];
         b->clicked = &multirom_ui_reboot_btn;
         button_init_ui(b, texts[i], SIZE_BIG);
-        list_add(b, &d->buttons);
+        list_add(&d->buttons, b);
 
         y += MISCBTN_H+30*DPI_MUL;
     }
@@ -208,12 +208,12 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
     fb_text *text = fb_add_text(5*DPI_MUL, 0, C_TEXT_SECONDARY, SIZE_SMALL, "MultiROM v%d"VERSION_DEV_FIX" with trampoline v%d.",
                                VERSION_MULTIROM, multirom_get_trampoline_ver());
     text->y = fb_height - text->h;
-    list_add(text, &d->ui_elements);
+    list_add(&d->ui_elements, text);
 
     text = fb_add_text(0, 0, C_TEXT_SECONDARY, SIZE_SMALL, "Battery: %d%%", multirom_get_battery());
     text->x = fb_width - text->w - 5*DPI_MUL;
     text->y = fb_height - text->h;
-    list_add(text, &d->ui_elements);
+    list_add(&d->ui_elements, text);
 }
 
 static int get_tab_width(multirom_theme_data *t)

@@ -434,7 +434,7 @@ int multirom_default_status(struct multirom_status *s)
 
         multirom_find_rom_icon(rom);
 
-        list_add(rom, &add_roms);
+        list_add(&add_roms, rom);
     }
 
     closedir(d);
@@ -697,7 +697,7 @@ void multirom_find_usb_roms(struct multirom_status *s)
     {
         if(s->roms[i]->partition)
         {
-            list_rm_at(i, &s->roms, &multirom_free_rom);
+            list_rm_at(&s->roms, i, &multirom_free_rom);
             i = 0;
         }
         else ++i;
@@ -776,7 +776,7 @@ int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_parti
 
         multirom_find_rom_icon(rom);
 
-        list_add(rom, &add_roms);
+        list_add(&add_roms, rom);
     }
     closedir(d);
 
@@ -785,7 +785,7 @@ int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_parti
         // sort roms
         qsort(add_roms, list_item_count(add_roms), sizeof(struct multirom_rom*), compare_rom_names);
 
-        list_add_from_list(add_roms, &s->roms);
+        list_add_from_list(&s->roms, add_roms);
         list_clear(&add_roms, NULL);
     }
     return 0;
@@ -2231,7 +2231,7 @@ int multirom_update_partitions(struct multirom_status *s)
 
         if(part->fs && multirom_mount_usb(part) == 0)
         {
-            list_add(part, &s->partitions);
+            list_add(&s->partitions, part);
             ERROR("Found part %s: %s, %s\n", part->name, part->uuid, part->fs);
         }
         else

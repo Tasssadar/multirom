@@ -724,19 +724,19 @@ void fb_add_rect_notfilled(int level, int x, int y, int w, int h, uint32_t color
     fb_rect *r;
     // top
     r = fb_add_rect_lvl(level, x, y, w, thickness, color);
-    list_add(r, list);
+    list_add(list, r);
 
     // right
     r = fb_add_rect_lvl(level, x + w - thickness, y, thickness, h, color);
-    list_add(r, list);
+    list_add(list, r);
 
     // bottom
     r = fb_add_rect_lvl(level, x, y + h - thickness, w, thickness, color);
-    list_add(r, list);
+    list_add(list, r);
 
     // left
     r = fb_add_rect_lvl(level, x, y, thickness, h, color);
-    list_add(r, list);
+    list_add(list, r);
 }
 
 fb_img *fb_add_img(int level, int x, int y, int w, int h, int img_type, px_type *data)
@@ -860,7 +860,7 @@ void fb_push_context(void)
     fb_ctx.first_item = NULL;
     pthread_mutex_unlock(&fb_ctx.mutex);
 
-    list_add(ctx, &inactive_ctx);
+    list_add(&inactive_ctx, ctx);
 }
 
 void fb_pop_context(void)
@@ -878,7 +878,7 @@ void fb_pop_context(void)
     fb_ctx.background_color = ctx->background_color;
     pthread_mutex_unlock(&fb_ctx.mutex);
 
-    list_rm_noreorder(ctx, &inactive_ctx, &free);
+    list_rm_noreorder(&inactive_ctx, ctx, &free);
 
     fb_request_draw();
 }
