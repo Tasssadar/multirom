@@ -259,6 +259,7 @@ void touch_commit_events(struct timeval ev_time)
         return;
 
     uint32_t i;
+    int res;
     touch_handler *h;
     handler_list_it *it;
 
@@ -279,8 +280,11 @@ void touch_commit_events(struct timeval ev_time)
         {
             h = it->handler;
 
-            if((*h->callback)(&mt_events[i], h->data) == 0)
+            res = (*h->callback)(&mt_events[i], h->data);
+            if(res == 0)
                 mt_events[i].consumed = 1;
+            else if(res == 1)
+                break;
 
             it = it->next;
         }

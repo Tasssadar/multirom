@@ -26,6 +26,7 @@
 #include "../log.h"
 #include "../animation.h"
 #include "../notification_card.h"
+#include "../tabview.h"
 
 #define HEADER_HEIGHT (110*DPI_MUL)
 #define TABS_HEIGHT (HEADER_HEIGHT - STATUS_HEIGHT)
@@ -113,6 +114,8 @@ static void init_header(multirom_theme_data *t)
 
         x += maxW;
     }
+
+    t->tabs = tabview_create(0, HEADER_HEIGHT, fb_width, fb_height-HEADER_HEIGHT);
 }
 
 static void header_select(multirom_theme_data *t, int tab)
@@ -127,7 +130,7 @@ static void header_select(multirom_theme_data *t, int tab)
     {
         anim_cancel_for(t->selected_tab_rect, 0);
 
-        item_anim *anim = item_anim_create(t->selected_tab_rect, 150, INTERPOLATOR_DECELERATE);
+        item_anim *anim = item_anim_create(t->selected_tab_rect, 200, INTERPOLATOR_DECELERATE);
         anim->targetX = dest_x;
         item_anim_add(anim);
     }
@@ -154,6 +157,9 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
     b->clicked = &multirom_ui_tab_misc_copy_log;
     button_init_ui(b, "Copy log to /sdcard", SIZE_BIG);
     list_add(&d->buttons, b);
+    tabview_add_item(t->tabs, TAB_MISC, b->text);
+    tabview_add_item(t->tabs, TAB_MISC, b->rect);
+    tabview_add_item(t->tabs, TAB_MISC, b);
 
     y += MISCBTN_H+70*DPI_MUL;
 
@@ -183,6 +189,9 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
         b->clicked = &multirom_ui_reboot_btn;
         button_init_ui(b, texts[i], SIZE_BIG);
         list_add(&d->buttons, b);
+        tabview_add_item(t->tabs, TAB_MISC, b->text);
+        tabview_add_item(t->tabs, TAB_MISC, b->rect);
+        tabview_add_item(t->tabs, TAB_MISC, b);
 
         y += MISCBTN_H+20*DPI_MUL;
         if(i == 2)
@@ -221,12 +230,15 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
         b->clicked = &multirom_ui_tab_misc_change_clr;
         button_init_ui(b, NULL, 0);
         list_add(&d->buttons, b);
+        tabview_add_item(t->tabs, TAB_MISC, b);
 
         x += CLRBTN_TOTAL + CLRBTN_MARGIN;
     }
 
     for(i = 0; d->buttons[i]; ++i)
         keyaction_add(d->buttons[i]->x, d->buttons[i]->y, button_keyaction_call, d->buttons[i]);
+
+    tabview_add_items(t->tabs, TAB_MISC, d->ui_elements);
 }
 
 static int get_tab_width(multirom_theme_data *t)

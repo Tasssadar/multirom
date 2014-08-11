@@ -135,6 +135,9 @@ int button_touch_handler(touch_event *ev, void *data)
     if(b->touch_id != ev->id)
         return -1;
 
+    if(ev->changed & TCHNG_POS)
+        button_set_hover(b, in_rect(ev->x, ev->y, b->x, b->y, b->w, b->h));
+
     if(ev->changed & TCHNG_REMOVED)
     {
         if((b->flags & BTN_HOVER) && b->clicked)
@@ -142,8 +145,6 @@ int button_touch_handler(touch_event *ev, void *data)
         button_set_hover(b, 0);
         b->touch_id = -1;
     }
-    else if(ev->changed & TCHNG_POS)
-        button_set_hover(b, in_rect(ev->x, ev->y, b->x, b->y, b->w, b->h));
 
     return 0;
 }

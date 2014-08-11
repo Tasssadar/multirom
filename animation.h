@@ -37,6 +37,8 @@ typedef void (*animation_callback)(void*); // data
 typedef void (*animation_callback_step)(void*, float); // data, interpolated
 typedef int (*animation_cancel_check)(void*, void*); // data, item
 
+#define ANIM_INVALID_ID UINT32_MAX
+
 #define ANIM_HEADER \
     uint32_t id; \
     uint32_t start_offset; \

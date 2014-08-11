@@ -1,0 +1,61 @@
+/*
+ * This file is part of MultiROM.
+ *
+ * MultiROM is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * MultiROM is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with MultiROM.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifndef TABVIEW_H
+#define TABVIEW_H
+
+#include <pthread.h>
+#include "framebuffer.h"
+#include "input.h"
+
+struct tabview_page;
+
+typedef struct {
+	FB_ITEM_POS
+
+	int pos;
+    int anim_pos_start;
+    int anim_pos_diff;
+	int fullW;
+
+	struct tabview_page **pages;
+    int count;
+
+    uint32_t anim_id;
+    pthread_mutex_t mutex;
+
+    int touch_id;
+    int touch_last_x;
+    int touch_last_y;
+    int touch_movement_x;
+    int touch_movement_y;
+    int touch_moving;
+    int64_t touch_us_diff;
+} tabview;
+
+tabview *tabview_create(int x, int y, int w, int h);
+int tabview_touch_handler(touch_event *ev, void *data);
+void tabview_destroy(tabview *t);
+void tabview_add_page(tabview *t, int idx);
+void tabview_rm_page(tabview *t, int idx);
+void tabview_add_item(tabview *t, int page_idx, void *fb_item);
+void tabview_add_items(tabview *t, int page_idx, void *fb_items);
+void tabview_rm_item(tabview *t, int page_idx, void *fb_item);
+void tabview_update_positions(tabview *t);
+void tabview_set_active_page(tabview *t, int page_idx, int anim_duration);
+
+#endif

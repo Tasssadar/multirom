@@ -269,7 +269,10 @@ static void anim_update(uint32_t diff, void *data)
 static uint32_t anim_generate_id(void)
 {
     static uint32_t id = 0;
-    return id++;
+    uint32_t res = id++;
+    if(res == ANIM_INVALID_ID)
+        res = id++;
+    return res;
 }
 
 void anim_init(float duration_coef)
@@ -287,6 +290,7 @@ void anim_stop(int wait_for_finished)
     if(!anim_list.running)
         return;
 
+    anim_list.running = 0;
     while(wait_for_finished)
     {
         pthread_mutex_lock(&anim_list.mutex);
@@ -299,7 +303,6 @@ void anim_stop(int wait_for_finished)
         usleep(10000);
     }
 
-    anim_list.running = 0;
     workers_remove(&anim_update, &anim_list);
 
     pthread_mutex_lock(&anim_list.mutex);
@@ -429,6 +432,12 @@ item_anim *item_anim_create(void *fb_item, int duration, int interpolator)
 
 void item_anim_add(item_anim *anim)
 {
+    if(!anim_list.running)
+    {
+        free(anim);
+        return;
+    }
+
     item_anim_on_start(anim);
 
     struct anim_list_it *it = mzalloc(sizeof(struct anim_list_it));
@@ -467,6 +476,12 @@ call_anim *call_anim_create(void *data, call_anim_callback callback, int duratio
 
 void call_anim_add(call_anim *anim)
 {
+    if(!anim_list.running)
+    {
+        free(anim);
+        return;
+    }
+
     struct anim_list_it *it = mzalloc(sizeof(struct anim_list_it));
     it->anim_type = ANIM_TYPE_CALLBACK;
     it->anim = (anim_header*)anim;

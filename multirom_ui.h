@@ -55,7 +55,6 @@ void multirom_ui_destroy_theme(void);
 
 void *multirom_ui_tab_rom_init(int tab_type);
 void multirom_ui_tab_rom_destroy(void *data);
-void multirom_ui_tab_rom_selected(listview_item *prev, listview_item *now);
 void multirom_ui_tab_rom_boot_btn(int action);
 void multirom_ui_tab_rom_confirmed(listview_item *it);
 void multirom_ui_tab_rom_refresh_usb(int action);

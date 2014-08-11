@@ -301,7 +301,31 @@ int listview_touch_handler(touch_event *ev, void *data)
     if(view->touch.id != ev->id)
         return -1;
 
-    if(ev->changed & TCHNG_POS)
+    if(ev->changed & TCHNG_REMOVED)
+    {
+        if(ev->x == -1 && ev->y == -1)
+        {
+            if(listview_select_item(view, NULL))
+                listview_update_ui(view);
+        }
+        else if(view->touch.hover)
+        {
+            if(view->selected == view->touch.hover)
+            {
+                if(view->item_confirmed)
+                    view->item_confirmed(view->selected);
+            }
+            else
+                listview_select_item(view, view->touch.hover);
+            view->touch.hover->flags &= ~(IT_HOVER);
+            view->touch.hover = NULL;
+        }
+        view->touch.id = -1;
+        listview_update_ui(view);
+        return 0;
+    }
+
+    if((ev->changed & TCHNG_POS))
     {
         view->touch.us_diff += ev->us_diff;
         if(view->touch.us_diff >= 10000)
@@ -323,23 +347,6 @@ int listview_touch_handler(touch_event *ev, void *data)
             view->touch.last_y = ev->y;
             view->touch.us_diff = 0;
         }
-    }
-
-    if(ev->changed & TCHNG_REMOVED)
-    {
-        if(view->touch.hover)
-        {
-            if(view->selected == view->touch.hover)
-            {
-                if(view->item_confirmed)
-                    view->item_confirmed(view->selected);
-            }
-            else
-                listview_select_item(view, view->touch.hover);
-            view->touch.hover->flags &= ~(IT_HOVER);
-        }
-        view->touch.id = -1;
-        listview_update_ui(view);
     }
 
     return 0;

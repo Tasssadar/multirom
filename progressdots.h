@@ -27,7 +27,8 @@
 
 typedef struct
 {
-    int x, y;
+	FB_ITEM_POS
+
     fb_rect *rect;
 } progdots;
 
