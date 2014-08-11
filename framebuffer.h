@@ -124,6 +124,7 @@ enum
 {
     FB_IT_RECT,
     FB_IT_IMG,
+    FB_IT_LISTVIEW,
 };
 
 enum
@@ -155,9 +156,10 @@ enum
 
 enum
 {
-    LEVEL_RECT = 0,
-    LEVEL_PNG  = 1,
-    LEVEL_TEXT = 2,
+    LEVEL_LISTVIEW = 0,
+    LEVEL_RECT = 1,
+    LEVEL_PNG  = 2,
+    LEVEL_TEXT = 3,
 };
 
 struct fb_item_header;

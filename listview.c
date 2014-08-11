@@ -69,12 +69,23 @@ static void listview_bounceback(uint32_t diff, void *data)
 
 void listview_init_ui(listview *view)
 {
-    view->keyact_item_selected = -1;
+    view->id = fb_generate_item_id();
+    view->parent = &DEFAULT_FB_PARENT;
+    view->level = LEVEL_LISTVIEW;
+    view->type = FB_IT_LISTVIEW;
 
+    view->keyact_item_selected = -1;
     view->touch.id = -1;
     view->touch.last_y = -1;
 
+    view->last_rendered_pos.x = view->x;
+    view->last_rendered_pos.y = view->y;
+    view->last_rendered_pos.w = view->w;
+    view->last_rendered_pos.h = view->h;
+
     add_touch_handler(&listview_touch_handler, view);
+
+    fb_ctx_add_item(view);
 }
 
 void listview_destroy(listview *view)
@@ -90,6 +101,8 @@ void listview_destroy(listview *view)
     fb_rm_rect(view->overscroll_marks[0]);
     fb_rm_rect(view->overscroll_marks[1]);
     fb_rm_rect(view->scroll_line);
+
+    fb_ctx_rm_item(view);
 
     free(view);
 }
@@ -119,13 +132,40 @@ void listview_clear(listview *view)
     keyaction_remove(listview_keyaction_call, view);
 }
 
-void listview_update_ui(listview *view)
+void listview_update_ui_args(listview *view, int only_if_moved, int mutex_locked)
 {
     int y = 0;
     int i, it_h, visible;
     listview_item *it;
 
-    fb_batch_start();
+    if(only_if_moved)
+    {
+        if (view->x == view->last_rendered_pos.x &&
+            view->y == view->last_rendered_pos.y &&
+            view->w == view->last_rendered_pos.w &&
+            view->h == view->last_rendered_pos.h)
+        {
+            return;
+        }
+
+        if(view->scroll_mark)
+        {
+            view->scroll_mark->x += view->x - view->last_rendered_pos.x;
+            view->scroll_mark->y += view->y - view->last_rendered_pos.y;
+            view->scroll_line->x += view->x - view->last_rendered_pos.x;
+            view->scroll_line->y += view->y - view->last_rendered_pos.y;
+            view->overscroll_marks[0]->y += view->y - view->last_rendered_pos.y;
+            view->overscroll_marks[1]->y += view->y - view->last_rendered_pos.y;
+        }
+
+        view->last_rendered_pos.x = view->x;
+        view->last_rendered_pos.y = view->y;
+        view->last_rendered_pos.w = view->w;
+        view->last_rendered_pos.h = view->h;
+    }
+
+    if(!mutex_locked)
+        fb_batch_start();
 
     for(i = 0; view->items && view->items[i]; ++i)
     {
@@ -151,8 +191,14 @@ void listview_update_ui(listview *view)
     if(y > view->h)
         listview_update_scroll_mark(view);
 
-    fb_batch_end();
+    if(!mutex_locked)
+        fb_batch_end();
     fb_request_draw();
+}
+
+void listview_update_ui(listview *view)
+{
+    listview_update_ui_args(view, 0, 0);
 }
 
 void listview_enable_scroll(listview *view, int enable)
@@ -492,6 +538,7 @@ typedef struct
     int deselect_anim_started;
     int rom_name_size;
     int last_y;
+    int last_x;
 } rom_item_data;
 
 void *rom_item_create(const char *text, const char *partition, const char *icon)
@@ -599,6 +646,9 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
     const int item_h = rom_item_height(it);
     if(!d->text_it)
     {
+        d->last_x = x;
+        d->last_y = y;
+
         fb_text_proto *p = fb_text_create(x+ROM_TEXT_PADDING, 0, C_TEXT, d->rom_name_size, d->text);
         p->style = STYLE_CONDENSED;
         d->text_it = fb_text_finalize(p);
@@ -626,10 +676,16 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
     {
         d->text_it->y = y + (item_h/2 - (d->text_it->h + d->part_it->h + 4*DPI_MUL)/2);
         d->part_it->y = d->text_it->y + d->text_it->h + 4*DPI_MUL;
+        d->part_it->x += x - d->last_x;
     }
 
+    d->text_it->x += x - d->last_x;
+
     if(d->icon)
+    {
+        d->icon->x += x - d->last_x;
         d->icon->y = y + (item_h/2 - ROM_ICON_H/2);
+    }
 
     if(it->flags & IT_SELECTED)
     {
@@ -639,6 +695,8 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
         }
         else
         {
+            d->sel_rect_sh->x += x - d->last_x;
+            d->sel_rect->x += x - d->last_x;
             d->sel_rect_sh->y += y - d->last_y;
             d->sel_rect->y += y - d->last_y;
         }
@@ -651,11 +709,14 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
         }
         else
         {
+            d->sel_rect_sh->x += x - d->last_x;
+            d->sel_rect->x += x - d->last_x;
             d->sel_rect_sh->y += y - d->last_y;
             d->sel_rect->y += y - d->last_y;
         }
     }
 
+    d->last_x = x;
     d->last_y = y;
 }
 
