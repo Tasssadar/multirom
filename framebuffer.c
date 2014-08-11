@@ -825,6 +825,9 @@ static void fb_draw(void)
     pthread_mutex_lock(&fb_ctx.mutex);
     for(it = fb_ctx.first_item; it; it = it->next)
     {
+        if(it->invisible)
+            continue;
+
         switch(it->type)
         {
             case FB_IT_RECT:

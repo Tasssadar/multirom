@@ -178,6 +178,7 @@ extern fb_item_pos DEFAULT_FB_PARENT;
     int id; \
     int type; \
     int level; \
+    int invisible; \
     fb_item_pos *parent; \
     struct fb_item_header *prev; \
     struct fb_item_header *next;
