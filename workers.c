@@ -114,7 +114,7 @@ void workers_add(worker_call call, void *data)
     w->data = data;
 
     pthread_mutex_lock(&worker_thread.mutex);
-    list_add(w, &worker_thread.workers);
+    list_add(&worker_thread.workers, w);
     pthread_mutex_unlock(&worker_thread.mutex);
 }
 
@@ -136,7 +136,7 @@ void workers_remove(worker_call call, void *data)
             w = worker_thread.workers[i];
             if(w->call == call && w->data == data)
             {
-                list_rm_at(i, &worker_thread.workers, &free);
+                list_rm_at(&worker_thread.workers, i, &free);
                 break;
             }
         }

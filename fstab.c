@@ -152,7 +152,7 @@ struct fstab *fstab_load(const char *path, int resolve_symlinks)
             continue;
         }
 
-        list_add(part, &t->parts);
+        list_add(&t->parts, part);
         ++t->count;
         part = NULL;
     }
@@ -359,7 +359,7 @@ void fstab_add_part(struct fstab *f, const char *dev, const char *path, const ch
     fstab_parse_options(p->options_raw, p);
     p->options2 = strdup(options2);
 
-    list_add(p, &f->parts);
+    list_add(&f->parts, p);
     ++f->count;
 }
 
@@ -380,6 +380,6 @@ struct fstab_part *fstab_clone_part(struct fstab_part *p)
 
 void fstab_add_part_struct(struct fstab *f, struct fstab_part *p)
 {
-    list_add(p, &f->parts);
+    list_add(&f->parts, p);
     ++f->count;
 }

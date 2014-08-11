@@ -419,7 +419,7 @@ void ncard_show(ncard_builder *b, int destroy_builder)
     {
         title->y = it_y;
         it_y += title->h*1.5;
-        list_add(title, &ncard.texts);
+        list_add(&ncard.texts, title);
     }
 
     if(text)
@@ -428,7 +428,7 @@ void ncard_show(ncard_builder *b, int destroy_builder)
         it_y += text->h + btn_h*0.75;
         if(!title)
             center_text(text, 0, -1, fb_width, -1);
-        list_add(text, &ncard.texts);
+        list_add(&ncard.texts, text);
     }
 
     for(i = 0; i < BTN_COUNT; ++i)
@@ -437,7 +437,7 @@ void ncard_show(ncard_builder *b, int destroy_builder)
             continue;
         btns[i]->y = it_y;
         ncard.btns[i].pos.y = it_y - ncard.btns[i].pos.h/3;
-        list_add(btns[i], &ncard.texts);
+        list_add(&ncard.texts, btns[i]);
     }
 
     if(ncard.active_btns && !ncard.touch_handler_registered)

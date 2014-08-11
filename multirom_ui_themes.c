@@ -29,7 +29,7 @@ multirom_themes_info *multirom_ui_init_themes(void)
 
 #define ADD_THEME(RES) \
     extern struct multirom_theme theme_info_ ## RES; \
-    list_add(&theme_info_ ## RES, &i->themes);
+    list_add(&i->themes, &theme_info_ ## RES);
 
     // universal themes which scale according to DPI_MUL
     ADD_THEME(landscape);

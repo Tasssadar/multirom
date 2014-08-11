@@ -371,12 +371,12 @@ void anim_push_context(void)
     pthread_mutex_lock(&anim_list.mutex);
     if(anim_list.first)
     {
-        list_add(anim_list.first, &anim_list.inactive_ctx);
+        list_add(&anim_list.inactive_ctx, anim_list.first);
         anim_list.first = anim_list.last = NULL;
     }
     else
     {
-        list_add(&EMPTY_CONTEXT, &anim_list.inactive_ctx);
+        list_add(&anim_list.inactive_ctx, &EMPTY_CONTEXT);
     }
     pthread_mutex_unlock(&anim_list.mutex);
 }
@@ -402,7 +402,7 @@ void anim_pop_context(void)
             last_active_ctx = last_active_ctx->next;
         anim_list.last = last_active_ctx;
     }
-    list_rm_at(idx, &anim_list.inactive_ctx, NULL);
+    list_rm_at(&anim_list.inactive_ctx, idx, NULL);
     pthread_mutex_unlock(&anim_list.mutex);
 }
 

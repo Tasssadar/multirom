@@ -654,7 +654,7 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
         p->wrap_w = t->list->w - 100*DPI_MUL;
         p->justify = JUSTIFY_CENTER;
         t->usb_text = fb_text_finalize(p);
-        list_add(t->usb_text, &t->ui_elements);
+        list_add(&t->ui_elements, t->usb_text);
 
         center_text(t->usb_text, t->list->x, -1, t->list->w, -1);
         t->usb_text->y = t->list->y + t->list->h*0.2;
@@ -667,7 +667,7 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
         progdots_destroy(t->usb_prog);
         t->usb_prog = NULL;
 
-        list_rm(t->usb_text, &t->ui_elements, &fb_remove_item);
+        list_rm(&t->ui_elements, t->usb_text, &fb_remove_item);
         t->usb_text = NULL;
     }
 }

@@ -474,7 +474,7 @@ void input_push_context(void)
     mt_handlers = NULL;
     pthread_mutex_unlock(&touch_mutex);
 
-    list_add(ctx, &inactive_ctx);
+    list_add(&inactive_ctx, ctx);
 }
 
 void input_pop_context(void)
@@ -489,7 +489,7 @@ void input_pop_context(void)
     mt_handlers = ctx->handlers;
     pthread_mutex_unlock(&touch_mutex);
 
-    list_rm_noreorder(ctx, &inactive_ctx, &free);
+    list_rm_noreorder(&inactive_ctx, ctx, &free);
 }
 
 struct keyaction
@@ -551,7 +551,7 @@ void keyaction_add(int x, int y, keyaction_call call, void *data)
 
     pthread_mutex_lock(&keyaction_ctx.lock);
 
-    list_add(k, &keyaction_ctx.actions);
+    list_add(&keyaction_ctx.actions, k);
     ++keyaction_ctx.actions_len;
 
     qsort(keyaction_ctx.actions, keyaction_ctx.actions_len,
@@ -578,7 +578,7 @@ void keyaction_remove(keyaction_call call, void *data)
                     keyaction_ctx.cur_act = NULL;
                 }
 
-                list_rm_at(i, &keyaction_ctx.actions, &free);
+                list_rm_at(&keyaction_ctx.actions, i, &free);
                 --keyaction_ctx.actions_len;
                 break;
             }
