@@ -856,9 +856,6 @@ static void fb_draw(void)
     fb_batch_start();
     for(it = fb_ctx.first_item; it; it = it->next)
     {
-        if(it->invisible)
-            continue;
-
         switch(it->type)
         {
             case FB_IT_RECT:
