@@ -64,7 +64,7 @@ struct multirom_theme
 
     void (*destroy)(multirom_theme_data *t);
     void (*init_header)(multirom_theme_data *t);
-    void (*header_select)(multirom_theme_data *t, int tab);
+    void (*header_set_tab_selector_pos)(multirom_theme_data *t, float pos);
     void (*tab_rom_init)(multirom_theme_data *t, tab_data_roms *d, int tab_type);
     void (*tab_misc_init)(multirom_theme_data *t, tab_data_misc *d, int color_scheme);
     int (*get_tab_width)(multirom_theme_data *t);

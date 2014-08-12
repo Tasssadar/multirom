@@ -95,6 +95,14 @@ int tabview_touch_handler(touch_event *ev, void *data)
                 page = 0;
             else if(page >= t->count)
                 page = t->count -1;
+
+            if(page != t->curr_page)
+            {
+                if(t->on_page_changed_by_swipe)
+                    t->on_page_changed_by_swipe(page);
+                t->curr_page = page;
+            }
+
             tabview_set_active_page(t, page, 100);
         }
         return -1;
@@ -219,6 +227,13 @@ void tabview_update_positions(tabview *t)
     int i;
     int x = 0;
 
+    if(t->last_reported_pos != t->pos)
+    {
+        if(t->on_pos_changed)
+            t->on_pos_changed(((float)t->pos)/t->w);
+        t->last_reported_pos = t->pos;
+    }
+
     fb_batch_start();
     pthread_mutex_lock(&t->mutex);
     for(i = 0; i < t->count; ++i)
@@ -243,8 +258,13 @@ void tabview_set_active_page(tabview *t, int page_idx, int anim_duration)
     if(page_idx < 0 || page_idx >= t->count)
         return;
 
+    if(t->curr_page == page_idx && t->pos == page_idx*t->w)
+        return;
+
     if(t->anim_id != ANIM_INVALID_ID)
         anim_cancel(t->anim_id, 0);
+
+    t->curr_page = page_idx;
 
     if(anim_duration == 0)
     {

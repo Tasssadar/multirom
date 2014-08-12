@@ -34,9 +34,15 @@ typedef struct {
 
 	struct tabview_page **pages;
     int count;
+    int curr_page;
 
     uint32_t anim_id;
     pthread_mutex_t mutex;
+
+    void (*on_page_changed_by_swipe)(int); // new_page
+    void (*on_pos_changed)(float);
+
+    int last_reported_pos;
 
     int touch_id;
     int touch_last_x;

@@ -115,25 +115,29 @@ static void init_header(multirom_theme_data *t)
         x += maxW;
     }
 
+    t->selected_tab_rect = fb_add_rect_lvl(110, tab_btns[0]->x, HEADER_HEIGHT-SELECTED_RECT_H, maxW, SELECTED_RECT_H, C_HIGHLIGHT_TEXT);
     t->tabs = tabview_create(0, HEADER_HEIGHT, fb_width, fb_height-HEADER_HEIGHT);
 }
 
-static void header_select(multirom_theme_data *t, int tab)
+static void header_set_tab_selector_pos(multirom_theme_data *t, float pos)
 {
-    int i;
     const int TAB_BTN_WIDTH = t->tab_btns[0]->w;
 
-    int dest_x = t->tab_btns[tab]->x;
-    if(!t->selected_tab_rect)
-        t->selected_tab_rect = fb_add_rect_lvl(110, dest_x, HEADER_HEIGHT-SELECTED_RECT_H, TAB_BTN_WIDTH, SELECTED_RECT_H, C_HIGHLIGHT_TEXT);
-    else
-    {
-        anim_cancel_for(t->selected_tab_rect, 0);
+    int dest_x = t->tab_btns[0]->x + TAB_BTN_WIDTH*pos;
+    int dest_w = TAB_BTN_WIDTH;
 
-        item_anim *anim = item_anim_create(t->selected_tab_rect, 200, INTERPOLATOR_DECELERATE);
-        anim->targetX = dest_x;
-        item_anim_add(anim);
+    if(dest_x < t->tab_btns[0]->x)
+    {
+        dest_w -= t->tab_btns[0]->x - dest_x;
+        dest_x = t->tab_btns[0]->x;
     }
+    else if(dest_x > t->tab_btns[TAB_COUNT-1]->x)
+    {
+        dest_w = (t->tab_btns[TAB_COUNT-1]->x + t->tab_btns[TAB_COUNT-1]->w) - dest_x;
+    }
+
+    t->selected_tab_rect->x = dest_x;
+    t->selected_tab_rect->w = dest_w;
 }
 
 static void tab_rom_init(multirom_theme_data *t, tab_data_roms *d, int tab_type)
@@ -257,7 +261,7 @@ const struct multirom_theme theme_info_portrait = {
 
     .destroy = &destroy,
     .init_header = &init_header,
-    .header_select = &header_select,
+    .header_set_tab_selector_pos = &header_set_tab_selector_pos,
     .tab_rom_init = &tab_rom_init,
     .tab_misc_init = &tab_misc_init,
     .get_tab_width = &get_tab_width,

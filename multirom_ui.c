@@ -277,6 +277,9 @@ void multirom_ui_init_theme(int tab)
     multirom_ui_init_header();
     fb_set_background(C_BACKGROUND);
 
+    themes_info->data->tabs->on_page_changed_by_swipe = multirom_ui_switch;
+    themes_info->data->tabs->on_pos_changed = multirom_ui_change_header_selector_pos;
+
     int i;
     for(i = 0; i < TAB_COUNT; ++i)
     {
@@ -320,9 +323,9 @@ void multirom_ui_init_header(void)
     cur_theme->init_header(themes_info->data);
 }
 
-void multirom_ui_header_select(int tab)
+void multirom_ui_change_header_selector_pos(float pos)
 {
-    cur_theme->header_select(themes_info->data, tab);
+    cur_theme->header_set_tab_selector_pos(themes_info->data, pos);
 }
 
 void multirom_ui_destroy_tab(int tab)
@@ -349,8 +352,6 @@ void multirom_ui_switch(int tab)
 {
     if(tab == themes_info->data->selected_tab)
         return;
-
-    multirom_ui_header_select(tab);
 
     tabview_set_active_page(themes_info->data->tabs, tab,
             themes_info->data->selected_tab == -1 ? 0 : 200);
