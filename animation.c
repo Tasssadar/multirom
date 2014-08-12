@@ -137,13 +137,25 @@ static inline void anim_int_step(int *prop, int *start, int *last, int *target, 
     }
 }
 
-static void item_anim_step(item_anim *anim, float interpolated)
+static inline int item_anim_is_on_screen(item_anim *anim)
 {
+    fb_item_header *it = anim->item;
+    return it->x + it->w > 0 && it->x < fb_width &&
+            it->y + it->h > 0 && it->y < fb_height;
+}
+
+static void item_anim_step(item_anim *anim, float interpolated, int *need_draw)
+{
+    int outside = !item_anim_is_on_screen(anim);
+
     fb_item_header *fb_it = anim->item;
     anim_int_step(&fb_it->x, &anim->start[0], &anim->last[0], &anim->targetX, interpolated);
     anim_int_step(&fb_it->y, &anim->start[1], &anim->last[1], &anim->targetY, interpolated);
     anim_int_step(&fb_it->w, &anim->start[2], &anim->last[2], &anim->targetW, interpolated);
     anim_int_step(&fb_it->h, &anim->start[3], &anim->last[3], &anim->targetH, interpolated);
+
+    if(!(*need_draw) && (!outside || item_anim_is_on_screen(anim)))
+        *need_draw = 1;
 }
 
 static void item_anim_on_start(item_anim *anim)
@@ -215,8 +227,7 @@ static void anim_update(uint32_t diff, void *data)
         switch(it->anim_type)
         {
             case ANIM_TYPE_ITEM:
-                need_draw = 1;
-                item_anim_step((item_anim*)anim, interpolated);
+                item_anim_step((item_anim*)anim, interpolated, &need_draw);
                 break;
             case ANIM_TYPE_CALLBACK:
                 call_anim_step((call_anim*)anim, interpolated);
