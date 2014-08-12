@@ -110,7 +110,7 @@ static void init_header(multirom_theme_data *t)
         tab_btns[i]->level_off = 100;
         button_init_ui(tab_btns[i], "", 0);
 
-        keyaction_add(tab_btns[i]->x, tab_btns[i]->y, button_keyaction_call, tab_btns[i]);
+        keyaction_add(tab_btns[i], button_keyaction_call, tab_btns[i]);
 
         x += maxW;
     }
@@ -240,7 +240,7 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
     }
 
     for(i = 0; d->buttons[i]; ++i)
-        keyaction_add(d->buttons[i]->x, d->buttons[i]->y, button_keyaction_call, d->buttons[i]);
+        keyaction_add(d->buttons[i], button_keyaction_call, d->buttons[i]);
 
     tabview_add_items(t->tabs, TAB_MISC, d->ui_elements);
 }

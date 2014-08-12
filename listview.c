@@ -118,7 +118,7 @@ listview_item *listview_add_item(listview *view, int id, void *data)
     it->parent_rect = (fb_item_pos*)view;
 
     if(!view->items)
-        keyaction_add(view->x, view->y, listview_keyaction_call, view);
+        keyaction_add(view, listview_keyaction_call, view);
 
     list_add(&view->items, it);
     return it;
