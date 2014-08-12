@@ -888,6 +888,14 @@ void fb_freeze(int freeze)
         ++fb_frozen;
     else
         --fb_frozen;
+
+    // wait for last draw to finish or prevent new draw
+    if(fb_frozen == 1)
+    {
+        pthread_mutex_lock(&fb_draw_mutex);
+        __atomic_cmpxchg(1, 0, &fb_draw_requested);
+        pthread_mutex_unlock(&fb_draw_mutex);
+    }
 }
 
 void fb_push_context(void)
