@@ -318,7 +318,7 @@ void ncard_show(ncard_builder *b, int destroy_builder)
     items_h = CARD_PADDING_V*2;
     if(b->title)
     {
-        fb_text_proto *p = fb_text_create(CARD_MARGIN + CARD_PADDING_H, 0, C_NCARD_TEXT, SIZE_EXTRA, b->title);
+        fb_text_proto *p = fb_text_create(CARD_MARGIN + CARD_PADDING_H, fb_height, C_NCARD_TEXT, SIZE_EXTRA, b->title);
         p->level = LEVEL_NCARD_TEXT + lvl_offset;
         p->style = STYLE_MEDIUM;
         p->wrap_w = CARD_WIDTH - CARD_PADDING_H*2;
@@ -328,7 +328,7 @@ void ncard_show(ncard_builder *b, int destroy_builder)
 
     if(b->text)
     {
-        fb_text_proto *p = fb_text_create(CARD_MARGIN + CARD_PADDING_H, 0, C_NCARD_TEXT_SECONDARY, SIZE_NORMAL, b->text);\
+        fb_text_proto *p = fb_text_create(CARD_MARGIN + CARD_PADDING_H, fb_height, C_NCARD_TEXT_SECONDARY, SIZE_NORMAL, b->text);\
         p->level = LEVEL_NCARD_TEXT + lvl_offset;
         p->wrap_w = CARD_WIDTH - CARD_PADDING_H*2;
         if(!title)
@@ -353,7 +353,7 @@ void ncard_show(ncard_builder *b, int destroy_builder)
 
         ncard.active_btns |= (1 << i);
 
-        fb_text_proto *p = fb_text_create(btn_x, 0, C_NCARD_TEXT, SIZE_NORMAL, b->buttons[i]->text);
+        fb_text_proto *p = fb_text_create(btn_x, fb_height, C_NCARD_TEXT, SIZE_NORMAL, b->buttons[i]->text);
         p->level = LEVEL_NCARD_TEXT + lvl_offset;
         p->style = STYLE_MEDIUM;
         fb_text *t = fb_text_finalize(p);
