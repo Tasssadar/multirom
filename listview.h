@@ -20,6 +20,7 @@
 
 #include "input.h"
 #include "framebuffer.h"
+#include "touch_tracker.h"
 
 enum
 {
@@ -40,9 +41,6 @@ typedef struct
 typedef struct 
 {
     int id;
-    int start_y;
-    int last_y;
-    int64_t us_diff;
     listview_item *hover;
     int fast_scroll;
 } listview_touch_data;
@@ -74,6 +72,7 @@ typedef struct
     int keyact_item_selected;
 
     listview_touch_data touch;
+    touch_tracker *tracker;
 } listview;
 
 int listview_touch_handler(touch_event *ev, void *data);

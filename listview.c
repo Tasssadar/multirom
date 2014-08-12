@@ -76,7 +76,7 @@ void listview_init_ui(listview *view)
 
     view->keyact_item_selected = -1;
     view->touch.id = -1;
-    view->touch.last_y = -1;
+    view->tracker = touch_tracker_create();
 
     view->last_rendered_pos.x = view->x;
     view->last_rendered_pos.y = view->y;
@@ -93,6 +93,8 @@ void listview_destroy(listview *view)
     workers_remove(listview_bounceback, view);
 
     rm_touch_handler(&listview_touch_handler, view);
+
+    touch_tracker_destroy(view->tracker);
 
     listview_clear(view);
     list_clear(&view->ui_items, &fb_remove_item);
@@ -278,10 +280,8 @@ int listview_touch_handler(touch_event *ev, void *data)
         if(ev->consumed)
             return -1;
 
+        touch_tracker_start(view->tracker, ev);
         view->touch.id = ev->id;
-        view->touch.last_y = ev->y;
-        view->touch.start_y = ev->y;
-        view->touch.us_diff = 0;
         view->touch.hover = listview_item_at(view, ev->y);
         view->touch.fast_scroll = (ev->x > view->x + view->w - PADDING*2 && ev->x <= view->x + view->w);
 
@@ -320,6 +320,7 @@ int listview_touch_handler(touch_event *ev, void *data)
             view->touch.hover->flags &= ~(IT_HOVER);
             view->touch.hover = NULL;
         }
+        touch_tracker_finish(view->tracker, ev);
         view->touch.id = -1;
         listview_update_ui(view);
         return 0;
@@ -327,25 +328,20 @@ int listview_touch_handler(touch_event *ev, void *data)
 
     if((ev->changed & TCHNG_POS))
     {
-        view->touch.us_diff += ev->us_diff;
-        if(view->touch.us_diff >= 10000)
+        touch_tracker_add(view->tracker, ev);
+
+        if(view->touch.hover && view->tracker->distance_abs_y > SCROLL_DIST)
         {
-            if(view->touch.hover && abs(ev->y - view->touch.start_y) > SCROLL_DIST)
-            {
-                view->touch.hover->flags &= ~(IT_HOVER);
-                view->touch.hover = NULL;
-            }
+            view->touch.hover->flags &= ~(IT_HOVER);
+            view->touch.hover = NULL;
+        }
 
-            if(!view->touch.hover)
-            {
-                if(view->touch.fast_scroll)
-                    listview_scroll_to(view, ((ev->y-view->y)*100)/(view->h));
-                else
-                    listview_scroll_by(view, view->touch.last_y - ev->y);
-            }
-
-            view->touch.last_y = ev->y;
-            view->touch.us_diff = 0;
+        if(!view->touch.hover)
+        {
+            if(view->touch.fast_scroll)
+                listview_scroll_to(view, ((ev->y-view->y)*100)/(view->h));
+            else
+                listview_scroll_by(view, view->tracker->prev_y - ev->y);
         }
     }
 
