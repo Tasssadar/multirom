@@ -26,6 +26,7 @@ LOCAL_SRC_FILES:= \
     multirom.c \
     multirom_ui.c \
     multirom_ui_themes.c \
+    themes/multirom_ui_landscape.c \
     themes/multirom_ui_portrait.c \
     notification_card.c \
     pong.c \
@@ -35,8 +36,6 @@ LOCAL_SRC_FILES:= \
     touch_tracker.c \
     util.c \
     workers.c
-
-# themes/multirom_ui_landscape.c \
 
 # With these, GCC optimizes aggressively enough so full-screen alpha blending
 # is quick enough to be done in an animation
