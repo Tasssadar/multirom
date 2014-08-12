@@ -448,6 +448,12 @@ uint32_t timespec_diff(struct timespec *f, struct timespec *s)
     return res;
 }
 
+int64_t timeval_us_diff(struct timeval now, struct timeval prev)
+{
+    return ((int64_t)(now.tv_sec - prev.tv_sec))*1000000+
+        (now.tv_usec - prev.tv_usec);
+}
+
 char *readlink_recursive(const char *link)
 {
     struct stat info;

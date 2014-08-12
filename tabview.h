@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include "framebuffer.h"
 #include "input.h"
+#include "touch_tracker.h"
 
 struct tabview_page;
 
@@ -45,12 +46,8 @@ typedef struct {
     int last_reported_pos;
 
     int touch_id;
-    int touch_last_x;
-    int touch_last_y;
-    int touch_movement_x;
-    int touch_movement_y;
     int touch_moving;
-    int64_t touch_us_diff;
+    touch_tracker *tracker;
 } tabview;
 
 tabview *tabview_create(int x, int y, int w, int h);

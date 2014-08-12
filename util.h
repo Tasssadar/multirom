@@ -43,6 +43,7 @@ char *readlink_recursive(const char *link);
 void stdio_to_null();
 char *parse_string(char *src);
 uint32_t timespec_diff(struct timespec *f, struct timespec *s);
+inline int64_t timeval_us_diff(struct timeval now, struct timeval prev);
 void emergency_remount_ro(void);
 int create_loop_device(const char *dev_path, const char *img_path, int loop_num, int loop_chmod);
 int mount_image(const char *src, const char *dst, const char *fs, int flags, const void *data);

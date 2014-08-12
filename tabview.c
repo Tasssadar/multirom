@@ -17,6 +17,8 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
+
 #include "tabview.h"
 #include "containers.h"
 #include "util.h"
@@ -64,12 +66,8 @@ int tabview_touch_handler(touch_event *ev, void *data)
         }
 
         t->touch_id = ev->id;
-        t->touch_last_x = ev->x;
-        t->touch_last_y = ev->y;
-        t->touch_us_diff = 0;
         t->touch_moving = 0;
-        t->touch_movement_x = 0;
-        t->touch_movement_y = 0;
+        touch_tracker_start(t->tracker, ev);
 
         if(t->anim_id != ANIM_INVALID_ID)
         {
@@ -85,61 +83,67 @@ int tabview_touch_handler(touch_event *ev, void *data)
     if(ev->changed & TCHNG_REMOVED)
     {
         t->touch_id = -1;
+        touch_tracker_finish(t->tracker, ev);
+
         if(!t->touch_moving)
             return -1;
 
         if(t->pos % t->w != 0)
         {
-            int page = ((float)t->pos)/t->w + 0.5f;
+            int page_idx, duration = 100;   
+            float page = ((float)t->pos)/t->w;
             if(page < 0)
-                page = 0;
-            else if(page >= t->count)
-                page = t->count -1;
-
-            if(page != t->curr_page)
+                page_idx = 0;
+            else if(page >= t->count - 1)
+                page_idx = t->count - 1;
+            else
             {
-                if(t->on_page_changed_by_swipe)
-                    t->on_page_changed_by_swipe(page);
-                t->curr_page = page;
+                float velocity = touch_tracker_get_velocity(t->tracker, TRACKER_X);
+                if(fabs(velocity) >= 1000.f)
+                {
+                    page_idx = (int)page;
+                    if(velocity < 0.f)
+                        ++page_idx;
+                    duration = iabs(t->pos - page_idx*t->w)/(fabs(velocity*DPI_MUL)/1000);
+                }
+                else
+                    page_idx = (int)(page + 0.5f);
             }
 
-            tabview_set_active_page(t, page, 100);
+            if(page_idx != t->curr_page)
+            {
+                if(t->on_page_changed_by_swipe)
+                    t->on_page_changed_by_swipe(page_idx);
+                t->curr_page = page_idx;
+            }
+
+            tabview_set_active_page(t, page_idx, duration);
         }
         return -1;
     }
 
     if(ev->changed & TCHNG_POS)
     {
+        touch_tracker_add(t->tracker, ev);
+
         if(!t->touch_moving)
         {
-            t->touch_movement_x += iabs(t->touch_last_x - ev->x);
-            t->touch_movement_y += iabs(t->touch_last_y - ev->y);
-            if (t->touch_movement_x >= 10*DPI_MUL && t->touch_movement_x > t->touch_movement_y)
+            if (t->tracker->distance_abs_x >= 25*DPI_MUL && t->tracker->distance_abs_x > t->tracker->distance_abs_y*3)
             {
                 t->touch_moving = 1;
                 ev->changed |= TCHNG_REMOVED;
                 ev->x = -1;
                 ev->y = -1;
+
+                t->pos += -t->tracker->distance_x;
+                tabview_update_positions(t);
             }
-            else
-            {
-                t->touch_last_x = ev->x;
-                t->touch_last_y = ev->y;
-                return -1;
-            }
+            return -1;
         }
 
-        t->touch_us_diff += ev->us_diff;
-        if(t->touch_us_diff >= 10000)
-        {
-            t->pos += t->touch_last_x - ev->x;
-            tabview_update_positions(t);
-
-            t->touch_last_x = ev->x;
-            t->touch_us_diff = 0;
-        }
-        
-        return (ev->changed & TCHNG_REMOVED) ? -1 : 1;
+        t->pos += t->tracker->prev_x - ev->x;
+        tabview_update_positions(t);
+        return 1;
     }
 
     return -1;
@@ -154,6 +158,7 @@ tabview *tabview_create(int x, int y, int w, int h)
     t->h = h;
     t->anim_id = ANIM_INVALID_ID;
     t->touch_id = -1;
+    t->tracker = touch_tracker_create();
     pthread_mutex_init(&t->mutex, NULL);
     return t;
 }
@@ -163,6 +168,7 @@ void tabview_destroy(tabview *t)
     rm_touch_handler(&tabview_touch_handler, t);
     pthread_mutex_destroy(&t->mutex);
     list_clear(&t->pages, tabview_page_destroy);
+    touch_tracker_destroy(t->tracker);
     free(t);
 }
 
@@ -276,7 +282,7 @@ void tabview_set_active_page(tabview *t, int page_idx, int anim_duration)
     t->anim_pos_start = t->pos;
     t->anim_pos_diff = page_idx*t->w - t->pos;
 
-    call_anim *a = call_anim_create(t, tabview_move_anim_step, anim_duration, INTERPOLATOR_ACCEL_DECEL);
+    call_anim *a = call_anim_create(t, tabview_move_anim_step, anim_duration, INTERPOLATOR_DECELERATE);
     t->anim_id = a->id;
     call_anim_add(a);
 }

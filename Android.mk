@@ -32,6 +32,7 @@ LOCAL_SRC_FILES:= \
     progressdots.c \
     rom_quirks.c \
     tabview.c \
+    touch_tracker.c \
     util.c \
     workers.c
 

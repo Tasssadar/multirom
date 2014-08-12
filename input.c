@@ -216,12 +216,6 @@ int calc_mt_pos(int val, int *range, int d_max)
     return (res*d_max)/100;
 }
 
-static inline int64_t get_us_diff(struct timeval now, struct timeval prev)
-{
-    return ((int64_t)(now.tv_sec - prev.tv_sec))*1000000+
-        (now.tv_usec - prev.tv_usec);
-}
-
 static void mt_recalc_pos_rotation(touch_event *ev)
 {
     switch(fb_rotation)
@@ -265,7 +259,7 @@ void touch_commit_events(struct timeval ev_time)
 
     for(i = 0; i < ARRAY_SIZE(mt_events); ++i)
     {
-        mt_events[i].us_diff = get_us_diff(ev_time, mt_events[i].time);
+        mt_events[i].us_diff = timeval_us_diff(ev_time, mt_events[i].time);
         mt_events[i].time = ev_time;
 
         if(!mt_events[i].changed)
