@@ -600,6 +600,9 @@ void fb_draw_rect(fb_rect *r)
     clamp_to_parent(r, &min_x, &max_x, &min_y, &max_y);
     const int rendered_w = max_x - min_x;
 
+    if(rendered_w <= 0)
+        return;
+
     const int w = rendered_w*PIXEL_SIZE;
 
     px_type *bits = fb.buffer + (fb.stride*(r->y + min_y)) + r->x + min_x;
@@ -667,6 +670,9 @@ void fb_draw_img(fb_img *i)
     int min_x, max_x, min_y, max_y;
     clamp_to_parent(i, &min_x, &max_x, &min_y, &max_y);
     const int rendered_w = max_x - min_x;
+
+    if(rendered_w <= 0)
+        return;
 
     px_type *bits = fb.buffer + (fb.stride*(i->y + min_y)) + i->x + min_x;
     px_type *img = (px_type*)(((uint32_t*)i->data) + (min_y * i->w) + min_x);
