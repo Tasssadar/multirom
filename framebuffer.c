@@ -41,6 +41,8 @@
 #include "animation.h"
 #include "multirom.h"
 
+#define SHOW_FPS_COUNTER
+
 #if PIXEL_SIZE == 4
 #define fb_memset(dst, what, len) android_memset32(dst, what, len)
 #else
@@ -83,6 +85,45 @@ static inline void fb_cpy_fb_with_rotation(px_type *dst, px_type *src);
 static inline void fb_rotate_90deg(px_type *dst, px_type *src);
 static inline void fb_rotate_270deg(px_type *dst, px_type *src);
 static inline void fb_rotate_180deg(px_type *dst, px_type *src);
+
+#ifdef SHOW_FPS_COUNTER
+static fb_img *fps_counter = NULL;
+static uint32_t fps_counter_num = 0;
+static pthread_mutex_t fb_fps_mutex = PTHREAD_MUTEX_INITIALIZER;
+static volatile int fps_thread_run = 0;
+static pthread_t fps_thread;
+static void *fps_thread_work(void *data)
+{
+    char buff[8];
+    struct timespec last, curr;
+    uint32_t diff = 0, fps;
+    clock_gettime(CLOCK_MONOTONIC, &last);
+
+    while(fps_thread_run)
+    {
+        pthread_mutex_lock(&fb_fps_mutex);
+
+        clock_gettime(CLOCK_MONOTONIC, &curr);
+        diff = timespec_diff(&last, &curr);
+        if(diff == 0)
+            ++diff;
+        fps = (fps_counter_num*1000) / diff;
+        fps_counter_num = 0;
+        pthread_mutex_unlock(&fb_fps_mutex);
+
+        if(fps_counter)
+        {
+            snprintf(buff, sizeof(buff), "%02u", fps);
+            fb_text_set_content(fps_counter, buff);
+        }
+        //printf("FPS: %2u\n", fps);
+
+        last = curr;
+        usleep(100000);
+    }
+    return NULL;
+}
+#endif
 
 int vt_set_mode(int graphics)
 {
@@ -197,6 +238,17 @@ int fb_open(int rotation)
 
     fb_update();
 
+#ifdef SHOW_FPS_COUNTER
+    fb_text_proto *p = fb_text_create(fb_width - 8*DPI_MUL, 8*DPI_MUL, WHITE, SIZE_NORMAL, "00");
+    p->level = INT_MAX;
+    p->style = STYLE_MONOSPACE;
+    fps_counter = fb_text_finalize(p);
+    fps_counter->x -= fps_counter->w;
+
+    fps_thread_run = 1;
+    pthread_create(&fps_thread, NULL, fps_thread_work, NULL);
+#endif
+
     fb_draw_run = 1;
     pthread_create(&fb_draw_thread, NULL, fb_draw_thread_work, NULL);
     return 0;
@@ -208,6 +260,11 @@ fail:
 
 void fb_close(void)
 {
+#ifdef SHOW_FPS_COUNTER
+    fps_thread_run = 0;
+    pthread_create(&fps_thread, NULL, fps_thread_work, NULL);
+#endif
+
     fb_draw_run = 0;
     pthread_join(fb_draw_thread, NULL);
 
@@ -802,6 +859,10 @@ void fb_rm_img(fb_img *i)
 void fb_clear(void)
 {
     pthread_mutex_lock(&fb_ctx.mutex);
+#ifdef SHOW_FPS_COUNTER    
+    fps_counter = NULL;
+#endif
+
     fb_item_header *it, *next;
     for(it = fb_ctx.first_item; it; it = next)
     {
@@ -897,6 +958,7 @@ void *fb_draw_thread_work(void *cookie)
 
         pthread_mutex_lock(&fb_draw_mutex);
 
+#ifndef SHOW_FPS_COUNTER
         if(__atomic_cmpxchg(1, 0, &fb_draw_requested) == 0)
         {
             fb_draw();
@@ -912,7 +974,14 @@ void *fb_draw_thread_work(void *cookie)
             pthread_mutex_unlock(&fb_update_mutex);
 #endif
         }
-
+#else
+        fb_draw();
+        pthread_mutex_lock(&fb_fps_mutex);
+        ++fps_counter_num;
+        pthread_mutex_unlock(&fb_fps_mutex);
+        pthread_cond_broadcast(&fb_draw_cond);
+        pthread_mutex_unlock(&fb_draw_mutex);
+#endif
 
         last = curr;
         if(diff <= SLEEP_CONST+prevSleepTime)
