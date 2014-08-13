@@ -40,6 +40,7 @@
 #include "containers.h"
 #include "animation.h"
 #include "notification_card.h"
+#include "tabview.h"
 
 static struct multirom_status *mrom_status = NULL;
 static struct multirom_rom *selected_rom = NULL;
@@ -47,8 +48,6 @@ static volatile int exit_ui_code = -1;
 static volatile int loop_act = 0;
 static multirom_themes_info *themes_info = NULL;
 static multirom_theme *cur_theme = NULL;
-static int last_selected_int_rom = -1;
-static int last_int_listview_pos = -1;
 
 static pthread_mutex_t exit_code_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -120,8 +119,6 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     exit_ui_code = -1;
     selected_rom = NULL;
-    last_selected_int_rom = -1;
-    last_int_listview_pos = -1;
 
     multirom_ui_select_color(s->colors);
     themes_info = multirom_ui_init_themes();
@@ -152,8 +149,6 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     multirom_set_brightness(s->brightness);
 
-    fb_freeze(0);
-
     if(s->auto_boot_rom && s->auto_boot_seconds > 0)
         multirom_ui_auto_boot();
     else
@@ -164,6 +159,8 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
         a->on_finished_data = r;
         call_anim_add(a);
     }
+
+    fb_freeze(0);
 
     fb_request_draw();
 
@@ -202,6 +199,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
         if(loop_act & LOOP_CHANGE_CLR)
         {
+            pthread_mutex_unlock(&exit_code_mutex);
             fb_freeze(1);
 
             multirom_ui_destroy_theme();
@@ -211,6 +209,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
             fb_freeze(0);
             fb_request_draw();
 
+            pthread_mutex_lock(&exit_code_mutex);
             loop_act &= ~(LOOP_CHANGE_CLR);
         }
 
@@ -276,22 +275,45 @@ void multirom_ui_init_theme(int tab)
     themes_info->data->selected_tab = -1;
 
     multirom_ui_init_header();
-    multirom_ui_switch(tab);
     fb_set_background(C_BACKGROUND);
+
+    themes_info->data->tabs->on_page_changed_by_swipe = multirom_ui_switch;
+    themes_info->data->tabs->on_pos_changed = multirom_ui_change_header_selector_pos;
+
+    int i;
+    for(i = 0; i < TAB_COUNT; ++i)
+    {
+        tabview_add_page(themes_info->data->tabs, -1);
+        switch(i)
+        {
+            case TAB_USB:
+            case TAB_INTERNAL:
+                themes_info->data->tab_data[i] = multirom_ui_tab_rom_init(i);
+                break;
+            case TAB_MISC:
+                themes_info->data->tab_data[i] = multirom_ui_tab_misc_init();
+                break;
+        }
+    }
+    add_touch_handler(&tabview_touch_handler, themes_info->data->tabs);
+    tabview_update_positions(themes_info->data->tabs);
+    multirom_ui_switch(tab);
 }
 
 void multirom_ui_destroy_theme(void)
 {
     cur_theme->destroy(themes_info->data);
 
+    tabview_destroy(themes_info->data->tabs);
+    themes_info->data->tabs = NULL;
+
     int i;
     for(i = 0; i < TAB_COUNT; ++i)
     {
         button_destroy(themes_info->data->tab_btns[i]);
         themes_info->data->tab_btns[i] = NULL;
+        multirom_ui_destroy_tab(i);
     }
-
-    multirom_ui_destroy_tab(themes_info->data->selected_tab);
 
     fb_clear();
 }
@@ -301,9 +323,9 @@ void multirom_ui_init_header(void)
     cur_theme->init_header(themes_info->data);
 }
 
-void multirom_ui_header_select(int tab)
+void multirom_ui_change_header_selector_pos(float pos)
 {
-    cur_theme->header_select(themes_info->data, tab);
+    cur_theme->header_set_tab_selector_pos(themes_info->data, pos);
 }
 
 void multirom_ui_destroy_tab(int tab)
@@ -314,16 +336,16 @@ void multirom_ui_destroy_tab(int tab)
             break;
         case TAB_USB:
         case TAB_INTERNAL:
-            multirom_ui_tab_rom_destroy(themes_info->data->tab_data);
+            multirom_ui_tab_rom_destroy(themes_info->data->tab_data[tab]);
             break;
         case TAB_MISC:
-            multirom_ui_tab_misc_destroy(themes_info->data->tab_data);
+            multirom_ui_tab_misc_destroy(themes_info->data->tab_data[tab]);
             break;
         default:
             assert(0);
             break;
     }
-    themes_info->data->tab_data = NULL;
+    themes_info->data->tab_data[tab] = NULL;
 }
 
 void multirom_ui_switch(int tab)
@@ -331,29 +353,9 @@ void multirom_ui_switch(int tab)
     if(tab == themes_info->data->selected_tab)
         return;
 
-    fb_freeze(1);
-
-    multirom_ui_header_select(tab);
-
-    // destroy old tab
-    multirom_ui_destroy_tab(themes_info->data->selected_tab);
-
-    // init new tab
-    switch(tab)
-    {
-        case TAB_USB:
-        case TAB_INTERNAL:
-            themes_info->data->tab_data = multirom_ui_tab_rom_init(tab);
-            break;
-        case TAB_MISC:
-            themes_info->data->tab_data = multirom_ui_tab_misc_init();
-            break;
-    }
-
+    tabview_set_active_page(themes_info->data->tabs, tab,
+            themes_info->data->selected_tab == -1 ? 0 : 200);
     themes_info->data->selected_tab = tab;
-
-    fb_freeze(0);
-    fb_request_draw();
 }
 
 void multirom_ui_fill_rom_list(listview *view, int mask)
@@ -361,7 +363,6 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
     int i;
     struct multirom_rom *rom;
     void *data;
-    listview_item *it, *select = NULL;
     char part_desc[64];
     for(i = 0; mrom_status->roms && mrom_status->roms[i]; ++i)
     {
@@ -377,17 +378,7 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
             continue;
 
         data = rom_item_create(rom->name, rom->partition ? part_desc : NULL, rom->icon_path);
-        it = listview_add_item(view, rom->id, data);
-
-        if (!select &&
-            ((mrom_status->auto_boot_rom && rom == mrom_status->auto_boot_rom) ||
-            (!mrom_status->auto_boot_rom && rom == mrom_status->current_rom)))
-        {
-            select = it;
-        }
-
-        if(rom->id == last_selected_int_rom)
-            select = it;
+        listview_add_item(view, rom->id, data);
     }
 }
 
@@ -491,32 +482,24 @@ void multirom_ui_start_pong(int action)
 void *multirom_ui_tab_rom_init(int tab_type)
 {
     tab_data_roms *t = mzalloc(sizeof(tab_data_roms));
-    themes_info->data->tab_data = t;
+    themes_info->data->tab_data[tab_type] = t;
 
     t->list = mzalloc(sizeof(listview));
     t->list->item_draw = &rom_item_draw;
     t->list->item_hide = &rom_item_hide;
     t->list->item_height = &rom_item_height;
     t->list->item_destroy = &rom_item_destroy;
-    t->list->item_selected = &multirom_ui_tab_rom_selected;
     t->list->item_confirmed = &multirom_ui_tab_rom_confirmed;
 
     cur_theme->tab_rom_init(themes_info->data, t, tab_type);
 
     listview_init_ui(t->list);
+    tabview_add_item(themes_info->data->tabs, tab_type, t->list);
 
     if(tab_type == TAB_INTERNAL)
         multirom_ui_fill_rom_list(t->list, MASK_INTERNAL);
 
     listview_update_ui(t->list);
-
-    if(tab_type == TAB_INTERNAL && last_int_listview_pos != -1)
-    {
-        t->list->pos = last_int_listview_pos;
-        listview_update_ui(t->list);
-    }
-    else if(listview_ensure_selected_visible(t->list))
-        listview_update_ui(t->list);
 
     int has_roms = (int)(t->list->items == NULL);
     multirom_ui_tab_rom_set_empty((void*)t, has_roms);
@@ -541,28 +524,12 @@ void multirom_ui_tab_rom_destroy(void *data)
     list_clear(&t->buttons, &button_destroy);
     list_clear(&t->ui_elements, &fb_remove_item);
 
-    if(themes_info->data->selected_tab == TAB_INTERNAL)
-        last_int_listview_pos = t->list->pos;
-
     listview_destroy(t->list);
 
     if(t->usb_prog)
         progdots_destroy(t->usb_prog);
 
     free(t);
-}
-
-void multirom_ui_tab_rom_selected(listview_item *prev, listview_item *now)
-{
-    if(!now)
-        return;
-
-    struct multirom_rom *rom = multirom_get_rom_by_id(mrom_status, now->id);
-    if(!rom || !themes_info->data->tab_data)
-        return;
-
-    if(M(rom->type) & MASK_INTERNAL)
-        last_selected_int_rom = now->id;
 }
 
 void multirom_ui_tab_rom_confirmed(listview_item *it)
@@ -572,10 +539,11 @@ void multirom_ui_tab_rom_confirmed(listview_item *it)
 
 void multirom_ui_tab_rom_boot_btn(int action)
 {
-    if(!themes_info->data->tab_data)
+    int cur_tab = themes_info->data->selected_tab;
+    if(!themes_info->data->tab_data[cur_tab])
         return;
 
-    tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data;
+    tab_data_roms *t = themes_info->data->tab_data[cur_tab];
     if(!t->list->selected)
         return;
 
@@ -655,18 +623,23 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
         p->justify = JUSTIFY_CENTER;
         t->usb_text = fb_text_finalize(p);
         list_add(&t->ui_elements, t->usb_text);
+        tabview_add_item(themes_info->data->tabs, TAB_USB, t->usb_text);
 
         center_text(t->usb_text, t->list->x, -1, t->list->w, -1);
         t->usb_text->y = t->list->y + t->list->h*0.2;
 
         int x = t->list->x + ((t->list->w/2) - (PROGDOTS_W/2));
         t->usb_prog = progdots_create(x, t->usb_text->y+100*DPI_MUL);
+        tabview_add_item(themes_info->data->tabs, TAB_USB, t->usb_prog->rect);
+        tabview_add_item(themes_info->data->tabs, TAB_USB, t->usb_prog);
     }
     else if(!empty && t->usb_text)
     {
+        tabview_rm_item(themes_info->data->tabs, TAB_USB, t->usb_prog->rect);
         progdots_destroy(t->usb_prog);
         t->usb_prog = NULL;
 
+        tabview_rm_item(themes_info->data->tabs, TAB_USB, t->usb_text);
         list_rm(&t->ui_elements, t->usb_text, &fb_remove_item);
         t->usb_text = NULL;
     }

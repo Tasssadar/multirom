@@ -216,12 +216,6 @@ int calc_mt_pos(int val, int *range, int d_max)
     return (res*d_max)/100;
 }
 
-static inline int64_t get_us_diff(struct timeval now, struct timeval prev)
-{
-    return ((int64_t)(now.tv_sec - prev.tv_sec))*1000000+
-        (now.tv_usec - prev.tv_usec);
-}
-
 static void mt_recalc_pos_rotation(touch_event *ev)
 {
     switch(fb_rotation)
@@ -259,16 +253,19 @@ void touch_commit_events(struct timeval ev_time)
         return;
 
     uint32_t i;
+    int res;
     touch_handler *h;
     handler_list_it *it;
 
     for(i = 0; i < ARRAY_SIZE(mt_events); ++i)
     {
-        mt_events[i].us_diff = get_us_diff(ev_time, mt_events[i].time);
+        mt_events[i].us_diff = timeval_us_diff(ev_time, mt_events[i].time);
         mt_events[i].time = ev_time;
 
         if(!mt_events[i].changed)
             continue;
+
+        keyaction_clear_active();
 
         if(mt_events[i].changed & TCHNG_POS)
             mt_recalc_pos_rotation(&mt_events[i]);
@@ -279,8 +276,11 @@ void touch_commit_events(struct timeval ev_time)
         {
             h = it->handler;
 
-            if((*h->callback)(&mt_events[i], h->data) == 0)
+            res = (*h->callback)(&mt_events[i], h->data);
+            if(res == 0)
                 mt_events[i].consumed = 1;
+            else if(res == 1)
+                break;
 
             it = it->next;
         }
@@ -494,7 +494,7 @@ void input_pop_context(void)
 
 struct keyaction
 {
-    int x, y;
+    fb_item_pos *parent;
     void *data;
     keyaction_call call;
 };
@@ -527,25 +527,24 @@ static int compare_keyactions(const void* k1, const void* k2)
     const struct keyaction *a1 = *((const struct keyaction **)k1);
     const struct keyaction *a2 = *((const struct keyaction **)k2);
 
-    if(a1->y < a2->y)
+    if(a1->parent->y < a2->parent->y)
         return -1;
-    else if(a1->y > a2->y)
+    else if(a1->parent->y > a2->parent->y)
         return 1;
     else
     {
-        if(a1->x < a2->x)
+        if(a1->parent->x < a2->parent->x)
             return -1;
-        else if(a1->x > a2->x)
+        else if(a1->parent->x > a2->parent->x)
             return 1;
     }
     return 0;
 }
 
-void keyaction_add(int x, int y, keyaction_call call, void *data)
+void keyaction_add(void *parent, keyaction_call call, void *data)
 {
     struct keyaction *k = mzalloc(sizeof(struct keyaction));
-    k->x = x;
-    k->y = y;
+    k->parent = parent;
     k->data = data;
     k->call = call;
 
@@ -599,6 +598,13 @@ void keyaction_clear(void)
     pthread_mutex_unlock(&keyaction_ctx.lock);
 }
 
+static int keyaction_is_visible(struct keyaction *a)
+{
+    return (a->parent->x >= 0 && a->parent->y >= 0 &&
+            a->parent->x + a->parent->w <= (int)fb_width &&
+            a->parent->y + a->parent->h <= (int)fb_height);
+}
+
 // expects locked mutex
 static void keyaction_call_cur_act(struct keyaction_ctx *c, int action)
 {
@@ -621,10 +627,17 @@ static void keyaction_call_cur_act(struct keyaction_ctx *c, int action)
     {
         if(*a == c->cur_act)
         {
-            if(action == KEYACT_UP)
-                c->cur_act = (a != c->actions) ? *(--a) : NULL;
-            else
-                c->cur_act = *(++a);
+            do
+            {
+                if(action == KEYACT_UP)
+                    c->cur_act = (a != c->actions) ? *(--a) : NULL;
+                else
+                    c->cur_act = *(++a);
+
+                if(c->cur_act)
+                    ERROR("act %d %d %d %d\n", c->cur_act->parent->x, c->cur_act->parent->y, c->cur_act->parent->w, c->cur_act->parent->h);
+            }
+            while(c->cur_act && !keyaction_is_visible(c->cur_act));
 
             if(c->cur_act)
                 c->cur_act->call(c->cur_act->data, action);
@@ -651,6 +664,18 @@ static void keyaction_repeat_worker(uint32_t diff, void *data)
             c->repeat_timer -= diff;
     }
     pthread_mutex_unlock(&c->lock);
+}
+
+void keyaction_clear_active(void)
+{
+    pthread_mutex_lock(&keyaction_ctx.lock);
+    if(keyaction_ctx.enable && keyaction_ctx.cur_act)
+    {
+        keyaction_call_cur_act(&keyaction_ctx, KEYACT_CLEAR);
+        keyaction_ctx.repeat = KEYACT_NONE;
+        keyaction_ctx.cur_act = NULL;
+    }
+    pthread_mutex_unlock(&keyaction_ctx.lock);
 }
 
 int keyaction_handle_keyevent(int key, int press)

@@ -26,6 +26,7 @@
 #include "../log.h"
 #include "../animation.h"
 #include "../notification_card.h"
+#include "../tabview.h"
 
 #define HEADER_HEIGHT (110*DPI_MUL)
 #define TABS_HEIGHT (HEADER_HEIGHT - STATUS_HEIGHT)
@@ -109,28 +110,34 @@ static void init_header(multirom_theme_data *t)
         tab_btns[i]->level_off = 100;
         button_init_ui(tab_btns[i], "", 0);
 
-        keyaction_add(tab_btns[i]->x, tab_btns[i]->y, button_keyaction_call, tab_btns[i]);
+        keyaction_add(tab_btns[i], button_keyaction_call, tab_btns[i]);
 
         x += maxW;
     }
+
+    t->selected_tab_rect = fb_add_rect_lvl(110, tab_btns[0]->x, HEADER_HEIGHT-SELECTED_RECT_H, maxW, SELECTED_RECT_H, C_HIGHLIGHT_TEXT);
+    t->tabs = tabview_create(0, HEADER_HEIGHT, fb_width, fb_height-HEADER_HEIGHT);
 }
 
-static void header_select(multirom_theme_data *t, int tab)
+static void header_set_tab_selector_pos(multirom_theme_data *t, float pos)
 {
-    int i;
     const int TAB_BTN_WIDTH = t->tab_btns[0]->w;
 
-    int dest_x = t->tab_btns[tab]->x;
-    if(!t->selected_tab_rect)
-        t->selected_tab_rect = fb_add_rect_lvl(110, dest_x, HEADER_HEIGHT-SELECTED_RECT_H, TAB_BTN_WIDTH, SELECTED_RECT_H, C_HIGHLIGHT_TEXT);
-    else
-    {
-        anim_cancel_for(t->selected_tab_rect, 0);
+    int dest_x = t->tab_btns[0]->x + TAB_BTN_WIDTH*pos;
+    int dest_w = TAB_BTN_WIDTH;
 
-        item_anim *anim = item_anim_create(t->selected_tab_rect, 150, INTERPOLATOR_DECELERATE);
-        anim->targetX = dest_x;
-        item_anim_add(anim);
+    if(dest_x < t->tab_btns[0]->x)
+    {
+        dest_w -= t->tab_btns[0]->x - dest_x;
+        dest_x = t->tab_btns[0]->x;
     }
+    else if(dest_x > t->tab_btns[TAB_COUNT-1]->x)
+    {
+        dest_w = (t->tab_btns[TAB_COUNT-1]->x + t->tab_btns[TAB_COUNT-1]->w) - dest_x;
+    }
+
+    t->selected_tab_rect->x = dest_x;
+    t->selected_tab_rect->w = dest_w;
 }
 
 static void tab_rom_init(multirom_theme_data *t, tab_data_roms *d, int tab_type)
@@ -154,6 +161,9 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
     b->clicked = &multirom_ui_tab_misc_copy_log;
     button_init_ui(b, "Copy log to /sdcard", SIZE_BIG);
     list_add(&d->buttons, b);
+    tabview_add_item(t->tabs, TAB_MISC, b->text);
+    tabview_add_item(t->tabs, TAB_MISC, b->rect);
+    tabview_add_item(t->tabs, TAB_MISC, b);
 
     y += MISCBTN_H+70*DPI_MUL;
 
@@ -183,6 +193,9 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
         b->clicked = &multirom_ui_reboot_btn;
         button_init_ui(b, texts[i], SIZE_BIG);
         list_add(&d->buttons, b);
+        tabview_add_item(t->tabs, TAB_MISC, b->text);
+        tabview_add_item(t->tabs, TAB_MISC, b->rect);
+        tabview_add_item(t->tabs, TAB_MISC, b);
 
         y += MISCBTN_H+20*DPI_MUL;
         if(i == 2)
@@ -221,12 +234,15 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
         b->clicked = &multirom_ui_tab_misc_change_clr;
         button_init_ui(b, NULL, 0);
         list_add(&d->buttons, b);
+        tabview_add_item(t->tabs, TAB_MISC, b);
 
         x += CLRBTN_TOTAL + CLRBTN_MARGIN;
     }
 
     for(i = 0; d->buttons[i]; ++i)
-        keyaction_add(d->buttons[i]->x, d->buttons[i]->y, button_keyaction_call, d->buttons[i]);
+        keyaction_add(d->buttons[i], button_keyaction_call, d->buttons[i]);
+
+    tabview_add_items(t->tabs, TAB_MISC, d->ui_elements);
 }
 
 static int get_tab_width(multirom_theme_data *t)
@@ -245,7 +261,7 @@ const struct multirom_theme theme_info_portrait = {
 
     .destroy = &destroy,
     .init_header = &init_header,
-    .header_select = &header_select,
+    .header_set_tab_selector_pos = &header_set_tab_selector_pos,
     .tab_rom_init = &tab_rom_init,
     .tab_misc_init = &tab_misc_init,
     .get_tab_width = &get_tab_width,

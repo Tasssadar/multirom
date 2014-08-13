@@ -448,6 +448,12 @@ uint32_t timespec_diff(struct timespec *f, struct timespec *s)
     return res;
 }
 
+int64_t timeval_us_diff(struct timeval now, struct timeval prev)
+{
+    return ((int64_t)(now.tv_sec - prev.tv_sec))*1000000+
+        (now.tv_usec - prev.tv_usec);
+}
+
 char *readlink_recursive(const char *link)
 {
     struct stat info;
@@ -576,6 +582,11 @@ int imin(int a, int b)
 int imax(int a, int b)
 {
     return (a > b) ? a : b;
+}
+
+inline int iabs(int a)
+{
+    return a >= 0 ? a : -a;
 }
 
 int in_rect(int x, int y, int rx, int ry, int rw, int rh)

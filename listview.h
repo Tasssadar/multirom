@@ -20,6 +20,7 @@
 
 #include "input.h"
 #include "framebuffer.h"
+#include "touch_tracker.h"
 
 enum
 {
@@ -40,16 +41,15 @@ typedef struct
 typedef struct 
 {
     int id;
-    int start_y;
-    int last_y;
-    int64_t us_diff;
     listview_item *hover;
     int fast_scroll;
 } listview_touch_data;
 
 typedef struct
 {
-    FB_ITEM_POS
+    FB_ITEM_HEAD
+
+    fb_item_pos last_rendered_pos;
 
     int pos; // scroll pos
     int fullH; // height of all items
@@ -72,6 +72,7 @@ typedef struct
     int keyact_item_selected;
 
     listview_touch_data touch;
+    touch_tracker *tracker;
 } listview;
 
 int listview_touch_handler(touch_event *ev, void *data);
@@ -80,7 +81,8 @@ void listview_init_ui(listview *view);
 void listview_destroy(listview *view);
 listview_item *listview_add_item(listview *view, int id, void *data);
 void listview_clear(listview *view);
-void listview_update_ui(listview *view);
+inline void listview_update_ui(listview *view);
+void listview_update_ui_args(listview *view, int only_if_moved, int mutex_locked);
 void listview_enable_scroll(listview *view, int enable);
 void listview_update_scroll_mark(listview *view);
 void listview_update_overscroll_mark(listview *v, int side, float overscroll);
