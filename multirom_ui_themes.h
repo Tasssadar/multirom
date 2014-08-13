@@ -23,6 +23,7 @@
 #include "progressdots.h"
 #include "listview.h"
 #include "multirom_ui.h"
+#include "tabview.h"
 
 // universal themes has these as width and height,
 // instead of real resolution
@@ -51,8 +52,9 @@ typedef struct
     fb_text *tab_texts[TAB_COUNT];
     fb_rect *selected_tab_rect;
     button *tab_btns[TAB_COUNT];
+    tabview *tabs;
     int selected_tab;
-    void *tab_data;
+    void *tab_data[TAB_COUNT];
 } multirom_theme_data;
 
 struct multirom_theme
@@ -62,7 +64,7 @@ struct multirom_theme
 
     void (*destroy)(multirom_theme_data *t);
     void (*init_header)(multirom_theme_data *t);
-    void (*header_select)(multirom_theme_data *t, int tab);
+    void (*header_set_tab_selector_pos)(multirom_theme_data *t, float pos);
     void (*tab_rom_init)(multirom_theme_data *t, tab_data_roms *d, int tab_type);
     void (*tab_misc_init)(multirom_theme_data *t, tab_data_misc *d, int color_scheme);
     int (*get_tab_width)(multirom_theme_data *t);

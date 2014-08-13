@@ -10,30 +10,32 @@ LOCAL_C_INCLUDES += $(multirom_local_path) \
     external/freetype/include
 
 LOCAL_SRC_FILES:= \
-    main.c \
-    util.c \
-    framebuffer.c \
-    multirom.c \
-    input.c \
-    multirom_ui.c \
-    listview.c \
-    checkbox.c \
+    animation.c \
     button.c \
-    pong.c \
-    progressdots.c \
-    multirom_ui_themes.c \
-    themes/multirom_ui_portrait.c \
-    themes/multirom_ui_landscape.c \
-    fstab.c \
-    workers.c \
+    checkbox.c \
     containers.c \
-    rom_quirks.c \
-    kexec.c \
+    framebuffer.c \
     framebuffer_generic.c \
     framebuffer_png.c \
     framebuffer_truetype.c \
-    animation.c \
-    notification_card.c
+    fstab.c \
+    input.c \
+    kexec.c \
+    listview.c \
+    main.c \
+    multirom.c \
+    multirom_ui.c \
+    multirom_ui_themes.c \
+    themes/multirom_ui_landscape.c \
+    themes/multirom_ui_portrait.c \
+    notification_card.c \
+    pong.c \
+    progressdots.c \
+    rom_quirks.c \
+    tabview.c \
+    touch_tracker.c \
+    util.c \
+    workers.c
 
 # With these, GCC optimizes aggressively enough so full-screen alpha blending
 # is quick enough to be done in an animation

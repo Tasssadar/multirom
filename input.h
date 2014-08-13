@@ -19,6 +19,7 @@
 #define INPUT_H
 
 #include <sys/time.h>
+#include "framebuffer.h"
 
 #define KEY_VOLUMEUP 115
 #define KEY_VOLUMEDOWN 114
@@ -73,9 +74,10 @@ enum
 #define KEYACT_FRAME_W (8*DPI_MUL)
 
 typedef int (*keyaction_call)(void *, int); // data, action
-void keyaction_add(int x, int y, keyaction_call call, void *data);
+void keyaction_add(void *parent, keyaction_call call, void *data);
 void keyaction_remove(keyaction_call call, void *data);
 void keyaction_clear(void);
+void keyaction_clear_active(void);
 int keyaction_handle_keyevent(int key, int press);
 void keyaction_enable(int enable);
 

@@ -40,6 +40,7 @@
 #include "containers.h"
 #include "animation.h"
 #include "multirom.h"
+#include "listview.h"
 
 #define SHOW_FPS_COUNTER
 
@@ -558,6 +559,9 @@ void fb_remove_item(void *item)
         case FB_IT_IMG:
             fb_rm_img((fb_img*)item);
             break;
+        case FB_IT_LISTVIEW:
+            listview_destroy((listview*)item);
+            break;
     }
 }
 
@@ -594,6 +598,37 @@ void fb_destroy_item(void *item)
     free(item);
 }
 
+static inline void clamp_to_parent(void *it, int *min_x, int *max_x, int *min_y, int *max_y)
+{
+    fb_item_header *h = it;
+
+    int parent_x = h->parent->x;
+    int parent_y = h->parent->y;
+    int parent_w = h->parent->w;
+    int parent_h = h->parent->h;
+
+    if(h->parent != &DEFAULT_FB_PARENT)
+    {
+        if(parent_x < 0)
+        {
+            parent_w += parent_x;
+            parent_x = 0;
+        }
+        if(parent_y < 0)
+        {
+            parent_h += parent_y;
+            parent_y = 0;
+        }
+        parent_w = imin(parent_x + parent_w, fb_width) - parent_x;
+        parent_h = imin(parent_y + parent_h, fb_height) - parent_y;
+    }
+
+    *min_x = h->x >= parent_x ? 0 : parent_x - h->x;
+    *min_y = h->y >= parent_y ? 0 : parent_y - h->y;
+    *max_x = imin(h->w, parent_x + parent_w - h->x);
+    *max_y = imin(h->h, parent_y + parent_h - h->y);
+}
+
 void fb_draw_rect(fb_rect *r)
 {
     const uint8_t alpha = (r->color >> 24) & 0xFF;
@@ -618,11 +653,12 @@ void fb_draw_rect(fb_rect *r)
     const uint16_t premult_color_g = ((color & 0x7E0) * alpha6b) >> 6;
 #endif
 
-    const int min_x = r->x >= r->parent->x ? 0 : r->parent->x - r->x;
-    const int min_y = r->y >= r->parent->y ? 0 : r->parent->y - r->y;
-    const int max_x = imin(r->w, r->parent->x + r->parent->w - r->x);
-    const int max_y = imin(r->h, r->parent->y + r->parent->h - r->y);
+    int min_x, max_x, min_y, max_y;
+    clamp_to_parent(r, &min_x, &max_x, &min_y, &max_y);
     const int rendered_w = max_x - min_x;
+
+    if(rendered_w <= 0)
+        return;
 
     const int w = rendered_w*PIXEL_SIZE;
 
@@ -688,11 +724,12 @@ void fb_draw_img(fb_img *i)
     const uint8_t max_alpha = 31;
 #endif
 
-    const int min_x = i->x >= i->parent->x ? 0 : i->parent->x - i->x;
-    const int min_y = i->y >= i->parent->y ? 0 : i->parent->y - i->y;
-    const int max_x = imin(i->w, i->parent->x + i->parent->w - i->x);
-    const int max_y = imin(i->h, i->parent->y + i->parent->h - i->y);
+    int min_x, max_x, min_y, max_y;
+    clamp_to_parent(i, &min_x, &max_x, &min_y, &max_y);
     const int rendered_w = max_x - min_x;
+
+    if(rendered_w <= 0)
+        return;
 
     px_type *bits = fb.buffer + (fb.stride*(i->y + min_y)) + i->x + min_x;
     px_type *img = (px_type*)(((uint32_t*)i->data) + (min_y * i->w) + min_x);
@@ -883,7 +920,7 @@ static void fb_draw(void)
 
     fb_fill(fb_ctx.background_color);
 
-    pthread_mutex_lock(&fb_ctx.mutex);
+    fb_batch_start();
     for(it = fb_ctx.first_item; it; it = it->next)
     {
         switch(it->type)
@@ -894,9 +931,12 @@ static void fb_draw(void)
             case FB_IT_IMG:
                 fb_draw_img((fb_img*)it);
                 break;
+            case FB_IT_LISTVIEW:
+                listview_update_ui_args((listview*)it, 1, 1);
+                break;
         }
     }
-    pthread_mutex_unlock(&fb_ctx.mutex);
+    fb_batch_end();
 
     pthread_mutex_lock(&fb_update_mutex);
     fb_update();
@@ -909,6 +949,14 @@ void fb_freeze(int freeze)
         ++fb_frozen;
     else
         --fb_frozen;
+
+    // wait for last draw to finish or prevent new draw
+    if(fb_frozen == 1)
+    {
+        pthread_mutex_lock(&fb_draw_mutex);
+        __atomic_cmpxchg(1, 0, &fb_draw_requested);
+        pthread_mutex_unlock(&fb_draw_mutex);
+    }
 }
 
 void fb_push_context(void)

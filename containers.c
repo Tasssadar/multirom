@@ -48,6 +48,26 @@ void list_add(ptrToList list_p, void *item)
     (*list)[--i] = item;
 }
 
+void list_add_at(ptrToList list_p, int idx, void *item)
+{
+    void ***list = (void***)list_p;
+    int size = list_size(*list);
+    int i;
+
+    *list = realloc(*list, (size+1)*sizeof(void*));
+
+    if(idx < 0)
+        idx = 0;
+    else if(idx >= size)
+        idx = size - 1;
+
+    for(i = idx + 1; i < size; ++i)
+        (*list)[i] = (*list)[i-1];
+
+    (*list)[idx] = item;
+    (*list)[i] = NULL;
+}
+
 int list_add_from_list(ptrToList list_p, listItself src_p)
 {
     void **src = (void**)src_p;

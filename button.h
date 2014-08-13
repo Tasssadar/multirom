@@ -40,8 +40,8 @@ enum
 
 typedef struct
 {
-    int x, y;
-    int w, h;
+    FB_ITEM_HEAD
+
     fb_img *text;
     fb_rect *rect;
     fb_rect **keyact_frame;

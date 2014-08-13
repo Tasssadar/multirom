@@ -25,6 +25,7 @@ typedef void* callback;
 typedef void(*callbackPtr)(void*);
 
 void list_add(ptrToList list_p, void *item);
+void list_add_at(ptrToList list_p, int idx, void *item);
 int list_add_from_list(ptrToList list_p, listItself src_p);
 int list_rm(ptrToList list_p, void *item, callback destroy_callback_p);
 int list_rm_noreorder(ptrToList list_p, void *item, callback destroy_callback_p);
