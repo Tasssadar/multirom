@@ -274,6 +274,8 @@ static void ncard_move_step(void *data, float interpolated)
     }
 
     pthread_mutex_unlock(&c->mutex);
+
+    fb_request_draw();
 }
 
 static void ncard_reveal_finished(void *data)
@@ -292,8 +294,6 @@ static void ncard_hide_finished(void *data)
     fb_rm_rect(c->alpha_bg);
     fb_rm_rect(c->hover_rect);
     free(c);
-
-    fb_request_draw();
 }
 
 void ncard_set_top_offset(int top_offset)
