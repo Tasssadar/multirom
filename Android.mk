@@ -12,7 +12,6 @@ LOCAL_C_INCLUDES += $(multirom_local_path) \
 LOCAL_SRC_FILES:= \
     animation.c \
     button.c \
-    checkbox.c \
     containers.c \
     framebuffer.c \
     framebuffer_generic.c \

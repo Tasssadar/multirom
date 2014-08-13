@@ -21,7 +21,6 @@
 #include "framebuffer.h"
 #include "util.h"
 #include "log.h"
-#include "checkbox.h"
 #include "multirom_ui.h"
 #include "multirom_ui_themes.h"
 #include "workers.h"

@@ -30,7 +30,6 @@
 #include "listview.h"
 #include "util.h"
 #include "button.h"
-#include "checkbox.h"
 #include "version.h"
 #include "pong.h"
 #include "progressdots.h"
