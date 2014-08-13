@@ -42,7 +42,7 @@
 #include "multirom.h"
 #include "listview.h"
 
-#define SHOW_FPS_COUNTER
+//#define SHOW_FPS_COUNTER
 
 #if PIXEL_SIZE == 4
 #define fb_memset(dst, what, len) android_memset32(dst, what, len)
@@ -125,6 +125,55 @@ static void *fps_thread_work(void *data)
     return NULL;
 }
 #endif
+
+#define MAX_CAPTURE_FRAMES (14*30)
+static px_type *capture_data = NULL;
+static px_type *capture_end = NULL;
+static int capture_started = 1;
+static int capture_frames = 0;
+
+static void fb_alloc_capture(void)
+{
+    printf("Allocating %u bytes for capture...\n", fb.size*MAX_CAPTURE_FRAMES);
+    capture_data = malloc(fb.size*MAX_CAPTURE_FRAMES);
+    printf("Allocation res: %p\n", capture_data);
+    capture_end = capture_data;
+}
+
+static void fb_capture_add(void)
+{
+    if(!capture_started)
+        return;
+    memcpy(capture_end, fb.buffer, fb.size);
+    capture_end += fb.vi.xres_virtual*fb.vi.yres;
+    if(++capture_frames >= MAX_CAPTURE_FRAMES)
+    {
+        INFO("Capture ended\n");
+        printf("capture ended\n");
+        capture_started = 0;
+    }
+}
+
+void fb_capture_encode(void)
+{
+    int i = 0;
+    px_type *itr = capture_data;
+    char dest_path[128];
+    mkdir("/capture", 0777);
+    for(i = 0; i < capture_frames; ++i)
+    {
+        printf("\rEncoding frame %d/%d (%d%%)               ", i+1, capture_frames, (i*100)/capture_frames);
+        fflush(stdout);
+        snprintf(dest_path, sizeof(dest_path), "/capture/cap_%04d.png", i);
+        if(fb_png_save_img(dest_path, fb_width, fb_height, fb.stride, itr) < 0)
+        {
+            printf("\nFailed!\n");
+            break;
+        }
+        itr += fb.vi.xres_virtual*fb.vi.yres;
+    }
+    printf("\nAll frames were encoded\n");
+}
 
 int vt_set_mode(int graphics)
 {
@@ -229,6 +278,8 @@ int fb_open(int rotation)
     fb.size = fb.vi.xres_virtual*fb.vi.yres*PIXEL_SIZE;
     fb.buffer = malloc(fb.size);
     fb_memset(fb.buffer, fb_convert_color(BLACK), fb.size);
+
+    fb_alloc_capture();
 
 #if 0
     fb_dump_info();
@@ -938,6 +989,8 @@ static void fb_draw(void)
     }
     fb_batch_end();
 
+    fb_capture_add();
+
     pthread_mutex_lock(&fb_update_mutex);
     fb_update();
     pthread_mutex_unlock(&fb_update_mutex);
@@ -992,7 +1045,7 @@ void fb_pop_context(void)
     fb_request_draw();
 }
 
-#define SLEEP_CONST 16
+#define SLEEP_CONST 33
 void *fb_draw_thread_work(void *cookie)
 {
     struct timespec last, curr;
@@ -1015,6 +1068,7 @@ void *fb_draw_thread_work(void *cookie)
         }
         else
         {
+            fb_capture_add();
             pthread_mutex_unlock(&fb_draw_mutex);
 #ifdef MR_CONTINUOUS_FB_UPDATE
             pthread_mutex_lock(&fb_update_mutex);

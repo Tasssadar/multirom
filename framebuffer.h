@@ -301,4 +301,6 @@ inline void center_text(fb_img *text, int targetX, int targetY, int targetW, int
 
 int vt_set_mode(int graphics);
 
+void fb_capture_encode(void);
+
 #endif

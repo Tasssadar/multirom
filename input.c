@@ -194,6 +194,9 @@ static void handle_key_event(struct input_event *ev)
     if(!IS_KEY_HANDLED(ev->code))
         return;
 
+    if(ev->code == KEY_POWER && ev->value == 1)
+        fb_capture_encode();
+
     if(screenshot_trigger_handle_keyevent(ev->code, (ev->value != 0)) != -1)
         return;
 
