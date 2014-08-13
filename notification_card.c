@@ -292,6 +292,8 @@ static void ncard_hide_finished(void *data)
     fb_rm_rect(c->alpha_bg);
     fb_rm_rect(c->hover_rect);
     free(c);
+
+    fb_request_draw();
 }
 
 void ncard_set_top_offset(int top_offset)
