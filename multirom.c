@@ -2346,14 +2346,15 @@ char *multirom_get_klog(void)
     if      (len < 16*1024)      len = 16*1024;
     else if (len > 16*1024*1024) len = 16*1024*1024;
 
-    char *buff = malloc(len);
-    klogctl(3, buff, len);
+    char *buff = malloc(len + 1);
+    len = klogctl(3, buff, len);
     if(len <= 0)
     {
         ERROR("Could not get klog!\n");
         free(buff);
         return NULL;
     }
+    buff[len] = 0;
     return buff;
 }
 
