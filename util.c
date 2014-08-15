@@ -24,6 +24,7 @@
 #include <time.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #ifdef HAVE_SELINUX
 #include <selinux/label.h>
@@ -464,35 +465,68 @@ char *readlink_recursive(const char *link)
         return strdup(link);
 
     char path[256];
+    char cur_dir[256];
     char buff[256];
+    char *r;
     char *p = (char*)link;
+    char *res = NULL;
+    int dirfd = AT_FDCWD;
 
     while(S_ISLNK(info.st_mode))
     {
         if(info.st_size >= sizeof(path)-1)
         {
             ERROR("readlink_recursive(): Couldn't resolve, too long path.\n");
-            return NULL;
+            goto exit;
         }
 
-        if(readlink(p, buff, info.st_size) != info.st_size)
+        if(mrom_readlinkat(dirfd, p, buff, info.st_size) != info.st_size)
         {
             ERROR("readlink_recursive: readlink() failed on %s!\n", p);
-            return NULL;
+            goto exit;
+        }
+
+        if(dirfd != AT_FDCWD)
+        {
+            close(dirfd);
+            dirfd = AT_FDCWD;
+        }
+
+        r = strrchr(p, '/');
+        if(r)
+        {
+            memcpy(cur_dir, p, r - p);
+            cur_dir[r-p] = 0;
+            dirfd = open(cur_dir, O_DIRECTORY | O_CLOEXEC);
+            if(dirfd < 0)
+                dirfd = AT_FDCWD;
         }
 
         buff[info.st_size] = 0;
         strcpy(path, buff);
         p = path;
 
-        if(lstat(buff, &info) < 0)
+        if(fstatat(dirfd, p, &info, AT_SYMLINK_NOFOLLOW) < 0)
         {
             ERROR("readlink_recursive: couldn't do lstat on %s!\n", buff);
-            return NULL;
+            goto exit;
         }
     }
 
-    return strdup(buff);
+    // relative path
+    if(buff[0] == '/')
+        res = strdup(buff);
+    else
+    {
+        const int res_size = strlen(buff) + strlen(cur_dir) + 2;
+        res = malloc(res_size);
+        snprintf(res, res_size, "%s/%s", cur_dir, buff);
+    }
+
+exit:
+    if(dirfd != AT_FDCWD)
+        close(dirfd);
+    return res;
 }
 
 /* Check to see if /proc/mounts contains any writeable filesystems

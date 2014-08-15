@@ -49,6 +49,7 @@
 #include "rom_quirks.h"
 #include "kexec.h"
 #include "fw_mounter/fw_mounter_defines.h"
+#include "share.h"
 
 #define REALDATA "/realdata"
 #define BUSYBOX_BIN "busybox"
@@ -415,8 +416,6 @@ int multirom_default_status(struct multirom_status *s)
             ERROR("Skipping ROM %s, name is too long (max %d chars allowed)", dr->d_name, MAX_ROM_NAME_LEN);
             continue;
         }
-
-        INFO("Adding ROM %s\n", dr->d_name);
 
         struct multirom_rom *rom = malloc(sizeof(struct multirom_rom));
         memset(rom, 0, sizeof(struct multirom_rom));
@@ -960,6 +959,7 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     switch(type)
     {
         case ROM_DEFAULT:
+            share_setup(to_boot);
             rom_quirks_on_android_mounted_fs(to_boot);
             break;
         case ROM_LINUX_INTERNAL:
@@ -979,6 +979,7 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
                 if(multirom_create_media_link() == -1)
                     return -1;
 
+                share_setup(to_boot);
                 rom_quirks_on_android_mounted_fs(to_boot);
             }
 
