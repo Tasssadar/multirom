@@ -272,9 +272,14 @@ int copy_file(const char *from, const char *to)
 
 int write_file(const char *path, const char *value)
 {
+    return write_file2(path, value, 0);
+}
+
+int write_file2(const char *path, const char *value, int flags)
+{
     int fd, ret, len;
 
-    fd = open(path, O_WRONLY|O_CREAT|O_CLOEXEC, 0622);
+    fd = open(path, O_WRONLY|O_CREAT|O_CLOEXEC|flags, 0622);
 
     if (fd < 0)
     {

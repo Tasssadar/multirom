@@ -35,6 +35,7 @@ int wait_for_file(const char *filename, int timeout);
 int copy_file(const char *from, const char *to);
 int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const char *group);
 int write_file(const char *path, const char *value);
+int write_file2(const char *path, const char *value, int flags);
 int remove_dir(const char *dir);
 int run_cmd(char **cmd);
 char *run_get_stdout(char **cmd);
