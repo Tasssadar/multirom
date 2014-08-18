@@ -168,6 +168,8 @@ ifeq ($(MR_USE_QCOM_OVERLAY),true)
     LOCAL_SRC_FILES += framebuffer_qcom_overlay.c
 ifneq ($(MR_QCOM_OVERLAY_HEADER),)
     LOCAL_CFLAGS += -DMR_QCOM_OVERLAY_HEADER=\"../../../$(MR_QCOM_OVERLAY_HEADER)\"
+else
+    $(error MR_USE_QCOM_OVERLAY is true but MR_QCOM_OVERLAY_HEADER was not specified!)
 endif
 endif
 
