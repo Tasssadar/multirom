@@ -166,7 +166,7 @@ static struct glyphs_entry *get_cache_for_size(const int style, const int size)
             return NULL;
         }
 
-        error = FT_Set_Char_Size(res->face, 0, size*64, MR_DPI_FONT, MR_DPI_FONT);
+        error = FT_Set_Char_Size(res->face, 0, size*16, MR_DPI_FONT, MR_DPI_FONT);
         if(error)
         {
             ERROR("failed to set font size with %d\n", error);

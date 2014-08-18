@@ -99,12 +99,13 @@ enum
 #define GRAY      0xFF7F7F7F
 #define DRED      0xFFCC0000
 
+// Font sizes in 1/4 of a point
 enum
 {
-    SIZE_SMALL     = 7,
-    SIZE_NORMAL    = 10,
-    SIZE_BIG       = 13,
-    SIZE_EXTRA     = 15,
+    SIZE_SMALL     = (7*4),
+    SIZE_NORMAL    = (10*4),
+    SIZE_BIG       = (13*4),
+    SIZE_EXTRA     = (15*4),
 };
 
 extern uint32_t fb_width;
