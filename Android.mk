@@ -166,6 +166,9 @@ endif
 ifeq ($(MR_USE_QCOM_OVERLAY),true)
     LOCAL_CFLAGS += -DMR_USE_QCOM_OVERLAY
     LOCAL_SRC_FILES += framebuffer_qcom_overlay.c
+ifneq ($(MR_QCOM_OVERLAY_HEADER),)
+    LOCAL_CFLAGS += -DMR_QCOM_OVERLAY_HEADER=\"../../../$(MR_QCOM_OVERLAY_HEADER)\"
+endif
 endif
 
 ifeq ($(MR_CONTINUOUS_FB_UPDATE),true)
