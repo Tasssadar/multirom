@@ -30,7 +30,9 @@
 #include "log.h"
 #include "util.h"
 
-#include "framebuffer_qcom_overlay.h"
+#ifdef MR_QCOM_OVERLAY_HEADER
+#include MR_QCOM_OVERLAY_HEADER
+#endif
 
 #define ALIGN(x, align) (((x) + ((align)-1)) & ~((align)-1))
 
