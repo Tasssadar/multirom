@@ -524,8 +524,9 @@ void listview_update_keyact_frame(listview *view)
 #define ROM_ITEM_SHADOW (7*DPI_MUL)
 #define ROM_ITEM_SEL_W (8*DPI_MUL)
 #define ROM_ICON_H (70*DPI_MUL)
-#define ROM_TEXT_PADDING (130*DPI_MUL)
-#define ROM_ICON_PADDING (ROM_TEXT_PADDING/2 - ROM_ICON_H/2)
+#define ROM_TEXT_PADDING_L (120*DPI_MUL)
+#define ROM_TEXT_PADDING_R ((ROM_TEXT_PADDING_L - ROM_ICON_H)/2)
+#define ROM_ICON_PADDING (ROM_TEXT_PADDING_L/2 - ROM_ICON_H/2)
 
 typedef struct
 {
@@ -651,12 +652,12 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
         d->last_x = x;
         d->last_y = y;
 
-        fb_text_proto *p = fb_text_create(x+ROM_TEXT_PADDING, 0, C_TEXT, d->rom_name_size, d->text);
+        fb_text_proto *p = fb_text_create(x+ROM_TEXT_PADDING_L, 0, C_TEXT, d->rom_name_size, d->text);
         p->style = STYLE_CONDENSED;
         d->text_it = fb_text_finalize(p);
         d->text_it->parent = it->parent_rect;
 
-        while(d->text_it->w + ROM_TEXT_PADDING >= w && d->rom_name_size > 3)
+        while((d->text_it->w + ROM_TEXT_PADDING_L) >= (w - ROM_TEXT_PADDING_R) && d->rom_name_size > 3)
             fb_text_set_size(d->text_it, --d->rom_name_size);
 
         if(d->icon_path)
@@ -667,7 +668,7 @@ void rom_item_draw(int x, int y, int w, listview_item *it)
 
         if(d->partition)
         {
-            d->part_it = fb_add_text(x+ROM_TEXT_PADDING, 0, C_TEXT_SECONDARY, SIZE_SMALL, d->partition);
+            d->part_it = fb_add_text(x+ROM_TEXT_PADDING_L, 0, C_TEXT_SECONDARY, SIZE_SMALL, d->partition);
             d->part_it->parent = it->parent_rect;
         }
     }
