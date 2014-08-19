@@ -130,11 +130,15 @@ static int allocate_overlay(struct fb_qcom_overlay_data *data, int fd, int width
     overlay.src.width  = ALIGN(width, 32);
     overlay.src.height = height;
 
+#ifdef MR_QCOM_OVERLAY_CUSTOM_PIXEL_FORMAT
+    overlay.src.format = MR_QCOM_OVERLAY_CUSTOM_PIXEL_FORMAT;
+#else
     /* We can't set format here because their IDs are different on aosp and CM kernels.
      * There is literally just one line different between their headers, and it breaks it.
      * MDP_FB_FORMAT works because it translates to MDP_IMGTYPE2_START, which is the same
      * on both. It means it will take the format from the framebuffer. */
     overlay.src.format = MDP_FB_FORMAT;
+#endif
 
     overlay.src_rect.w = width;
     overlay.src_rect.h = height;
