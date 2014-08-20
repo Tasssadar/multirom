@@ -60,6 +60,8 @@ LOCAL_C_INCLUDES += system/extras/libbootimg/include
 # Init default define values
 MULTIROM_DEFAULT_ROTATION := 0
 
+LOCAL_CFLAGS += -DMR_LOG_TAG=\"multirom\"
+
 # This value is used to have different folders on USB drives
 # for different devices. Grouper didn't have that, hence the hack
 LOCAL_CFLAGS += -DTARGET_DEVICE="\"$(TARGET_DEVICE)\""

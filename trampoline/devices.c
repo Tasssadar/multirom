@@ -47,7 +47,7 @@
 
 #include "devices.h"
 #include "../util.h"
-#include "log.h"
+#include "../log.h"
 
 //#define DEBUG_MISSING_UEVENTS 1
 
