@@ -30,7 +30,7 @@
 
 #include "adb.h"
 #include "../util.h"
-#include "log.h"
+#include "../log.h"
 
 static pthread_t adb_thread;
 static volatile int run_thread = 0;

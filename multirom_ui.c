@@ -175,8 +175,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
         if(loop_act & LOOP_UPDATE_USB)
         {
             multirom_find_usb_roms(mrom_status);
-            if(themes_info->data->selected_tab == TAB_USB)
-                multirom_ui_tab_rom_update_usb(themes_info->data->tab_data);
+            multirom_ui_tab_rom_update_usb();
             loop_act &= ~(LOOP_UPDATE_USB);
         }
 
@@ -589,15 +588,15 @@ void multirom_ui_tab_rom_boot_btn(int action)
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-void multirom_ui_tab_rom_update_usb(void *data)
+void multirom_ui_tab_rom_update_usb(void)
 {
-    tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data;
+    tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data[TAB_USB];
     listview_clear(t->list);
 
     multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
     listview_update_ui(t->list);
 
-    multirom_ui_tab_rom_set_empty(data, (int)(t->list->items == NULL));
+    multirom_ui_tab_rom_set_empty(t, (int)(t->list->items == NULL));
     fb_request_draw();
 }
 
@@ -635,6 +634,7 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
     else if(!empty && t->usb_text)
     {
         tabview_rm_item(themes_info->data->tabs, TAB_USB, t->usb_prog->rect);
+        tabview_rm_item(themes_info->data->tabs, TAB_USB, t->usb_prog);
         progdots_destroy(t->usb_prog);
         t->usb_prog = NULL;
 
