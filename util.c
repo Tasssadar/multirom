@@ -672,6 +672,27 @@ char *strtoupper(const char *str)
     return res;
 }
 
+inline char *strdup_safe(const char *str)
+{
+    return str ? strdup(str) : NULL;
+}
+
+char *strset(char *orig, const char *new_str)
+{
+    if(!new_str)
+    {
+        if(orig)
+            free(orig);
+        return NULL;
+    }
+    else
+    {
+        orig = realloc(orig, strlen(new_str)+1);
+        strcpy(orig, new_str);
+        return orig;
+    }
+}
+
 int create_loop_device(const char *dev_path, const char *img_path, int loop_num, int loop_chmod)
 {
     int file_fd, device_fd, res = -1;

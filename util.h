@@ -56,6 +56,8 @@ inline int in_rect(int x, int y, int rx, int ry, int rw, int rh);
 
 inline void *mzalloc(size_t size); // alloc and fill with 0s
 char *strtoupper(const char *str);
+inline char *strdup_safe(const char *str);
+char *strset(char *orig, const char *new_str);
 
 extern int mrom_readlinkat(int, const char *, char *, size_t);
 
