@@ -17,6 +17,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -34,7 +35,9 @@
 #include MR_QCOM_OVERLAY_HEADER
 #endif
 
+#define MDP_V4_0 400
 #define ALIGN(x, align) (((x) + ((align)-1)) & ~((align)-1))
+#define FB_PATH "/sys/class/graphics/fb0/name"
 
 struct fb_qcom_overlay_data {
     int overlay_id;
@@ -44,6 +47,119 @@ struct fb_qcom_overlay_data {
     int mem_fd;
     struct ion_handle_data handle_data;
 };
+
+static struct framebuffer fb;
+
+//Left and right overlay id
+static int overlayL_id = MSMFB_NEW_REQUEST;
+static int overlayR_id = MSMFB_NEW_REQUEST;
+static bool isMDP5 = false;
+
+static int map_mdp_pixel_format()
+{
+    int format;
+#ifdef MR_QCOM_OVERLAY_CUSTOM_PIXEL_FORMAT
+    format = MR_QCOM_OVERLAY_CUSTOM_PIXEL_FORMAT;
+#else
+    /* We can't set format here because their IDs are different on aosp and CM kernels.
+     * There is literally just one line different between their headers, and it breaks it.
+     * MDP_FB_FORMAT works because it translates to MDP_IMGTYPE2_START, which is the same
+     * on both. It means it will take the format from the framebuffer. */
+    format = MDP_FB_FORMAT;
+#endif
+    return format;
+}
+
+#define MAX_DISPLAY_DIM  2048
+
+static int leftSplit = 0;
+static int rightSplit = 0;
+
+static void setDisplaySplit() {
+    char split[64] = {0};
+    FILE* fp = fopen("/sys/class/graphics/fb0/msm_fb_split", "r");
+    if (fp) {
+        //Format "left right" space as delimiter
+        if(fread(split, sizeof(char), 64, fp)) {
+            leftSplit = atoi(split);
+            INFO("Left Split=%d\n",leftSplit);
+            char *rght = strpbrk(split, " ");
+            if (rght)
+                rightSplit = atoi(rght + 1);
+            INFO("Right Split=%d\n", rightSplit);
+        }
+    } else {
+        ERROR("Failed to open mdss_fb_split node\n");
+    }
+    if (fp)
+        fclose(fp);
+}
+
+static int getLeftSplit() {
+   //Default even split for all displays with high res
+   int lSplit = fb_width / 2;
+
+   //Override if split published by driver
+   if (leftSplit)
+       lSplit = leftSplit;
+
+   return lSplit;
+}
+
+static int getRightSplit() {
+   return rightSplit;
+}
+
+static bool isDisplaySplit() {
+    if (fb_width > MAX_DISPLAY_DIM)
+        return true;
+    //check if right split is set by driver
+    if (getRightSplit())
+        return true;
+
+    return false;
+}
+
+static int getFbXres() {
+    return fb_width;
+}
+
+static int getFbYres() {
+    return fb_height;
+}
+
+bool target_has_overlay()
+{
+    bool ret = false;
+    char version[32];
+    char str_ver[4];
+    int len = 0;
+    int fd = open(FB_PATH, O_RDONLY);
+
+    if (fd < 0)
+        return false;
+
+    if ((len = read(fd, version, 31)) >= 0) {
+        version[len] = '\0';
+    }
+    close(fd);
+
+    if (len >= 8) {
+        if (!strncmp(version, "mdssfb", strlen("mdssfb"))) {
+            ret = true;
+            isMDP5 = true;
+        }
+    }
+
+    return ret;
+}
+
+static bool isTargetMdp5() {
+    if (isMDP5)
+        return true;
+
+    return false;
+}
 
 static int free_ion_mem(struct fb_qcom_overlay_data *data)
 {
@@ -120,41 +236,101 @@ static int alloc_ion_mem(struct fb_qcom_overlay_data *data, unsigned int size)
 
 static int allocate_overlay(struct fb_qcom_overlay_data *data, int fd, int width, int height)
 {
-    struct mdp_overlay overlay;
     int ret = 0;
 
-    memset(&overlay, 0 , sizeof (struct mdp_overlay));
+    if (!isDisplaySplit()) {
+        // Check if overlay is already allocated
+        if (MSMFB_NEW_REQUEST == overlayL_id) {
+            struct mdp_overlay overlayL;
 
-    /* Fill Overlay Data */
+            memset(&overlayL, 0 , sizeof (struct mdp_overlay));
 
-    overlay.src.width  = ALIGN(width, 32);
-    overlay.src.height = height;
+            /* Fill Overlay Data */
+            overlayL.src.width  = ALIGN(width, 32);
+            overlayL.src.height = height;
+            overlayL.src.format = map_mdp_pixel_format();
+            overlayL.src_rect.w = width;
+            overlayL.src_rect.h = height;
+            overlayL.dst_rect.w = width;
+            overlayL.dst_rect.h = height;
+            overlayL.alpha = 0xFF;
+            overlayL.transp_mask = MDP_TRANSP_NOP;
+            overlayL.id = MSMFB_NEW_REQUEST;
+            ret = ioctl(fd, MSMFB_OVERLAY_SET, &overlayL);
+            if (ret < 0)
+            {
+                ERROR("Overlay Set Failed");
+                return ret;
+            }
+            overlayL_id = overlayL.id;
+        }
+    } else {
+        float xres = getFbXres();
+        int lSplit = getLeftSplit();
+        float lSplitRatio = lSplit / xres;
+        float lCropWidth = width * lSplitRatio;
+        int lWidth = lSplit;
+        int rWidth = width - lSplit;
+        int height = height;
 
-#ifdef MR_QCOM_OVERLAY_CUSTOM_PIXEL_FORMAT
-    overlay.src.format = MR_QCOM_OVERLAY_CUSTOM_PIXEL_FORMAT;
-#else
-    /* We can't set format here because their IDs are different on aosp and CM kernels.
-     * There is literally just one line different between their headers, and it breaks it.
-     * MDP_FB_FORMAT works because it translates to MDP_IMGTYPE2_START, which is the same
-     * on both. It means it will take the format from the framebuffer. */
-    overlay.src.format = MDP_FB_FORMAT;
-#endif
+        if (MSMFB_NEW_REQUEST == overlayL_id) {
 
-    overlay.src_rect.w = width;
-    overlay.src_rect.h = height;
-    overlay.dst_rect.w = width;
-    overlay.dst_rect.h = height;
-    overlay.alpha = 0xFF;
-    overlay.transp_mask = MDP_TRANSP_NOP;
-    overlay.id = MSMFB_NEW_REQUEST;
-    ret = ioctl(fd, MSMFB_OVERLAY_SET, &overlay);
-    if (ret < 0)
-    {
-        ERROR("Overlay Set Failed");
-        return ret;
+            struct mdp_overlay overlayL;
+
+            memset(&overlayL, 0 , sizeof (struct mdp_overlay));
+
+            /* Fill OverlayL Data */
+            overlayL.src.width  = ALIGN(width, 32);
+            overlayL.src.height = height;
+            overlayL.src.format = map_mdp_pixel_format();
+            overlayL.src_rect.x = 0;
+            overlayL.src_rect.y = 0;
+            overlayL.src_rect.w = lCropWidth;
+            overlayL.src_rect.h = height;
+            overlayL.dst_rect.x = 0;
+            overlayL.dst_rect.y = 0;
+            overlayL.dst_rect.w = lWidth;
+            overlayL.dst_rect.h = height;
+            overlayL.alpha = 0xFF;
+            overlayL.transp_mask = MDP_TRANSP_NOP;
+            overlayL.id = MSMFB_NEW_REQUEST;
+            ret = ioctl(fd, MSMFB_OVERLAY_SET, &overlayL);
+            if (ret < 0) {
+                ERROR("OverlayL Set Failed");
+                return ret;
+            }
+            overlayL_id = overlayL.id;
+        }
+        if (MSMFB_NEW_REQUEST == overlayR_id) {
+            struct mdp_overlay overlayR;
+
+            memset(&overlayR, 0 , sizeof (struct mdp_overlay));
+
+            /* Fill OverlayR Data */
+            overlayR.src.width  = ALIGN(width, 32);
+            overlayR.src.height = height;
+            overlayR.src.format = map_mdp_pixel_format();
+            overlayR.src_rect.x = lCropWidth;
+            overlayR.src_rect.y = 0;
+            overlayR.src_rect.w = width - lCropWidth;
+            overlayR.src_rect.h = height;
+            overlayR.dst_rect.x = 0;
+            overlayR.dst_rect.y = 0;
+            overlayR.dst_rect.w = rWidth;
+            overlayR.dst_rect.h = height;
+            overlayR.alpha = 0xFF;
+            overlayR.flags = MDSS_MDP_RIGHT_MIXER;
+            overlayR.transp_mask = MDP_TRANSP_NOP;
+            overlayR.id = MSMFB_NEW_REQUEST;
+            ret = ioctl(fd, MSMFB_OVERLAY_SET, &overlayR);
+            if (ret < 0) {
+                ERROR("OverlayR Set Failed");
+                return ret;
+            }
+            overlayR_id = overlayR.id;
+        }
     }
 
-    data->overlay_id = overlay.id;
     return 0;
 }
 
@@ -163,29 +339,52 @@ static int free_overlay(struct fb_qcom_overlay_data *data, int fd)
     int ret = 0;
     struct mdp_display_commit ext_commit;
 
-    if (data->overlay_id != MSMFB_NEW_REQUEST)
-    {
-        ret = ioctl(fd, MSMFB_OVERLAY_UNSET, &data->overlay_id);
-        if (ret)
+    if (!isDisplaySplit()) {
+        if (overlayL_id != MSMFB_NEW_REQUEST)
         {
-            ERROR("Overlay Unset Failed");
-            data->overlay_id = MSMFB_NEW_REQUEST;
-            return ret;
+            ret = ioctl(fd, MSMFB_OVERLAY_UNSET, &overlayL_id);
+            if (ret)
+            {
+                ERROR("OverlayL Unset Failed");
+                overlayL_id = MSMFB_NEW_REQUEST;
+                return ret;
+            }
+        }
+    } else {
+        if (overlayL_id != MSMFB_NEW_REQUEST) {
+            ret = ioctl(fd, MSMFB_OVERLAY_UNSET, &overlayL_id);
+            if (ret)
+            {
+                ERROR("OverlayL Unset Failed");
+                overlayL_id = MSMFB_NEW_REQUEST;
+                return ret;
+            }
         }
 
-        memset(&ext_commit, 0, sizeof(struct mdp_display_commit));
-        ext_commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
-        ext_commit.wait_for_finish = 1;
-        ret = ioctl(fd, MSMFB_DISPLAY_COMMIT, &ext_commit);
-        if (ret < 0)
-        {
-            ERROR("ERROR: Clear MSMFB_DISPLAY_COMMIT failed!");
-            data->overlay_id = MSMFB_NEW_REQUEST;
-            return ret;
+        if (overlayR_id != MSMFB_NEW_REQUEST) {
+            ret = ioctl(fd, MSMFB_OVERLAY_UNSET, &overlayR_id);
+            if (ret)
+            {
+                ERROR("OverlayR Unset Failed");
+                overlayR_id = MSMFB_NEW_REQUEST;
+                return ret;
+            }
         }
-
-        data->overlay_id = MSMFB_NEW_REQUEST;
     }
+    memset(&ext_commit, 0, sizeof(struct mdp_display_commit));
+    ext_commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+    ext_commit.wait_for_finish = 1;
+    ret = ioctl(fd, MSMFB_DISPLAY_COMMIT, &ext_commit);
+    if (ret < 0)
+    {
+        ERROR("Clear MSMFB_DISPLAY_COMMIT failed!");
+        overlayL_id = MSMFB_NEW_REQUEST;
+        overlayR_id = MSMFB_NEW_REQUEST;
+        return ret;
+    }
+    overlayL_id = MSMFB_NEW_REQUEST;
+    overlayR_id = MSMFB_NEW_REQUEST;
+
     return 0;
 }
 
@@ -193,6 +392,9 @@ static int impl_open(struct framebuffer *fb)
 {
     struct fb_qcom_overlay_data *data = mzalloc(sizeof(struct fb_qcom_overlay_data));
     data->overlay_id = MSMFB_NEW_REQUEST;
+	
+    if (fb_start() < 0)
+        goto fail;
 
     if (alloc_ion_mem(data, fb->fi.line_length * fb->vi.yres) < 0)
         goto fail;
@@ -223,29 +425,65 @@ static void impl_close(struct framebuffer *fb)
 static int impl_update(struct framebuffer *fb)
 {
     int ret = 0;
-    struct msmfb_overlay_data ovdata;
+    struct msmfb_overlay_data ovdataL, ovdataR;
     struct mdp_display_commit ext_commit;
     struct fb_qcom_overlay_data *data = fb->impl_data;
 
-    if (data->overlay_id == MSMFB_NEW_REQUEST)
-    {
-        ERROR("display_frame failed, no overlay\n");
-        return -1;
+    if (!isDisplaySplit()) {
+        if (overlayL_id == MSMFB_NEW_REQUEST)
+        {
+            ERROR("display_frame failed, no overlay\n");
+            return -EINVAL;
+        }
+
+        memset(&ovdataL, 0, sizeof(struct msmfb_overlay_data));
+
+        ovdataL.id = overlayL_id;
+        ovdataL.data.flags = 0;
+        ovdataL.data.offset = 0;
+        ovdataL.data.memory_id = data->mem_fd;
+        ret = ioctl(fb->fd, MSMFB_OVERLAY_PLAY, &ovdataL);
+        if (ret < 0)
+        {
+            ERROR("overlay_display_frame failed, overlay play Failed\n");
+            return -1;
+        }
+    } else {
+
+        if (overlayL_id == MSMFB_NEW_REQUEST) {
+            ERROR("display_frame failed, no overlayL \n");
+            return -EINVAL;
+        }
+
+        memset(&ovdataL, 0, sizeof(struct msmfb_overlay_data));
+
+        ovdataL.id = overlayL_id;
+        ovdataL.data.flags = 0;
+        ovdataL.data.offset = 0;
+        ovdataL.data.memory_id = data->mem_fd;
+        ret = ioctl(fb->fd, MSMFB_OVERLAY_PLAY, &ovdataL);
+        if (ret < 0) {
+            ERROR("overlay_display_frame failed, overlayL play Failed\n");
+            return ret;
+        }
+
+        if (overlayR_id == MSMFB_NEW_REQUEST) {
+            ERROR("display_frame failed, no overlayR \n");
+            return -EINVAL;
+        }
+
+        memset(&ovdataR, 0, sizeof(struct msmfb_overlay_data));
+
+        ovdataR.id = overlayR_id;
+        ovdataR.data.flags = 0;
+        ovdataR.data.offset = 0;
+        ovdataR.data.memory_id = data->mem_fd;
+        ret = ioctl(fb->fd, MSMFB_OVERLAY_PLAY, &ovdataR);
+        if (ret < 0) {
+            ERROR("overlay_display_frame failed, overlayR play Failed\n");
+            return ret;
+        }
     }
-
-    memset(&ovdata, 0, sizeof(struct msmfb_overlay_data));
-
-    ovdata.id = data->overlay_id;
-    ovdata.data.flags = 0;
-    ovdata.data.offset = 0;
-    ovdata.data.memory_id = data->mem_fd;
-    ret = ioctl(fb->fd, MSMFB_OVERLAY_PLAY, &ovdata);
-    if (ret < 0)
-    {
-        ERROR("overlay_display_frame failed, overlay play Failed\n");
-        return -1;
-    }
-
     memset(&ext_commit, 0, sizeof(struct mdp_display_commit));
     ext_commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
     ext_commit.wait_for_finish = 1;
@@ -256,13 +494,39 @@ static int impl_update(struct framebuffer *fb)
         return -1;
     }
 
-    return 0;
+    return ret;
 }
 
 static void *impl_get_frame_dest(struct framebuffer *fb)
 {
     struct fb_qcom_overlay_data *data = fb->impl_data;
     return data->mem_buf;
+}
+
+int fb_start()
+{
+    memset(&fb, 0, sizeof(struct framebuffer));
+
+    fb.fd = open("/dev/graphics/fb0", O_RDWR | O_CLOEXEC);
+    if (fb.fd < 0)
+        return -1;
+
+    if(ioctl(fb.fd, FBIOGET_VSCREENINFO, &fb.vi) < 0)
+        goto fail;
+
+    if(ioctl(fb.fd, FBIOGET_FSCREENINFO, &fb.fi) < 0)
+        goto fail;
+
+    if (target_has_overlay())
+        setDisplaySplit();
+
+    fb_width = fb.vi.xres;
+    fb_height = fb.vi.yres;
+    return 0;
+
+fail:
+    close(fb.fd);
+    return -1;
 }
 
 const struct fb_impl fb_impl_qcom_overlay = {
