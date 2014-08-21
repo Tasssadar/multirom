@@ -17,7 +17,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -35,9 +34,7 @@
 #include MR_QCOM_OVERLAY_HEADER
 #endif
 
-#define MDP_V4_0 400
 #define ALIGN(x, align) (((x) + ((align)-1)) & ~((align)-1))
-#define FB_PATH "/sys/class/graphics/fb0/name"
 
 struct fb_qcom_overlay_data {
     int overlay_id;
@@ -48,12 +45,9 @@ struct fb_qcom_overlay_data {
     struct ion_handle_data handle_data;
 };
 
-static struct framebuffer fb;
-
 //Left and right overlay id
 static int overlayL_id = MSMFB_NEW_REQUEST;
 static int overlayR_id = MSMFB_NEW_REQUEST;
-static bool isMDP5 = false;
 
 static int map_mdp_pixel_format()
 {
@@ -110,14 +104,14 @@ static int getRightSplit() {
    return rightSplit;
 }
 
-static bool isDisplaySplit() {
+static int isDisplaySplit() {
     if (fb_width > MAX_DISPLAY_DIM)
-        return true;
+        return 1;
     //check if right split is set by driver
     if (getRightSplit())
-        return true;
+        return 1;
 
-    return false;
+    return 0;
 }
 
 static int getFbXres() {
@@ -126,39 +120,6 @@ static int getFbXres() {
 
 static int getFbYres() {
     return fb_height;
-}
-
-bool target_has_overlay()
-{
-    bool ret = false;
-    char version[32];
-    char str_ver[4];
-    int len = 0;
-    int fd = open(FB_PATH, O_RDONLY);
-
-    if (fd < 0)
-        return false;
-
-    if ((len = read(fd, version, 31)) >= 0) {
-        version[len] = '\0';
-    }
-    close(fd);
-
-    if (len >= 8) {
-        if (!strncmp(version, "mdssfb", strlen("mdssfb"))) {
-            ret = true;
-            isMDP5 = true;
-        }
-    }
-
-    return ret;
-}
-
-static bool isTargetMdp5() {
-    if (isMDP5)
-        return true;
-
-    return false;
 }
 
 static int free_ion_mem(struct fb_qcom_overlay_data *data)
@@ -393,8 +354,10 @@ static int impl_open(struct framebuffer *fb)
     struct fb_qcom_overlay_data *data = mzalloc(sizeof(struct fb_qcom_overlay_data));
     data->overlay_id = MSMFB_NEW_REQUEST;
 	
-    if (fb_start() < 0)
-        goto fail;
+    fb_width = fb->vi.xres;
+    fb_height = fb->vi.yres;
+
+    setDisplaySplit();
 
     if (alloc_ion_mem(data, fb->fi.line_length * fb->vi.yres) < 0)
         goto fail;
@@ -501,32 +464,6 @@ static void *impl_get_frame_dest(struct framebuffer *fb)
 {
     struct fb_qcom_overlay_data *data = fb->impl_data;
     return data->mem_buf;
-}
-
-int fb_start()
-{
-    memset(&fb, 0, sizeof(struct framebuffer));
-
-    fb.fd = open("/dev/graphics/fb0", O_RDWR | O_CLOEXEC);
-    if (fb.fd < 0)
-        return -1;
-
-    if(ioctl(fb.fd, FBIOGET_VSCREENINFO, &fb.vi) < 0)
-        goto fail;
-
-    if(ioctl(fb.fd, FBIOGET_FSCREENINFO, &fb.fi) < 0)
-        goto fail;
-
-    if (target_has_overlay())
-        setDisplaySplit();
-
-    fb_width = fb.vi.xres;
-    fb_height = fb.vi.yres;
-    return 0;
-
-fail:
-    close(fb.fd);
-    return -1;
 }
 
 const struct fb_impl fb_impl_qcom_overlay = {
