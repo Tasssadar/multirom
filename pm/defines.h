@@ -50,4 +50,8 @@ enum
     BASEPERM_TYPE_DYNAMIC = 2
 };
 
+#define PRIVILEGED_APP_PATH "/system/priv-app/"
+#define PRIVILEGED_APP_PATH_U ((const xmlChar*)PRIVILEGED_APP_PATH)
+#define PRIVILEGED_APP_PATH_LEN 17
+
 #endif

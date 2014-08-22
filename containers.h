@@ -54,20 +54,24 @@ int map_find(map *m, const char *key);
 void *map_get_val(map *m, const char *key);
 void *map_get_ref(map *m, const char *key);
 
-typedef struct
-{
-    int *keys;
-    void **values;
-    size_t size;
-} imap;
+#define BASETYPE_MAP_DECL(name, type) \
+    typedef struct \
+    { \
+        type *keys; \
+        void **values; \
+        size_t size; \
+    } name; \
+    name *name_create(void); \
+    void name_destroy(name *m, void (*destroy_callback)(void*)); \
+    void name_clear(name *m, void (*destroy_callback)(void*)); \
+    void name_add(name *m, type key, void *val, void (*destroy_callback)(void*)); \
+    void name_add_not_exist(name *m, type key, void *val); \
+    void name_rm(name *m, type key, void (*destroy_callback)(void*)); \
+    int name_find(name *m, type key); \
+    void *name_get_val(name *m, type key); \
+    void *name_get_ref(name *m, type key);
 
-imap *imap_create(void);
-void imap_destroy(imap *m, void (*destroy_callback)(void*));
-void imap_add(imap *m, int key, void *val, void (*destroy_callback)(void*));
-void imap_add_not_exist(imap *m, int key, void *val);
-void imap_rm(imap *m, int key, void (*destroy_callback)(void*));
-int imap_find(imap *m, int key);
-void *imap_get_val(imap *m, int key);
-void *imap_get_ref(imap *m, int key);
+BASETYPE_MAP_DECL(imap, int);
+BASETYPE_MAP_DECL(i64map, int64_t);
 
 #endif

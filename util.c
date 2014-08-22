@@ -781,3 +781,11 @@ int mount_image(const char *src, const char *dst, const char *fs, int flags, con
 
     return res;
 }
+
+int64_t get_mtime_ms(const char *path)
+{
+    struct stat info;
+    if(stat(path, &info) < 0)
+        return -1;
+    return info.st_mtime + info.st_mtime_nsec / 1000000;
+}

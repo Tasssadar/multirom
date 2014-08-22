@@ -21,6 +21,8 @@
 #include <libxml/hash.h>
 #include <libxml/dict.h>
 
+#include "../containers.h"
+
 struct pkg_key_set_data
 {
     int64_t *signingKeySets;
@@ -32,6 +34,7 @@ struct pkg_key_set_data
 
 struct pkg_key_set_data *pkg_key_set_data_create(void);
 void pkg_key_set_data_destroy(struct pkg_key_set_data *pksd);
+struct pkg_key_set_data *pkg_key_set_data_clone(struct pkg_key_set_data *base);
 void pkg_key_set_data_add_signing_key_set(struct pkg_key_set_data *pksd, int64_t ks);
 void pkg_key_set_data_add_defined_key_set(struct pkg_key_set_data *pksd, int64_t ks, const xmlChar *alias);
 
@@ -64,12 +67,32 @@ struct pkg_user_state
 
     char *lastDisableAppCaller;
 
-    xmlDict *disabledComponents;
-    xmlDict *enabledComponents;
+    xmlHashTable *disabledComponents;
+    xmlHashTable *enabledComponents;
 };
 
 struct pkg_user_state *pkg_user_state_create(void);
 void pkg_user_state_destroy(struct pkg_user_state *st);
+struct pkg_user_state *pkg_user_state_clone(struct pkg_user_state *base);
+
+
+struct shared_user_setting
+{
+    char *name;
+    int userId;
+    int uidFlags;
+    int pkgFlags;
+    xmlHashTable *grantedPermissions;
+    int *gids;
+    int gids_size;
+    struct pkg_setting **packages;
+    struct signatures *signatures;
+};
+
+struct shared_user_setting *shared_user_setting_create(const char *name, int pkgFlags);
+void shared_user_setting_destroy(struct shared_user_setting *sus);
+void shared_user_setting_set_flags(struct shared_user_setting *sus, int pkgFlags);
+void shared_user_setting_add_package(struct shred_user_setting *sus, struct pkg_setting *pkg);
 
 struct pkg_setting
 {
@@ -81,7 +104,7 @@ struct pkg_setting
     char *installerPackageName;
     int versionCode;
     int pkgFlags;
-    xmlDict *grantedPermissions;
+    xmlHashTable *grantedPermissions;
     int appId;
     int sharedId;
     int64_t timeStamp;
@@ -93,6 +116,11 @@ struct pkg_setting
     struct pkg_signatures *signatures;
     int permissionsFixed;
     struct pkg_key_set_data *keySetData;
+    struct shared_user_setting *sharedUser;
+    struct pkg_setting *origPackage;
+    int *gids;
+    int gids_size;
+    int haveGids;
 };
 
 struct pkg_setting *pkg_setting_create(const char *name, const char *realName, const char *codePath, const char *resourcePath, const char *nativeLibraryPath, int pVersionCode, int pkgFlags);
@@ -101,6 +129,11 @@ void pkg_setting_destroy(struct pkt_setting *ps);
 void pkg_setting_set_enabled(struct pkg_setting *ps, int state, int userId, xmlChar *callingPackage);
 void pkg_setting_add_disabled_component(struct pkg_setting *ps, const xmlChar *name, int userId);
 void pkg_setting_add_enabled_component(struct pkg_setting *ps, const xmlChar *name, int userId);
+xmlHashTable *pkg_setting_get_enabled_components(struct pkg_setting *ps, int userId);
+xmlHashTable *pkg_setting_get_disabled_components(struct pkg_setting *ps, int userId);
+void pkg_setting_set_enabled_components_copy(struct pkg_setting *ps, xmlHashTable *components, int userId);
+void pkg_setting_set_disabled_components_copy(struct pkg_setting *ps, xmlHashTable *components, int userId);
+
 
 struct perm_info
 {
@@ -131,25 +164,43 @@ struct base_perm *base_perm_create(const char *name, const char *sourcePackage, 
 void base_perm_destroy(struct base_perm *perm);
 int base_perm_fix_protection_level(int level);
 
-struct shared_user_setting
+struct pkg_clean_item
 {
-    char *name;
     int userId;
-    int uidFlags;
-    int pkgFlags;
-    xmlDict *grantedPermissions;
-    int *gids;
-    int gids_size;
-    struct pkg_setting **packages;
-    struct signatures *signatures;
+    char *packageName;
+    int andCode;
 };
 
-struct shared_user_setting *shared_user_setting_create(const char *name, int pkgFlags);
-void shared_user_setting_destroy(struct shared_user_setting *sus);
-void shared_user_setting_set_flags(struct shared_user_setting *sus, int pkgFlags);
+struct pkg_clean_item pkg_clean_item_create(int userId, const char *packageName, int andCode);
+void pkg_clean_item_destroy(struct pkg_clean_item *pci);
+void pkg_clean_item_equals(struct pkg_clean_item *pci1, struct pkg_clean_item *pci2);
+
+struct verifier_device_id
+{
+    int64_t identity;
+    char *identityString;
+};
+
+struct verifier_device_id *verifier_device_id_parse(const xmlChar *text);
+void verifier_device_id_destroy(struct verifier_device_id *vdi);
+
+struct key_set_mgr
+{
+    i64map *key_sets;
+    i64map *public_keys;
+    i64map *key_set_mapping;
+    xmlHashTable *packages;
+    int64_t lastIssuedKeySetId;
+    int64_t lastIssuedKeyId;
+};
+
+struct key_set_mgr *key_set_mgr_create(xmlHashTable *packages);
+void key_set_mgr_destroy(struct key_set_mgr *mgr);
+void key_set_mgr_read(struct key_set_mgr *mgr, xmlNode *node);
 
 struct pm_settings {
     xmlHashTable *packages;
+    xmlHashTable *disabled_packages;
     struct pkg_setting **pending_packages;
     xmlHashTable *shared_users;
     void **user_ids;
@@ -157,6 +208,15 @@ struct pm_settings {
     struct signature **past_signatures;
     xmlHashTable *permissions;
     xmlHashTable *permission_trees;
+    xmlNode **preferred_activities;
+    struct pkg_clean_item **packages_to_clean;
+    xmlHashTable *renamed_packages;
+    int internal_sdk_platform;
+    int external_sdk_platform;
+    struct verifier_device_id *verifier_device_id;
+    int read_external_storage_enforced;
+    struct key_set_mgr *key_set_mgr;
+    int first_available_uid;
 };
 
 struct pm_settings *pm_settings_create(void);

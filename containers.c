@@ -308,81 +308,81 @@ void *map_get_ref(map *m, const char *key)
     return &m->values[idx];
 }
 
-
-
-imap *imap_create(void)
-{
-    return mzalloc(sizeof(imap));
-}
-
-void imap_destroy(imap *m, void (*destroy_callback)(void*))
-{
-    if(!m)
-        return;
-
-    list_clear(&m->values, destroy_callback);
-    free(m->keys);
-    free(m);
-}
-
-void imap_add(imap *m, int key, void *val, void (*destroy_callback)(void*))
-{
-    int idx = imap_find(m, key);
-    if(idx >= 0)
-    {
-        if(destroy_callback)
-            (*destroy_callback)(m->values[idx]);
-        m->values[idx] = val;
+#define BASETYPE_MAP_IMPL(name, type) \
+    name *name_create(void) \
+    { \
+        return mzalloc(sizeof(name)); \
+    } \
+    void name_destroy(name *m, void (*destroy_callback)(void*)) \
+    { \
+        if(!m) \
+            return; \
+\
+        name_clear(m, destroy_callback); \
+        free(m); \
+    } \
+    void name_clear(name *m, void (*destroy_callback)(void*)) \
+    { \
+        list_clear(&m->values, destroy_callback); \
+        free(m->keys); \
+        m->keys = NULL; \
+        m->size = 0; \
+    } \
+    void name_add(name *m, type key, void *val, void (*destroy_callback)(void*)) \
+    { \
+        int idx = name_find(m, key); \
+        if(idx >= 0) \
+        { \
+            if(destroy_callback) \
+                (*destroy_callback)(m->values[idx]); \
+            m->values[idx] = val; \
+        } \
+        else \
+            name_add_not_exist(m, key, val); \
+    } \
+    void name_add_not_exist(name *m, type key, void *val) \
+    { \
+        m->keys = realloc(m->keys, sizeof(type)*(m->size+1)); \
+        m->keys[m->size++] = key; \
+\
+        list_add(&m->values, val); \
+    } \
+    void name_rm(name *m, type key, void (*destroy_callback)(void*)) \
+    { \
+        size_t i; \
+        int idx = name_find(m, key); \
+        if(idx < 0) \
+            return; \
+\
+        for(i = idx; i < m->size-1; ++i) \
+            m->keys[i] = m->keys[i+1]; \
+\
+        --m->size; \
+        m->keys = realloc(m->keys, sizeof(type)*m->size); \
+        list_rm_at(&m->values, idx, destroy_callback); \
+    } \
+    int name_find(name *m, type key) \
+    { \
+        size_t i; \
+        for(i = 0; i < m->size; ++i) \
+            if(key == m->keys[i]) \
+                return i; \
+        return -1;  \
+    } \
+    void *name_get_val(name *m, type key) \
+    { \
+        int idx = name_find(m, key); \
+        if(idx < 0) \
+            return NULL; \
+        return m->values[idx]; \
+    } \
+    void *name_get_ref(name *m, type key) \
+    { \
+        int idx = name_find(m, key); \
+        if(idx < 0) \
+            return NULL; \
+        return &m->values[idx]; \
     }
-    else
-        imap_add_not_exist(m, key, val);
-}
 
-void imap_add_not_exist(imap *m, int key, void *val)
-{
-    m->keys = realloc(m->keys, sizeof(int)*(m->size+1));
-    m->keys[m->size++] = key;
-
-    list_add(&m->values, val);
-}
-
-void imap_rm(imap *m, int key, void (*destroy_callback)(void*))
-{
-    size_t i;
-    int idx = imap_find(m, key);
-    if(idx < 0)
-        return;
-
-    for(i = idx; i < m->size-1; ++i)
-        m->keys[i] = m->keys[i+1];
-
-    --m->size;
-    m->keys = realloc(m->keys, sizeof(int)*m->size);
-    list_rm_at(&m->values, idx, destroy_callback);
-}
-
-int imap_find(imap *m, int key)
-{
-    size_t i;
-    for(i = 0; i < m->size; ++i)
-        if(key == m->keys[i])
-            return i;
-    return -1; 
-}
-
-void *imap_get_val(imap *m, int key)
-{
-    int idx = imap_find(m, key);
-    if(idx < 0)
-        return NULL;
-    return m->values[idx];
-}
-
-void *imap_get_ref(imap *m, int key)
-{
-    int idx = imap_find(m, key);
-    if(idx < 0)
-        return NULL;
-    return &m->values[idx];
-}
-
+BASETYPE_MAP_IMPL(imap, int);
+BASETYPE_MAP_IMPL(i64map, int64_t);
