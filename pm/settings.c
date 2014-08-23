@@ -28,6 +28,7 @@
 #include <libxml/xmlstring.h>
 #include <libxml/hash.h>
 #include <libxml/dict.h>
+#include <libxml/xmlwriter.h>
 
 #include "settings.h"
 #include "../log.h"
@@ -170,7 +171,8 @@ struct signature *signature_from_text(xmlChar *text)
     }
 
     struct signature *sig = mzalloc(sizeof(struct signature));
-    sig->signature = malloc(len/2);
+    sig->signature_size = len/2;
+    sig->signature = malloc(sig->signature_size);
 
     int i, sigIndex = 0;
     for(i = 0; i < len; )
@@ -186,6 +188,35 @@ void signature_destroy(struct signature *sig)
 {
     free(sig->signature);
     free(sig);
+}
+
+int signature_equals(struct signature *a, struct signature *b)
+{
+    if(a == b)
+        return 1;
+
+    if(!a || !b || a->signature_size != b->signature_size)
+        return 0;
+
+    return memcmp(a->signature, b->signature, a->signature_size) == 0;
+}
+
+xmlChar *signature_to_xmlchar(struct signature *sig)
+{
+    int i, x, d;
+    int8_t v;
+    xmlChar *res = xmlMalloc((sig->signature_size * 2) + 1);
+
+    for(i = 0, x = 0; i < sig->signature_size; ++i)
+    {
+        v = sig->signature[i];
+        d = (v >> 4) & 0xF;
+        res[x++] = d >= 10 ? ('a' + d - 10) : ('0' + d);
+        d = v & 0xF;
+        res[x++] = d >= 10 ? ('a' + d - 10) : ('0' + d);
+    }
+    res[x] = 0;
+    return res;
 }
 
 
@@ -279,6 +310,46 @@ int pkg_signatures_read(struct pkg_signatures *psig, xmlNode *node, struct signa
     }
     xmlFree(countStr);
     return 0;
+}
+
+static void pkg_signatures_write(struct pkg_signatures *psig, xmlTextWriter *writer, const char *tagName, struct signature ***past_signatures)
+{
+    if(!psig->signatures)
+        return;
+
+    int i, x, pastSize;
+    const int size = list_item_count(psig->signatures);
+
+    xmlTextWriterStartElement(writer, UCtagName);
+    xmlTextWriterWriteFormatAttribute(writer, UC"count", "%d", size);
+    for(i = 0; i < size; ++i)
+    {
+        struct signature *sig = psig->signatures[i];
+        pastSize = list_item_count(*past_signatures);
+
+        xmlTextWriterStartElement(writer, UC"cert");
+        for(x = 0; x < pastSize; ++x)
+        {
+            struct signature *pastSig = (*past_signatures)[x];
+            if(signature_equals(pastSig, sig))
+            {
+                xmlTextWriterWriteFormatAttribute(writer, UC"index", "%d", x);
+                break;
+            }
+        }
+
+        if(j >= pastSize)
+        {
+            list_add(past_signatures, sig);
+            xmlChar *keyStr = signature_to_xmlchar(sig);
+            xmlTextWriterWriteFormatAttribute(writer, UC"index", "%d", pastSize);
+            xmlTextWriterWriteAttribute(writer, UC"key", keyStr);
+            xmlFree(keyStr);
+        }
+
+        xmlTextWriterEndElement(writer);
+    }
+    xmlTextWriterEndElement(writer);
 }
 
 
@@ -813,6 +884,65 @@ void key_set_mgr_read(struct key_set_mgr *mgr, xmlNode *node)
         else if(xml_str_equal(child->name, "keysets"))
             key_set_mgr_read_key_set_list(mgr, child);
     }
+}
+
+static void key_set_mgr_write_public_keys(struct key_set_mgr *mgr, xmlTextWriter *writer)
+{
+    size_t i;
+    xmlTextWriterStartElement(writer, UC"keys");
+    for(i = 0; i < mgr->public_keys->size; ++i)
+    {
+        int64_t id = mgr->public_keys->keys[i];
+        xmlChar *encodedKey = mgr->public_keys->values[i];
+        
+        xmlTextWriterStartElement(writer, UC"public-key");
+        xmlTextWriterWriteFormatAttribute(writer, UC"identifier", "%lld", id);
+        xmlTextWriterWriteAttribute(writer, UC"value", encodedKey);
+        xmlTextWriterEndElement(writer);
+    }
+    xmlTextWriterEndElement(writer);
+}
+
+static void key_set_mgr_write_key_sets(struct key_set_mgr *mgr, xmlTextWriter *writer)
+{
+    int x;
+    size_t i;
+    xmlTextWriterStartElement(writer, UC"keysets");
+    for(i = 0; i < mgr->key_set_mapping->size; ++i)
+    {
+        const int64_t id = mgr->key_set_mapping->keys[i];
+        int64_t **keys = mgr->key_set_mapping->values[i];
+        const int size = list_item_count(keys);
+        
+        xmlTextWriterStartElement(writer, UC"keyset");
+        xmlTextWriterWriteFormatAttribute(writer, UC"identifier", "%lld", id);
+        for(x = 0; x < size; ++x)
+        {
+            xmlTextWriterStartElement(writer, UC"key-id");
+            xmlTextWriterWriteAttribute(writer, UC"identifier", *(keys[x]));
+            xmlTextWriterEndElement(writer);    
+        }
+        xmlTextWriterEndElement(writer);
+    }
+    xmlTextWriterEndElement(writer);
+}
+
+static void key_set_mgr_write(struct key_set_mgr *mgr, xmlTextWriter *writer)
+{
+    xmlTextWriterStartElement(writer, UC"keyset-settings");
+
+    key_set_mgr_write_public_keys(mgr, writer);
+    key_set_mgr_write_key_sets(mgr, writer);
+
+    xmlTextWriterStartElement(writer, UC"lastIssuedKeyId");
+    xmlTextWriterWriteFormatAttribute(writer, UC"value", "%lld", mgr->lastIssuedKeyId);
+    xmlTextWriterEndElement(writer);
+
+    xmlTextWriterStartElement(writer, UC"lastIssuedKeySetId");
+    xmlTextWriterWriteFormatAttribute(writer, UC"value", "%lld", mgr->lastIssuedKeySetId);
+    xmlTextWriterEndElement(writer);
+
+    xmlTextWriterEndElement(writer);
 }
 
 
@@ -1720,5 +1850,254 @@ exit:
     if(doc)
         xmlFreeDoc(doc);
     xmlCleanupParser();
+    return res;
+}
+
+static void pm_settings_write_base_perm(void *payload, void *data, xmlChar *name)
+{
+    xmlTextWriter *writer = data;
+    struct base_perm *perm = payload;
+
+    xmlTextWriterStartElement(writer, UC"item");
+    xmlTextWriterWriteAttribute(writer, UC"name", name);
+    xmlTextWriterWriteAttribute(writer, UC"package", UCperm->sourcePackage);
+    if(perm->protectionLevel != PROTECTION_NORMAL)
+        xmlTextWriterWriteFormatAttribute(writer, UC"protection", "%d", perm->protectionLevel);
+    if(perm->type == BASEPERM_TYPE_DYNAMIC)
+    {
+        // FIXME: our base_perm doesn't have 'perm' - Settings.java:1616
+        struct perm_info *pi = perm->pendingInfo;
+        if(pi)
+        {
+            xmlTextWriterWriteAttribute(writer, UC"type", UC"dynamic");
+            if(pi->icon)
+                xmlTextWriterWriteFormatAttribute(writer, UC"icon", "%d", pi->icon);
+            if(pi->nonLocalizedLabel)
+                xmlTextWriterWriteAttribute(writer, UC"label", pi->nonLocalizedLabel);
+        }
+    }
+    xmlTextWriterEndElement(writer);
+}
+
+static void pm_settings_write_granted_perm(void *payload, void *data, xmlChar *name)
+{
+    xmlTextWriter *writer = data;
+    xmlTextWriterStartElement(writer, UC"item");
+    xmlTextWriterWriteAttribute(writer, UC"name", name);
+    xmlTextWriterEndElement(writer);
+}
+
+static void pm_settings_write_key_set_alias(void *payload, void *data, xmlChar *name)
+{
+    xmlTextWriter *writer = d->writer;
+    int64_t id = *((int64_t)payload);
+
+    xmlTextWriterStartElement(writer, UC"defined-keyset");
+    xmlTextWriterWriteAttribute(writer, UC"alias", name);
+    xmlTextWriterWriteFormatAttribute(writer, UC"identifier", "%lld", id);
+    xmlTextWriterEndElement(writer);
+}
+
+struct pm_settings_write_scan_data
+{
+    xmlTextWriter *writer;
+    struct pm_settings *settings;
+};
+
+static void pm_settings_write_package(void *payload, void *data, xmlChar *name)
+{
+    struct pm_settings_write_scan_data *d = data;
+    xmlTextWriter *writer = d->writer;
+    struct pkg_setting *pkg = payload;
+
+    xmlTextWriterStartElement(writer, UC"package");
+
+    xmlTextWriterWriteAttribute(writer, UC"name", name);
+    if(pkg->realName)
+        xmlTextWriterWriteAttribute(writer, UC"realName", UCpkg->realName);
+    xmlTextWriterWriteAttribute(writer, UC"codePath", UCpkg->codePath);
+    if(strcmp(pkg->resourcePath, pkg->codePath) != 0)
+        xmlTextWriterWriteAttribute(writer, UC"resourcePath", UCpkg->resourcePath);
+    if(pkg->nativeLibraryPath)
+        xmlTextWriterWriteAttribute(writer, UC"nativeLibraryPath", UCpkg->nativeLibraryPath);
+    xmlTextWriterWriteFormatAttribute(writer, UC"flags", "%d", pkg->pkgFlags);
+    xmlTextWriterWriteFormatAttribute(writer, UC"ft", "%lld", pkg->timeStamp);
+    xmlTextWriterWriteFormatAttribute(writer, UC"it", "%lld", pkg->firstInstallTime);
+    xmlTextWriterWriteFormatAttribute(writer, UC"ut", "%lld", pkg->lastUpdateTime);
+    xmlTextWriterWriteFormatAttribute(writer, UC"version", "%d", pkg->versionCode);
+    if(!pkg->sharedUser)
+        xmlTextWriterWriteFormatAttribute(writer, UC"userId", "%d", pkg->appId);
+    else
+        xmlTextWriterWriteFormatAttribute(writer, UC"sharedUserId", "%d", pkg->appId);
+    if(pkg->uidError)
+        xmlTextWriterWriteAttribute(writer, UC"uidError", UC"true");
+    if(pkg->installStatus == PKG_INSTALL_INCOMPLETE)
+        xmlTextWriterWriteAttribute(writer, UC"installStatus", UC"false");
+    if(pkg->installerPackageName)
+        xmlTextWriterWriteAttribute(writer, UC"installer", UCpkg->installerPackageName);
+
+    pkg_signatures_write(pkg->signatures, writer, "sigs", &d->settings->past_signatures);
+
+    if(!(pkg->pkgFlags & FLAG_SYSTEM))
+    {
+        xmlTextWriterStartElement(writer, UC"perms");
+        if(!pkf->sharedUser)
+            xmlHashScan(pkg->grantedPermissions, pm_settings_write_granted_perm, writer);
+        xmlTextWriterEndElement(writer);
+    }
+
+    int i;
+    for(i = 0; i < pkg->keySetData->signingKeySetsSize; ++i)
+    {
+        xmlTextWriterStartElement(writer, UC"signing-keyset");
+        xmlTextWriterWriteFormatAttribute(writer, UC"identifier", "%lld", pkg->keySetData->signingKeySets[i]);
+        xmlTextWriterEndElement(writer);
+    }
+
+    xmlHashScan(pkg->keySetData->keySetAliases, pm_settings_write_key_set_alias, writer);
+
+    xmlTextWriterEndElement(writer);
+}
+
+static void pm_settings_write_disabled_package(void *payload, void *data, xmlChar *name)
+{
+    struct pm_settings_write_scan_data *d = data;
+    xmlTextWriter *writer = d->writer;
+    struct pkg_setting *pkg = payload;
+
+    xmlTextWriterStartElement(writer, UC"updated-package");
+    xmlTextWriterWriteAttribute(writer, UC"name", name);
+    if(pkg->realName)
+        xmlTextWriterWriteAttribute(writer, UC"realName", UCpkg->realName);
+    xmlTextWriterWriteAttribute(writer, UC"codePath", UCpkg->codePath);
+    if(strcmp(pkg->resourcePath, pkg->codePath) != 0)
+        xmlTextWriterWriteAttribute(writer, UC"resourcePath", UCpkg->resourcePath);
+    if(pkg->nativeLibraryPath)
+        xmlTextWriterWriteAttribute(writer, UC"nativeLibraryPath", UCpkg->nativeLibraryPath);
+    xmlTextWriterWriteFormatAttribute(writer, UC"ft", "%lld", pkg->timeStamp);
+    xmlTextWriterWriteFormatAttribute(writer, UC"it", "%lld", pkg->firstInstallTime);
+    xmlTextWriterWriteFormatAttribute(writer, UC"ut", "%lld", pkg->lastUpdateTime);
+    xmlTextWriterWriteFormatAttribute(writer, UC"version", "%d", pkg->versionCode);
+    if(!pkg->sharedUser)
+        xmlTextWriterWriteFormatAttribute(writer, UC"userId", "%d", pkg->appId);
+    else
+        xmlTextWriterWriteFormatAttribute(writer, UC"sharedUserId", "%d", pkg->appId);
+
+    xmlTextWriterStartElement(writer, UC"perms");
+    if(!pkf->sharedUser)
+        xmlHashScan(pkg->grantedPermissions, pm_settings_write_granted_perm, writer);
+    xmlTextWriterEndElement(writer);
+
+    xmlTextWriterEndElement(writer);
+}
+
+static void pm_settings_write_shared_user(void *payload, void *data, xmlChar *name)
+{
+    struct pm_settings_write_scan_data *d = data;
+    xmlTextWriter *writer = d->writer;
+    struct shared_user_setting *usr = payload;
+
+    xmlTextWriterStartElement(writer, UC"shared-user");
+    xmlTextWriterWriteAttribute(writer, UC"name", name);
+    xmlTextWriterWriteFormatAttribute(writer, UC"userId", "%d", user->userId);
+
+    pkg_signatures_write(user->signatures, writer, "sigs", &d->settings->past_signatures);
+
+    xmlTextWriterStartElement(writer, UC"perms");
+    xmlHashScan(user->grantedPermissions, pm_settings_write_granted_perm, writer);
+    xmlTextWriterEndElement(writer);
+
+    xmlTextWriterEndElement(writer);
+}
+
+static void pm_settings_write_renamed_package(void *payload, void *data, xmlChar *name)
+{
+    struct pm_settings_write_scan_data *d = data;
+    xmlTextWriter *writer = d->writer;
+    xmlChar *oname = payload;
+
+    xmlTextWriterStartElement(writer, UC"renamed-package");
+    xmlTextWriterWriteAttribute(writer, UC"new", name);
+    xmlTextWriterWriteAttribute(writer, UC"old", oname);
+    xmlTextWriterEndElement(writer);
+}
+
+int pm_settings_write(struct pm_settings *s, const char *path)
+{
+    int res = -1;
+    int i, size;
+    xmlTextWriter *writer = NULL;   
+
+    list_clear(&s->past_signatures, NULL); // FIXME: leak
+
+    writer = xmlNewTextWriterFilename(path, );
+    if(!writer)
+    {
+        LOGE("Failed to open xml writer");
+        goto exit;
+    }
+
+    // Settings.java:1285
+    xmlTextWriterStartDocument(writer, NULL, "utf-8", "yes");
+    xmlTextWriterStartElement(writer, UC"packages");
+
+    xmlTextWriterStartElement(writer, UC"last-platform-version");
+    xmlTextWriterWriteFormatAttribute(writer, UC"internal", "%d", s->internal_sdk_platform);
+    xmlTextWriterWriteFormatAttribute(writer, UC"external", "%d", s->external_sdk_platform);
+    xmlTextWriterEndElement(writer);
+
+    if(s->verifier_device_id)
+    {
+        xmlTextWriterStartElement(writer, UC"verifier");
+        xmlTextWriterWriteAttribute(writer, UC"device", UCs->verifier_device_id->identityString);
+        xmlTextWriterEndElement(writer);
+    }
+
+    if(s->read_external_storage_enforced)
+    {
+        xmlTextWriterStartElement(writer, UC"read-external-storage");
+        xmlTextWriterWriteFormatAttribute(writer, UC"enforcement", "%d", s->read_external_storage_enforced);
+        xmlTextWriterEndElement(writer);
+    }
+
+    xmlTextWriterStartElement(writer, UC"permission-trees");
+    xmlHashScan(s->permission_trees, pm_settings_write_base_perm, writer);
+    xmlTextWriterEndElement(writer);
+
+    xmlTextWriterStartElement(writer, UC"permissions");
+    xmlHashScan(s->permissions, pm_settings_write_base_perm, writer);
+    xmlTextWriterEndElement(writer);
+
+    struct pm_settings_write_scan_data data = {
+        .writer = writer,
+        .settings = s,
+    };
+
+    xmlHashScan(s->packages, pm_settings_write_package, &data);
+    xmlHashScan(s->disabled_packages, pm_settings_write_disabled_package, &data);
+    xmlHashScan(s->shared_users, pm_settings_write_shared_user, &data);
+
+    size = list_item_count(s->packages_to_clean);
+    for(i = 0; i < size; ++i)
+    {
+        struct pkg_clean_item *c = s->packages_to_clean[i];
+        xmlTextWriterStartElement(writer, UC"cleaning-package");
+        xmlTextWriterWriteAttribute(writer, UC"name", UCc->packageName);
+        xmlTextWriterWriteAttribute(writer, UC"code", c->andCode ? UC"true" : UC"false");
+        xmlTextWriterWriteFormatAttribute(writer, UC"user", "%d", c->userId);
+        xmlTextWriterEndElement(writer);
+    }
+
+    xmlHashScan(s->renamed_packages, pm_settings_write_renamed_package, &data);
+
+    key_set_mgr_write(s->key_set_mgr, writer);
+
+    xmlTextWriterEndElement(writer);
+    xmlTextWriterEndDocument(writer);
+
+    res = 0;
+exit:
+    if(writer)
+        xmlFreeTextWriter(writer);
     return res;
 }

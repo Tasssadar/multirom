@@ -29,7 +29,7 @@ struct pkg_key_set_data
     int signingKeySetsSize;
     int64_t *definedKeySets;
     int definedKeySetsSize;
-    xmlHashTable keySetAliases;
+    xmlHashTable *keySetAliases;
 };
 
 struct pkg_key_set_data *pkg_key_set_data_create(void);
@@ -41,12 +41,14 @@ void pkg_key_set_data_add_defined_key_set(struct pkg_key_set_data *pksd, int64_t
 struct signature
 {
     int8_t *signature;
+    int signature_size;
     int hashCode;
     int haveHashCode;  
 };
 
 struct signature *signature_from_text(xmlChar *text);
 void signature_destroy(struct signature *sig);
+int signature_equals(struct signature *a, struct signature *b);
 
 struct pkg_signatures
 {
@@ -222,5 +224,6 @@ struct pm_settings {
 struct pm_settings *pm_settings_create(void);
 void pm_settings_destroy(struct pm_settings *s);
 int pm_settings_read(struct pm_settings *s, const char *path);
+int pm_settings_write(struct pm_settings *s, const char *path);
 
 #endif
