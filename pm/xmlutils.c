@@ -27,12 +27,12 @@ xmlNode *xml_find_node(xmlNode *root, const char *name)
     return NULL;
 }
 
-int xml_str_equal(void *str1, void *str2)
+int xml_str_equal(const void *str1, const void *str2)
 {
-    return xmlStrEqual((xmlChar*)str1, (xmlChar*)str2);
+    return xmlStrEqual((const xmlChar*)str1, (const xmlChar*)str2);
 }
 
-xmlChar *xml_get_prop(xmlNode *node, void *name)
+xmlChar *xml_get_prop(xmlNode *node, const void *name)
 {
-    return xmlGetProp(node, (xmlChar*)name);
+    return xmlGetProp(node, (const xmlChar*)name);
 }

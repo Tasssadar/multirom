@@ -21,7 +21,7 @@
 #include <libxml/tree.h>
 
 xmlNode *xml_find_node(xmlNode *root, const char *name);
-inline int xml_str_equal(void *str1, void *str2);
-inline xmlChar *xml_get_prop(xmlNode *node, void *name);
+inline int xml_str_equal(const void *str1, const void *str2);
+inline xmlChar *xml_get_prop(xmlNode *node, const void *name);
 
 #endif

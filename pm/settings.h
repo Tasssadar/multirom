@@ -57,7 +57,7 @@ struct pkg_signatures
 
 struct pkg_signatures* pkg_signatures_create(void);
 void pkg_signatures_destroy(struct pkg_signatures *psig);
-int pkg_signatures_read(struct pkg_signatures *psig, xmlNode *node, struct signatures ***pastSignatures);
+int pkg_signatures_read(struct pkg_signatures *psig, xmlNode *node, struct signature ***pastSignatures);
 
 struct pkg_user_state
 {
@@ -88,13 +88,13 @@ struct shared_user_setting
     int *gids;
     int gids_size;
     struct pkg_setting **packages;
-    struct signatures *signatures;
+    struct pkg_signatures *signatures;
 };
 
 struct shared_user_setting *shared_user_setting_create(const char *name, int pkgFlags);
 void shared_user_setting_destroy(struct shared_user_setting *sus);
 void shared_user_setting_set_flags(struct shared_user_setting *sus, int pkgFlags);
-void shared_user_setting_add_package(struct shred_user_setting *sus, struct pkg_setting *pkg);
+void shared_user_setting_add_package(struct shared_user_setting *sus, struct pkg_setting *pkg);
 
 struct pkg_setting
 {
@@ -126,8 +126,8 @@ struct pkg_setting
 };
 
 struct pkg_setting *pkg_setting_create(const char *name, const char *realName, const char *codePath, const char *resourcePath, const char *nativeLibraryPath, int pVersionCode, int pkgFlags);
-void pkg_setting_set_flags(struct pkt_setting *ps, int pkgFlags);
-void pkg_setting_destroy(struct pkt_setting *ps);
+void pkg_setting_set_flags(struct pkg_setting *ps, int pkgFlags);
+void pkg_setting_destroy(struct pkg_setting *ps);
 void pkg_setting_set_enabled(struct pkg_setting *ps, int state, int userId, xmlChar *callingPackage);
 void pkg_setting_add_disabled_component(struct pkg_setting *ps, const xmlChar *name, int userId);
 void pkg_setting_add_enabled_component(struct pkg_setting *ps, const xmlChar *name, int userId);
@@ -173,9 +173,9 @@ struct pkg_clean_item
     int andCode;
 };
 
-struct pkg_clean_item pkg_clean_item_create(int userId, const char *packageName, int andCode);
+struct pkg_clean_item *pkg_clean_item_create(int userId, const char *packageName, int andCode);
 void pkg_clean_item_destroy(struct pkg_clean_item *pci);
-void pkg_clean_item_equals(struct pkg_clean_item *pci1, struct pkg_clean_item *pci2);
+int pkg_clean_item_equals(struct pkg_clean_item *pci1, struct pkg_clean_item *pci2);
 
 struct verifier_device_id
 {

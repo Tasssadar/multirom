@@ -38,6 +38,8 @@ int list_move(ptrToList dest_p, ptrToList source_p);
 void list_clear(ptrToList list_p, callback destroy_callback_p);
 void list_swap(ptrToList a_p, ptrToList b_p);
 
+typedef void (*map_destroy_callback)(void*);
+
 typedef struct
 {
     char **keys;
@@ -46,30 +48,30 @@ typedef struct
 } map;
 
 map *map_create(void);
-void map_destroy(map *m, void (*destroy_callback)(void*));
-void map_add(map *m, const char *key, void *val, void (*destroy_callback)(void*));
+void map_destroy(map *m, map_destroy_callback destroy_callback);
+void map_add(map *m, const char *key, void *val, map_destroy_callback destroy_callback);
 void map_add_not_exist(map *m, const char *key, void *val);
-void map_rm(map *m, const char *key, void (*destroy_callback)(void*));
+void map_rm(map *m, const char *key, map_destroy_callback destroy_callback);
 int map_find(map *m, const char *key);
 void *map_get_val(map *m, const char *key);
 void *map_get_ref(map *m, const char *key);
 
-#define BASETYPE_MAP_DECL(name, type) \
+#define BASETYPE_MAP_DECL(N, T) \
     typedef struct \
     { \
-        type *keys; \
+        T *keys; \
         void **values; \
         size_t size; \
-    } name; \
-    name *name_create(void); \
-    void name_destroy(name *m, void (*destroy_callback)(void*)); \
-    void name_clear(name *m, void (*destroy_callback)(void*)); \
-    void name_add(name *m, type key, void *val, void (*destroy_callback)(void*)); \
-    void name_add_not_exist(name *m, type key, void *val); \
-    void name_rm(name *m, type key, void (*destroy_callback)(void*)); \
-    int name_find(name *m, type key); \
-    void *name_get_val(name *m, type key); \
-    void *name_get_ref(name *m, type key);
+    } N; \
+    N *N##_create(void); \
+    void N##_destroy(N *m, map_destroy_callback destroy_callback); \
+    void N##_clear(N *m, map_destroy_callback destroy_callback); \
+    void N##_add(N *m, T key, void *val, map_destroy_callback destroy_callback); \
+    void N##_add_not_exist(N *m, T key, void *val); \
+    void N##_rm(N *m, T key, map_destroy_callback destroy_callback); \
+    int N##_find(N *m, T key); \
+    void *N##_get_val(N *m, T key); \
+    void *N##_get_ref(N *m, T key);
 
 BASETYPE_MAP_DECL(imap, int);
 BASETYPE_MAP_DECL(i64map, int64_t);

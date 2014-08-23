@@ -33,9 +33,15 @@
 #include "settings.h"
 #include "../log.h"
 #include "../util.h"
-#include "../xmlutils.h"
+#include "xmlutils.h"
 #include "applicationinfo.h"
 #include "defines.h"
+
+/*
+ * TODO:
+ * - write preffered activities for old android
+ * - add comment about wtf does this do
+ */
 
 #define SC (char*)
 #define UC (unsigned char*)
@@ -44,13 +50,14 @@
 #define LOGE(x...) ERROR(x)
 
 static uint8_t USERID_NULL_OBJECT = 0;
-static uint8_t PAST_SIGS_NULL = 0;
+static struct signature PAST_SIGS_NULL;
+static uint8_t EMPTY_HASH_PAYLOAD = 0;
 
 static struct pkg_user_state DEFAULT_USER_STATE = {
     .stopped = 0,
     .notLaunched = 0,
     .installed = 1,
-    .blocked = false,
+    .blocked = 0,
     .enabled = COMPONENT_ENABLED_STATE_DEFAULT,
     .lastDisableAppCaller = NULL,
     .disabledComponents = NULL,
@@ -77,15 +84,6 @@ void pkg_key_set_data_destroy(struct pkg_key_set_data *pksd)
     free(pksd);
 }
 
-struct pkg_key_set_data
-{
-    int64_t *signingKeySets;
-    int signingKeySetsSize;
-    int64_t *definedKeySets;
-    int definedKeySetsSize;
-    xmlHashTable keySetAliases;
-};
-
 struct pkg_key_set_data_aliases_copier_data
 {
     xmlHashTable *dest;
@@ -99,7 +97,7 @@ static void pkg_key_set_data_aliases_copier(void *payload, void *data, xmlChar *
     int64_t *alias = payload;
     int idx = alias - d->base_definedKeySets;
 
-    xmlHashAddEntry(dest, name, &d->dest_definedKeySets[idx]);
+    xmlHashAddEntry(d->dest, name, &d->dest_definedKeySets[idx]);
 }
 
 struct pkg_key_set_data *pkg_key_set_data_clone(struct pkg_key_set_data *base)
@@ -232,7 +230,7 @@ void pkg_signatures_destroy(struct pkg_signatures *psig)
     free(psig);
 }
 
-int pkg_signatures_read(struct pkg_signatures *psig, xmlNode *node, struct signatures ***pastSignatures)
+int pkg_signatures_read(struct pkg_signatures *psig, xmlNode *node, struct signature ***pastSignatures)
 {
     xmlChar *countStr = xml_get_prop(node, "count");
     if(!countStr)
@@ -241,7 +239,7 @@ int pkg_signatures_read(struct pkg_signatures *psig, xmlNode *node, struct signa
         return -1;
     }
 
-    int count = atoi(countStr);
+    int count = atoi(SC countStr);
     int pos = 0;
     xmlNode *child;
 
@@ -251,7 +249,7 @@ int pkg_signatures_read(struct pkg_signatures *psig, xmlNode *node, struct signa
     for(child = node->children; child; child = child->next)
     {
         if(child->type != XML_ELEMENT_NODE)
-                continue;
+            continue;
 
         if(xml_str_equal(child->name, "cert"))
         {
@@ -260,7 +258,7 @@ int pkg_signatures_read(struct pkg_signatures *psig, xmlNode *node, struct signa
                 xmlChar *index = xml_get_prop(child, "index");
                 if(index)
                 {
-                    int idx = atoi(SCindex);
+                    int idx = atoi(SC index);
                     xmlChar *key = xml_get_prop(child, "key");
                     int pastSignaturesSize = list_item_count(*pastSignatures);
                     if(!key)
@@ -279,8 +277,7 @@ int pkg_signatures_read(struct pkg_signatures *psig, xmlNode *node, struct signa
                     }
                     else
                     {
-                        struct signature *sig = signature_from_text((int8_t*)key);
-
+                        struct signature *sig = signature_from_text(key);
                         if(sig)
                         {
                             while(pastSignaturesSize <= idx) {
@@ -320,30 +317,30 @@ static void pkg_signatures_write(struct pkg_signatures *psig, xmlTextWriter *wri
     int i, x, pastSize;
     const int size = list_item_count(psig->signatures);
 
-    xmlTextWriterStartElement(writer, UCtagName);
-    xmlTextWriterWriteFormatAttribute(writer, UC"count", "%d", size);
+    xmlTextWriterStartElement(writer, UC tagName);
+    xmlTextWriterWriteFormatAttribute(writer, UC "count", "%d", size);
     for(i = 0; i < size; ++i)
     {
         struct signature *sig = psig->signatures[i];
         pastSize = list_item_count(*past_signatures);
 
-        xmlTextWriterStartElement(writer, UC"cert");
+        xmlTextWriterStartElement(writer, UC "cert");
         for(x = 0; x < pastSize; ++x)
         {
             struct signature *pastSig = (*past_signatures)[x];
             if(signature_equals(pastSig, sig))
             {
-                xmlTextWriterWriteFormatAttribute(writer, UC"index", "%d", x);
+                xmlTextWriterWriteFormatAttribute(writer, UC "index", "%d", x);
                 break;
             }
         }
 
-        if(j >= pastSize)
+        if(x >= pastSize)
         {
             list_add(past_signatures, sig);
             xmlChar *keyStr = signature_to_xmlchar(sig);
-            xmlTextWriterWriteFormatAttribute(writer, UC"index", "%d", pastSize);
-            xmlTextWriterWriteAttribute(writer, UC"key", keyStr);
+            xmlTextWriterWriteFormatAttribute(writer, UC "index", "%d", pastSize);
+            xmlTextWriterWriteAttribute(writer, UC "key", keyStr);
             xmlFree(keyStr);
         }
 
@@ -372,20 +369,6 @@ void pkg_user_state_destroy(struct pkg_user_state *st)
     free(st);
 }
 
-struct pkg_user_state
-{
-    int stopped;
-    int notLaunched;
-    int installed;
-    int blocked;
-    int enabled;
-
-    char *lastDisableAppCaller;
-
-    xmlHashTable *disabledComponents;
-    xmlHashTable *enabledComponents;
-};
-
 struct pkg_user_state *pkg_user_state_clone(struct pkg_user_state *base)
 {
     if(!base)
@@ -399,15 +382,16 @@ struct pkg_user_state *pkg_user_state_clone(struct pkg_user_state *base)
     return st;
 }
 
+
 struct pkg_setting *pkg_setting_create(const char *name, const char *realName,
         const char *codePath, const char *resourcePath, const char *nativeLibraryPath,
         int pVersionCode, int pkgFlags)
 {
-    struct pkt_setting *ps = mzalloc(sizeof(struct pkg_setting));
+    struct pkg_setting *ps = mzalloc(sizeof(struct pkg_setting));
     ps->name = strdup_safe(name);
     ps->realName = strdup_safe(realName);
     ps->codePath = strdup_safe(codePath);
-    ps->resourcePath = strdup_safe(codePathStr);
+    ps->resourcePath = strdup_safe(resourcePath);
     ps->nativeLibraryPath = strdup_safe(nativeLibraryPath);
     ps->versionCode = pVersionCode;
     pkg_setting_set_flags(ps, pkgFlags);
@@ -416,10 +400,11 @@ struct pkg_setting *pkg_setting_create(const char *name, const char *realName,
     ps->userState = imap_create();
     ps->signatures = pkg_signatures_create();
     ps->keySetData = pkg_key_set_data_create();
+    ps->installStatus = PKG_INSTALL_COMPLETE;
     return ps;
 }
 
-void pkg_setting_destroy(struct pkt_setting *ps)
+void pkg_setting_destroy(struct pkg_setting *ps)
 {
     free(ps->name);
     free(ps->realName);
@@ -428,16 +413,18 @@ void pkg_setting_destroy(struct pkt_setting *ps)
     free(ps->nativeLibraryPath);
     free(ps->installerPackageName);
     xmlHashFree(ps->grantedPermissions, NULL);
-    imap_destroy(ps->userState, pkg_user_state_destroy);
-    pkg_signatures_destroy(ps->signatures);
+    imap_destroy(ps->userState, (map_destroy_callback)pkg_user_state_destroy);
+    //pkg_signatures_destroy(ps->signatures); FIXME: leak
     pkg_key_set_data_destroy(ps->keySetData);
     free(ps->gids);
     free(ps);
 }
 
-void pkg_setting_set_flags(struct pkt_setting *ps, int pkgFlags)
+void pkg_setting_set_flags(struct pkg_setting *ps, int pkgFlags)
 {
-    ps->pkgFlags = pkgFlags & (FLAG_SYSTEM | FLAG_PRIVILEGED | FLAG_FORWARD_LOCK | FLAG_EXTERNAL_STORAGE);
+    //ps->pkgFlags = pkgFlags & (FLAG_SYSTEM | FLAG_PRIVILEGED | FLAG_FORWARD_LOCK | FLAG_EXTERNAL_STORAGE);
+    // FIXME: we only read the flags from the packagex.xml file, we need all of them so we can write them back again
+    ps->pkgFlags = pkgFlags;
 }
 
 static struct pkg_user_state *pkg_setting_modify_user_state(struct pkg_setting *ps, int userId)
@@ -469,13 +456,13 @@ void pkg_setting_set_enabled(struct pkg_setting *ps, int state, int userId, xmlC
 void pkg_setting_add_disabled_component(struct pkg_setting *ps, const xmlChar *name, int userId)
 {
     struct pkg_user_state *st = pkg_setting_modify_user_state(ps, userId);
-    xmlHashAddEntry(st->disabledComponents, name, NULL);
+    xmlHashAddEntry(st->disabledComponents, name, &EMPTY_HASH_PAYLOAD);
 }
 
 void pkg_setting_add_enabled_component(struct pkg_setting *ps, const xmlChar *name, int userId)
 {
     struct pkg_user_state *st = pkg_setting_modify_user_state(ps, userId);
-    xmlHashAddEntry(st->enabledComponents, name, NULL);
+    xmlHashAddEntry(st->enabledComponents, name, &EMPTY_HASH_PAYLOAD);
 }
 
 xmlHashTable *pkg_setting_get_enabled_components(struct pkg_setting *ps, int userId)
@@ -491,7 +478,7 @@ xmlHashTable *pkg_setting_get_disabled_components(struct pkg_setting *ps, int us
 void pkg_setting_set_enabled_components_copy(struct pkg_setting *ps, xmlHashTable *components, int userId)
 {
     struct pkg_user_state *st = pkg_setting_modify_user_state(ps, userId);
-    xmlHashFree(st->enabledComponents);
+    xmlHashFree(st->enabledComponents, NULL);
     if(components)
         st->enabledComponents = xmlHashCopy(components, empty_hash_copier);
     else
@@ -501,14 +488,14 @@ void pkg_setting_set_enabled_components_copy(struct pkg_setting *ps, xmlHashTabl
 void pkg_setting_set_disabled_components_copy(struct pkg_setting *ps, xmlHashTable *components, int userId)
 {
     struct pkg_user_state *st = pkg_setting_modify_user_state(ps, userId);
-    xmlHashFree(st->disabledComponents);
+    xmlHashFree(st->disabledComponents, NULL);
     if(components)
         st->disabledComponents = xmlHashCopy(components, empty_hash_copier);
     else
         st->disabledComponents = xmlHashCreate(16);
 }
 
-void pkg_setting_copy_from(struct pkg_setting *ps, struct pkg_setting *base);
+void pkg_setting_copy_from(struct pkg_setting *ps, struct pkg_setting *base)
 {
     xmlHashFree(ps->grantedPermissions, NULL);
     ps->grantedPermissions = xmlHashCopy(base->grantedPermissions, empty_hash_copier);
@@ -523,14 +510,15 @@ void pkg_setting_copy_from(struct pkg_setting *ps, struct pkg_setting *base);
     ps->timeStamp = base->timeStamp;
     ps->firstInstallTime = base->firstInstallTime;
     ps->lastUpdateTime = base->lastUpdateTime;
+    ps->signatures = base->signatures; // FIXME: memory management
     ps->permissionsFixed = base->permissionsFixed;
     ps->haveGids = base->haveGids;
 
-    imap_clear(ps->userState, pkg_user_state_destroy);
+    imap_clear(ps->userState, (map_destroy_callback)pkg_user_state_destroy);
     size_t i;
     for(i = 0; i < base->userState->size; ++i)
     {
-        struct pkg_user_state *st = pkg_user_state_clone(base->userState->value[i]);
+        struct pkg_user_state *st = pkg_user_state_clone(base->userState->values[i]);
         imap_add_not_exist(ps->userState, base->userState->keys[i], st);
     }
 
@@ -589,24 +577,26 @@ struct shared_user_setting *shared_user_setting_create(const char *name, int pkg
     ses->name = strdup_safe(name);
     ses->signatures = pkg_signatures_create();
     ses->grantedPermissions = xmlHashCreate(16);
-    shared_user_setting_set_flags(pkgFlags);
+    shared_user_setting_set_flags(ses, pkgFlags);
     return ses;
 }
 
 void shared_user_setting_destroy(struct shared_user_setting *sus)
 {
-    xmlHashFree(ses->grantedPermissions, NULL);
-    pkg_signatures_destroy(ses->signatures);
-    free(ses->name);
-    free(ses);
+    xmlHashFree(sus->grantedPermissions, NULL);
+    //pkg_signatures_destroy(sus->signatures); FIXME: leak
+    free(sus->name);
+    free(sus);
 }
 
 void shared_user_setting_set_flags(struct shared_user_setting *sus, int pkgFlags)
 {
-    ses->pkgFlags = pkgFlags & (FLAG_SYSTEM | FLAG_PRIVILEGED | FLAG_FORWARD_LOCK | FLAG_EXTERNAL_STORAGE);
+    //sus->pkgFlags = pkgFlags & (FLAG_SYSTEM | FLAG_PRIVILEGED | FLAG_FORWARD_LOCK | FLAG_EXTERNAL_STORAGE);
+    // FIXME: we only read the flags from the packagex.xml file, we need all of them so we can write them back again
+    sus->pkgFlags = pkgFlags;
 }
 
-void shared_user_setting_add_package(struct shred_user_setting *sus, struct pkg_setting *pkg)
+void shared_user_setting_add_package(struct shared_user_setting *sus, struct pkg_setting *pkg)
 {
     int i;
     const int size = list_item_count(sus->packages);
@@ -619,12 +609,13 @@ void shared_user_setting_add_package(struct shred_user_setting *sus, struct pkg_
 }
 
 
-struct pkg_clean_item pkg_clean_item_create(int userId, const char *packageName, int andCode)
+struct pkg_clean_item *pkg_clean_item_create(int userId, const char *packageName, int andCode)
 {
     struct pkg_clean_item *pci = mzalloc(sizeof(struct pkg_clean_item));
     pci->userId = userId;
     pci->packageName = strdup_safe(packageName);
     pci->andCode = andCode;
+    return pci;
 }
 
 void pkg_clean_item_destroy(struct pkg_clean_item *pci)
@@ -633,7 +624,7 @@ void pkg_clean_item_destroy(struct pkg_clean_item *pci)
     free(pci);
 }
 
-void pkg_clean_item_equals(struct pkg_clean_item *pci1, struct pkg_clean_item *pci2)
+int pkg_clean_item_equals(struct pkg_clean_item *pci1, struct pkg_clean_item *pci2)
 {
     return pci1->userId == pci2->userId && pci1->andCode == pci2->andCode &&
             strcmp(pci1->packageName, pci2->packageName) == 0;
@@ -727,7 +718,7 @@ void verifier_device_id_destroy(struct verifier_device_id *vdi)
     }
 }
 
-static void key_set_mapping_deallocator(int64_t **list)
+static void key_set_mapping_deallocator(void *list)
 {
     int64_t **ptr = list;
     list_clear(&ptr, free);
@@ -751,21 +742,35 @@ void key_set_mgr_destroy(struct key_set_mgr *mgr)
     free(mgr);
 }
 
+static xmlChar *key_set_mgr_key_remove_whitespace(xmlChar *encodedKey)
+{
+    int i, x;
+    const int orig_len = xmlStrlen(encodedKey);
+    xmlChar *res = xmlMalloc(orig_len + 1);
+
+    for(i = 0, x = 0; i < orig_len; ++i)
+        if(encodedKey[i] != ' ')
+            res[x++] = encodedKey[i];
+
+    res[x++] = 0;
+    res = xmlRealloc(res, x);
+    return res;
+}
+
 static void key_set_mgr_read_public_key(struct key_set_mgr *mgr, xmlNode *node)
 {
     xmlChar *encodedID = xml_get_prop(node, "identifier");
     xmlChar *encodedPublicKey = xml_get_prop(node, "value");
     if(encodedID && encodedPublicKey)
     {
-        int64_t identifier = strtoll(SCencodedID, NULL, 0);
-        i64map_add(mgr->public_keys, identifier, encodedPublicKey, xmlFree);
+        int64_t identifier = strtoll(SC encodedID, NULL, 0);
+        xmlChar *key = key_set_mgr_key_remove_whitespace(encodedPublicKey);
+        i64map_add(mgr->public_keys, identifier, key, xmlFree);
     }
     else
-    {
         LOGE("key doesn't have identifier or value");
-        xmlFree(encodedPublicKey);
-    }
 
+    xmlFree(encodedPublicKey);
     xmlFree(encodedID);
 }
 
@@ -779,24 +784,6 @@ static void key_set_mgr_read_keys(struct key_set_mgr *mgr, xmlNode *node)
 
         if(xml_str_equal(child->name, "public-key"))
             key_set_mgr_read_public_key(mgr, child);
-        else if(xml_str_equal(child->name, "lastIssuedKeyId"))
-        {
-            xmlChar *idStr = xml_get_prop(child, "value");
-            if(idStr)
-            {
-                mgr->lastIssuedKeyId = strtoll(SCidStr, NULL, 0);
-                xmlFree(idStr);
-            }
-        }
-        else if(xml_str_equal(child->name, "lastIssuedKeySetId"))
-        {
-            xmlChar *idStr = xml_get_prop(child, "value");
-            if(idStr)
-            {
-                mgr->lastIssuedKeySetId = strtoll(SCidStr, NULL, 0);
-                xmlFree(idStr);
-            }
-        }
     }
 }
 
@@ -806,7 +793,7 @@ static int64_t key_set_mgr_read_identifier(xmlNode *node, int *ok)
     if(identifierStr)
     {
         char *r;
-        int64_t res = strtoll(SCidentifierStr, &r, 0);
+        int64_t res = strtoll(SC identifierStr, &r, 0);
         *ok = (r != (char*)identifierStr);
         xmlFree(identifierStr);
         return res;
@@ -825,27 +812,34 @@ static void key_set_mgr_read_key_set_list(struct key_set_mgr *mgr, xmlNode *node
         if(child->type != XML_ELEMENT_NODE)
             continue;
 
-        if(xml_str_equal(child->name, "keyset"))
+        if(!xml_str_equal(child->name, "keyset"))
+            continue;
+
+        currentKeySetId = key_set_mgr_read_identifier(child, &ok);
+        if(!ok)
         {
-            currentKeySetId = key_set_mgr_read_identifier(child, &ok);
-            if(!ok)
-            {
-                LOGE("Failed to read keyset identifier");
-                return;
-            }
-            i64map_add(mgr->key_sets, currentKeySetId, NULL, free); // FIXME
-            i64map_add(mgr->key_set_mapping, currentKeySetId, mzalloc(sizeof(int64_t**)), key_set_mapping_deallocator);
+            LOGE("Failed to read keyset identifier");
+            return;
         }
-        else if(xml_str_equal(child->name, "key-id"))
+        i64map_add(mgr->key_sets, currentKeySetId, NULL, free); // FIXME
+        i64map_add(mgr->key_set_mapping, currentKeySetId, mzalloc(sizeof(int64_t**)), key_set_mapping_deallocator);
+
+        for(node = child->children; node; node = node->next)
         {
-            int64_t id = key_set_mgr_read_identifier(child, &ok);
+            if(node->type != XML_ELEMENT_NODE)
+                continue;
+
+            if(!xml_str_equal(node->name, "key-id"))
+                continue;
+
+            int64_t id = key_set_mgr_read_identifier(node, &ok);
             if(!ok)
             {
                 LOGE("Failed to read key-id identifier");
                 return;
             }
 
-            int64_t ***mapping = i64map_get_ref(mgr->key_set_mapping, id);
+            int64_t ***mapping = i64map_get_ref(mgr->key_set_mapping, currentKeySetId);
             if(mapping)
             {
                 ok = 1;
@@ -883,21 +877,39 @@ void key_set_mgr_read(struct key_set_mgr *mgr, xmlNode *node)
             key_set_mgr_read_keys(mgr, child);
         else if(xml_str_equal(child->name, "keysets"))
             key_set_mgr_read_key_set_list(mgr, child);
+        else if(xml_str_equal(child->name, "lastIssuedKeyId"))
+        {
+            xmlChar *idStr = xml_get_prop(child, "value");
+            if(idStr)
+            {
+                mgr->lastIssuedKeyId = strtoll(SC idStr, NULL, 0);
+                xmlFree(idStr);
+            }
+        }
+        else if(xml_str_equal(child->name, "lastIssuedKeySetId"))
+        {
+            xmlChar *idStr = xml_get_prop(child, "value");
+            if(idStr)
+            {
+                mgr->lastIssuedKeySetId = strtoll(SC idStr, NULL, 0);
+                xmlFree(idStr);
+            }
+        }
     }
 }
 
 static void key_set_mgr_write_public_keys(struct key_set_mgr *mgr, xmlTextWriter *writer)
 {
     size_t i;
-    xmlTextWriterStartElement(writer, UC"keys");
+    xmlTextWriterStartElement(writer, UC "keys");
     for(i = 0; i < mgr->public_keys->size; ++i)
     {
         int64_t id = mgr->public_keys->keys[i];
         xmlChar *encodedKey = mgr->public_keys->values[i];
         
-        xmlTextWriterStartElement(writer, UC"public-key");
-        xmlTextWriterWriteFormatAttribute(writer, UC"identifier", "%lld", id);
-        xmlTextWriterWriteAttribute(writer, UC"value", encodedKey);
+        xmlTextWriterStartElement(writer, UC "public-key");
+        xmlTextWriterWriteFormatAttribute(writer, UC "identifier", "%lld", id);
+        xmlTextWriterWriteAttribute(writer, UC "value", encodedKey);
         xmlTextWriterEndElement(writer);
     }
     xmlTextWriterEndElement(writer);
@@ -907,19 +919,19 @@ static void key_set_mgr_write_key_sets(struct key_set_mgr *mgr, xmlTextWriter *w
 {
     int x;
     size_t i;
-    xmlTextWriterStartElement(writer, UC"keysets");
+    xmlTextWriterStartElement(writer, UC "keysets");
     for(i = 0; i < mgr->key_set_mapping->size; ++i)
     {
         const int64_t id = mgr->key_set_mapping->keys[i];
         int64_t **keys = mgr->key_set_mapping->values[i];
         const int size = list_item_count(keys);
         
-        xmlTextWriterStartElement(writer, UC"keyset");
-        xmlTextWriterWriteFormatAttribute(writer, UC"identifier", "%lld", id);
+        xmlTextWriterStartElement(writer, UC "keyset");
+        xmlTextWriterWriteFormatAttribute(writer, UC "identifier", "%lld", id);
         for(x = 0; x < size; ++x)
         {
-            xmlTextWriterStartElement(writer, UC"key-id");
-            xmlTextWriterWriteAttribute(writer, UC"identifier", *(keys[x]));
+            xmlTextWriterStartElement(writer, UC "key-id");
+            xmlTextWriterWriteFormatAttribute(writer, UC "identifier", "%lld", *(keys[x]));
             xmlTextWriterEndElement(writer);    
         }
         xmlTextWriterEndElement(writer);
@@ -929,17 +941,17 @@ static void key_set_mgr_write_key_sets(struct key_set_mgr *mgr, xmlTextWriter *w
 
 static void key_set_mgr_write(struct key_set_mgr *mgr, xmlTextWriter *writer)
 {
-    xmlTextWriterStartElement(writer, UC"keyset-settings");
+    xmlTextWriterStartElement(writer, UC "keyset-settings");
 
     key_set_mgr_write_public_keys(mgr, writer);
     key_set_mgr_write_key_sets(mgr, writer);
 
-    xmlTextWriterStartElement(writer, UC"lastIssuedKeyId");
-    xmlTextWriterWriteFormatAttribute(writer, UC"value", "%lld", mgr->lastIssuedKeyId);
+    xmlTextWriterStartElement(writer, UC "lastIssuedKeyId");
+    xmlTextWriterWriteFormatAttribute(writer, UC "value", "%lld", mgr->lastIssuedKeyId);
     xmlTextWriterEndElement(writer);
 
-    xmlTextWriterStartElement(writer, UC"lastIssuedKeySetId");
-    xmlTextWriterWriteFormatAttribute(writer, UC"value", "%lld", mgr->lastIssuedKeySetId);
+    xmlTextWriterStartElement(writer, UC "lastIssuedKeySetId");
+    xmlTextWriterWriteFormatAttribute(writer, UC "value", "%lld", mgr->lastIssuedKeySetId);
     xmlTextWriterEndElement(writer);
 
     xmlTextWriterEndElement(writer);
@@ -982,18 +994,18 @@ static void xml_free_deallocator(void *payload, xmlChar *name)
 
 void pm_settings_destroy(struct pm_settings *s)
 {
-    xmlHashDestroy(s->packages, pkg_setting_deallocator);
-    xmlHashDestroy(s->disabled_packages, pkg_setting_deallocator);
+    xmlHashFree(s->packages, pkg_setting_deallocator);
+    xmlHashFree(s->disabled_packages, pkg_setting_deallocator);
     list_clear(&s->pending_packages, pkg_setting_destroy);
     list_clear(&s->user_ids, NULL);
     imap_destroy(s->other_user_ids, NULL);
     xmlHashFree(s->shared_users, shared_user_setting_deallocator);
     list_clear(&s->past_signatures, NULL);
-    xmlHashDestroy(s->permissions, base_perm_deallocator);
-    xmlHashDestroy(s->permission_trees, base_perm_deallocator);
+    xmlHashFree(s->permissions, base_perm_deallocator);
+    xmlHashFree(s->permission_trees, base_perm_deallocator);
     list_clear(&s->preferred_activities, xmlFreeNode);
     list_clear(&s->packages_to_clean, pkg_clean_item_destroy);
-    xmlHashDestroy(s->renamed_packages, xml_free_deallocator);
+    xmlHashFree(s->renamed_packages, xml_free_deallocator);
     verifier_device_id_destroy(s->verifier_device_id);
     key_set_mgr_destroy(s->key_set_mgr);
     free(s);
@@ -1068,7 +1080,7 @@ static int pm_settings_new_user_id(struct pm_settings *s, void *obj)
 static void pm_settings_add_package_setting(struct pm_settings *s, struct pkg_setting *p,
         const char *name, struct shared_user_setting *sharedUser)
 {
-    xmlHashUpdateEntry(s->packages, name, p, pkg_setting_deallocator);
+    xmlHashUpdateEntry(s->packages, UC name, p, pkg_setting_deallocator);
     if(sharedUser)
     {
         if(p->sharedUser && p->sharedUser != sharedUser)
@@ -1092,7 +1104,7 @@ static struct pkg_setting *pm_settings_get_package(struct pm_settings *s, char *
         const char *codePath, const char *resourcePath, const char *nativeLibraryPathString,
         int vc, int pkgFlags, void *installUser, int add, int allowInstall)
 {
-    struct pkg_setting *p = xmlHashLookup(s->packages, UCname);
+    struct pkg_setting *p = xmlHashLookup(s->packages, UC name);
     if(p)
     {
         if(!xml_str_equal(p->codePath, codePath))
@@ -1134,13 +1146,13 @@ static struct pkg_setting *pm_settings_get_package(struct pm_settings *s, char *
             p->appId = origPackage->appId;
             p->origPackage = origPackage;
             name = origPackage->name;
-            p->timeStamp = get_mtime_ms(codePath);
+            // p->timeStamp = get_mtime_ms(codePath); FIXME: enable when the paths are mounted
         }
         else
         {
             p = pkg_setting_create(name, realName, codePath, resourcePath,
                     nativeLibraryPathString, vc, pkgFlags);
-            p->timeStamp = get_mtime_ms(codePath);
+            // p->timeStamp = get_mtime_ms(codePath); FIXME: enable when the paths are mounted
             p->sharedUser = sharedUser;
 
             // Settings.java:468
@@ -1153,7 +1165,7 @@ static struct pkg_setting *pm_settings_get_package(struct pm_settings *s, char *
                 p->appId = sharedUser->userId;
             else
             {
-                struct pkg_setting *dis = xmlHashLookup(s->disabled_packages, UCname);
+                struct pkg_setting *dis = xmlHashLookup(s->disabled_packages, UC name);
                 if(dis)
                 {
                     if(dis->signatures->signatures)
@@ -1167,12 +1179,12 @@ static struct pkg_setting *pm_settings_get_package(struct pm_settings *s, char *
                     p->grantedPermissions = xmlHashCopy(dis->grantedPermissions, empty_hash_copier);
 
                     // FIXME: Add support for multiple users
-                    xmlHashTable *t = pkg_get_enabled_components(dis, 0);
+                    xmlHashTable *t = pkg_setting_get_enabled_components(dis, 0);
                     pkg_setting_set_enabled_components_copy(p, t, 0);
-                    t = pkg_get_disabled_components(dis, 0);
+                    t = pkg_setting_get_disabled_components(dis, 0);
                     pkg_setting_set_disabled_components_copy(p, t, 0);
 
-                    pm_settings_add_user_id(s, p->appId, p, name);
+                    pm_settings_add_user_id(s, p->appId, p, UC name);
                 }
                 else
                 {
@@ -1211,7 +1223,8 @@ static struct pkg_setting *pm_settings_add_package(struct pm_settings *s, const 
         return NULL;
     }
 
-    ps = pkg_setting_create(name, realName, codePath, resourcePath, nativeLibraryPath, vc, pkgFlags);
+    ps = pkg_setting_create(SC name, SC realName, SC codePath, SC resourcePath,
+            SC nativeLibraryPathString, vc, pkgFlags);
     ps->appId = uid;
     if(pm_settings_add_user_id(s, uid, ps, name))
     {
@@ -1276,7 +1289,10 @@ static void pm_settings_read_granted_permissions(struct pm_settings *s, xmlNode 
         {
             xmlChar *name = xml_get_prop(child, "name");
             if(name)
-                xmlHashAddEntry(outPerms, name, NULL);
+            {
+                xmlHashAddEntry(outPerms, name, &EMPTY_HASH_PAYLOAD);
+                xmlFree(name);
+            }
             else
                 LOGE("Error in package manager settings: <perms> has no name\n");
         }
@@ -1285,7 +1301,7 @@ static void pm_settings_read_granted_permissions(struct pm_settings *s, xmlNode 
     }
 }
 
-static int pm_settings_read_package(struct pm_settings *s, xmlNode *node)
+static void pm_settings_read_package(struct pm_settings *s, xmlNode *node)
 {
     xmlChar *name = NULL;
     xmlChar *realName = NULL;
@@ -1318,41 +1334,41 @@ static int pm_settings_read_package(struct pm_settings *s, xmlNode *node)
     installerPackageName = xml_get_prop(node, "installer");
 
     if(version)
-        versionCode = atoi(SCversion);
+        versionCode = atoi(SC version);
 
     systemStr = xml_get_prop(node, "flags");
     if(systemStr)
-        pkgFlags = atoi(SCsystemStr);
+        pkgFlags = atoi(SC systemStr);
     else
     {
         systemStr = xml_get_prop(node, "system");
-        if(!systemStr || strcasecmp(SCsystemStr, "true") == 0)
+        if(!systemStr || strcasecmp(SC systemStr, "true") == 0)
             pkgFlags |= FLAG_SYSTEM;
     }
 
     timeStampStr = xml_get_prop(node, "ft");
-    if(!timeStampStr)
-        timeStamp = atoll(SCtimeStampStr);
+    if(timeStampStr)
+        timeStamp = strtoll(SC timeStampStr, NULL, 16);
     else
     {
         timeStampStr = xml_get_prop(node, "ts");
         if(timeStampStr)
-            timeStamp = atoll(SCtimeStampStr);
+            timeStamp = atoll(SC timeStampStr);
     }
 
     xmlFree(timeStampStr);
     timeStampStr = xml_get_prop(node, "it");
     if(timeStampStr)
-        firstInstallTime = strtoll(SCtimeStampStr, NULL, 16);;
+        firstInstallTime = strtoll(SC timeStampStr, NULL, 16);;
 
     xmlFree(timeStampStr);
     timeStampStr = xml_get_prop(node, "ut");
     if(timeStampStr)
-        lastUpdateTime = strtoll(SCtimeStampStr, NULL, 16);;
+        lastUpdateTime = strtoll(SC timeStampStr, NULL, 16);;
 
     LOGV("Reading package: %s userId=%s sharedUserId=%s\n", name, idStr, sharedIdStr);
 
-    int userId = idStr ? atoi(idStr) : 0;
+    int userId = idStr ? atoi(SC idStr) : 0;
     if(!resourcePathStr && codePathStr)
         resourcePathStr = xmlStrdup(codePathStr);
 
@@ -1376,11 +1392,11 @@ static int pm_settings_read_package(struct pm_settings *s, xmlNode *node)
     }
     else if(sharedIdStr)
     {
-        userId = atoi(SCsharedIdStr);
+        userId = atoi(SC sharedIdStr);
         if(userId > 0)
         {
-            packageSetting = pkg_setting_create(name, realName, codePathStr,
-                    resourcePathStr, nativeLibraryPathStr, versionCode, pkgFlags);
+            packageSetting = pkg_setting_create(SC name, SC realName, SC codePathStr,
+                    SC resourcePathStr, SC nativeLibraryPathStr, versionCode, pkgFlags);
             packageSetting->sharedId = userId;
             packageSetting->timeStamp = timeStamp;
             packageSetting->firstInstallTime = firstInstallTime;
@@ -1400,7 +1416,7 @@ static int pm_settings_read_package(struct pm_settings *s, xmlNode *node)
     if(packageSetting)
     {
         packageSetting->uidError = xml_str_equal(uidError, "true");
-        packageSetting->installerPackageName = strdup_safe(installerPackageName);
+        packageSetting->installerPackageName = strdup_safe(SC installerPackageName);
         // This is already set in constructor
         // packageSetting.nativeLibraryPathString = nativeLibraryPathStr;
 
@@ -1411,11 +1427,11 @@ static int pm_settings_read_package(struct pm_settings *s, xmlNode *node)
             int enabled = strtol((char*)enabledStr, &endptr, 0);
             if((char*)enabledStr != endptr)
                 pkg_setting_set_enabled(packageSetting, enabled, 0, NULL);
-            else if(strcasecmp(SCenabledStr, "true") == 0)
+            else if(strcasecmp(SC enabledStr, "true") == 0)
                 pkg_setting_set_enabled(packageSetting, COMPONENT_ENABLED_STATE_ENABLED, 0, NULL);
-            else if(strcasecmp(SCenabledStr, "false") == 0)
+            else if(strcasecmp(SC enabledStr, "false") == 0)
                 pkg_setting_set_enabled(packageSetting, COMPONENT_ENABLED_STATE_DISABLED, 0, NULL);
-            else if(strcasecmp(SCenabledStr, "default") == 0)
+            else if(strcasecmp(SC enabledStr, "default") == 0)
                 pkg_setting_set_enabled(packageSetting, COMPONENT_ENABLED_STATE_DEFAULT, 0, NULL);
             else
                 LOGE("Error in package manager settings: package %s has bad enabled value %s\n", name, enabledStr);
@@ -1428,7 +1444,7 @@ static int pm_settings_read_package(struct pm_settings *s, xmlNode *node)
         xmlChar *installStatusStr = xml_get_prop(node, "installStatus");
         if(installStatusStr)
         {
-            if(strcasecmp(SCinstallStatusStr, "false") == 0)
+            if(strcasecmp(SC installStatusStr, "false") == 0)
                 packageSetting->installStatus = PKG_INSTALL_INCOMPLETE;
             else
                 packageSetting->installStatus = PKG_INSTALL_COMPLETE;
@@ -1443,9 +1459,9 @@ static int pm_settings_read_package(struct pm_settings *s, xmlNode *node)
 
             // Settings.java:2497
             if(xml_str_equal(child->name, "disabled-components"))
-                pm_settings_read_disabled_components(s, packageSetting, 0);
+                pm_settings_read_disabled_components(s, packageSetting, child, 0);
             else if(xml_str_equal(child->name, "enabled-components"))
-                pm_settings_read_enabled_components(s, packageSetting, 0);
+                pm_settings_read_enabled_components(s, packageSetting, child, 0);
             else if(xml_str_equal(child->name, "sigs"))
                 pkg_signatures_read(packageSetting->signatures, child, &s->past_signatures);
             else if(xml_str_equal(child->name, "perms"))
@@ -1456,7 +1472,7 @@ static int pm_settings_read_package(struct pm_settings *s, xmlNode *node)
             else if(xml_str_equal(child->name, "signing-keyset"))
             {
                 xmlChar *identifierStr = xml_get_prop(child, "identifier");
-                int64_t id = identifierStr ? atoll(identifierStr) : 0;
+                int64_t id = identifierStr ? atoll(SC identifierStr) : 0;
 
                 pkg_key_set_data_add_signing_key_set(packageSetting->keySetData, id);
                 
@@ -1465,7 +1481,7 @@ static int pm_settings_read_package(struct pm_settings *s, xmlNode *node)
             else if(xml_str_equal(child->name, "defined-keyset"))
             {
                 xmlChar *identifierStr = xml_get_prop(child, "identifier");
-                int64_t id = identifierStr ? atoll(identifierStr) : 0;
+                int64_t id = identifierStr ? atoll(SC identifierStr) : 0;
                 xmlChar *alias = xml_get_prop(child, "alias");
 
                 pkg_key_set_data_add_defined_key_set(packageSetting->keySetData, id, alias);
@@ -1491,7 +1507,7 @@ static int pm_settings_read_package(struct pm_settings *s, xmlNode *node)
     xmlFree(timeStampStr);
 }
 
-static int pm_settings_read_int(xmlNode *node, const xmlChar *name, int defValue)
+static int pm_settings_read_int(xmlNode *node, const char *name, int defValue)
 {
     xmlChar *v = xml_get_prop(node, name);
     if(!v)
@@ -1521,14 +1537,14 @@ static void pm_settings_read_permissions(struct pm_settings *s, xmlHashTable *ou
             if(name && sourcePackage)
             {
                 int dynamic = xml_str_equal(ptype, "dynamic");
-                struct base_perm *perm = base_perm_create(name, sourcePackage, dynamic ? BASEPERM_TYPE_DYNAMIC : BASEPERM_TYPE_NORMAL);
+                struct base_perm *perm = base_perm_create(SC name, SC sourcePackage, dynamic ? BASEPERM_TYPE_DYNAMIC : BASEPERM_TYPE_NORMAL);
                 perm->protectionLevel = pm_settings_read_int(child, "protection", PROTECTION_NORMAL);
                 perm->protectionLevel = base_perm_fix_protection_level(perm->protectionLevel);
                 if(dynamic)
                 {
                     struct perm_info *pi = perm_info_create();
-                    pi->packageName = strdup_safe(sourcePackage);
-                    pi->name = strdup_safe(name);
+                    pi->packageName = strdup_safe(SC sourcePackage);
+                    pi->name = strdup_safe(SC name);
                     pi->icon = pm_settings_read_int(child, "icon", 0);
                     pi->nonLocalizedLabel = (char*)xml_get_prop(child, "label");
                     pi->protectionLevel = perm->protectionLevel;
@@ -1557,7 +1573,7 @@ static struct shared_user_setting *pm_settings_add_shared_user(struct pm_setting
         LOGE("Adding duplicate shared user, keeping first %s\n", name);
         return NULL;
     }
-    ses = shared_user_setting_create(name, pkgFlags);
+    ses = shared_user_setting_create(SC name, pkgFlags);
     ses->userId = userId;
     if(pm_settings_add_user_id(s, userId, ses, name))
     {
@@ -1580,7 +1596,7 @@ static void pm_settings_read_shared_user(struct pm_settings *s, xmlNode *node)
     name = xml_get_prop(node, "name");
     idStr = xml_get_prop(node, "userId");
     systemStr = xml_get_prop(node, "system");
-    userId = idStr ? atoi(SCidStr) : 0;
+    userId = idStr ? atoi(SC idStr) : 0;
 
     if(systemStr && xml_str_equal(systemStr, "true"))
         pkgFlags |= FLAG_SYSTEM;
@@ -1603,7 +1619,7 @@ static void pm_settings_read_shared_user(struct pm_settings *s, xmlNode *node)
             if(xml_str_equal(child->name, "sigs"))
                 pkg_signatures_read(su->signatures, child, &s->past_signatures);
             else if(xml_str_equal(child->name, "perms"))
-                pm_settings_read_granted_permissions(s, child, ses->grantedPermissions);
+                pm_settings_read_granted_permissions(s, child, su->grantedPermissions);
             else
                 LOGE("Unknown element under <shared-user>: %s\n", child->name);
         }
@@ -1626,40 +1642,40 @@ static void pm_settings_read_disabled_package(struct pm_settings *s, xmlNode *no
     xmlChar *version = xml_get_prop(node, "version");
     int versionCode = 0;
     if(version)
-        versionCode = atoi(SCversion);
+        versionCode = atoi(SC version);
 
     int pkgFlags = FLAG_SYSTEM;
     if(xmlStrncmp(codePathStr, PRIVILEGED_APP_PATH_U, PRIVILEGED_APP_PATH_LEN) == 0)
         pkgFlags |= FLAG_PRIVILEGED;
 
-    struct pkg_setting *ps = pkg_setting_create(name, realName, codePathStr,
-            resourcePathStr, nativeLibraryPathStr, versionCode, pkgFlags);
+    struct pkg_setting *ps = pkg_setting_create(SC name, SC realName, SC codePathStr,
+            SC resourcePathStr, SC nativeLibraryPathStr, versionCode, pkgFlags);
     xmlChar *timeStampStr = xml_get_prop(node, "ft");
     if(timeStampStr)
-        ps->timeStamp = strtoll(SCtimeStampStr, NULL, 16);
+        ps->timeStamp = strtoll(SC timeStampStr, NULL, 16);
     else
     {
         timeStampStr = xml_get_prop(node, "ts");
         if(timeStampStr)
-            ps->timeStamp = strtoll(SCtimeStampStr, NULL, 0);    
+            ps->timeStamp = strtoll(SC timeStampStr, NULL, 0);    
     }
 
     xmlFree(timeStampStr);
     timeStampStr = xml_get_prop(node, "it");
     if(timeStampStr)
-        ps->firstInstallTime = strtoll(SCtimeStampStr, NULL, 16);
+        ps->firstInstallTime = strtoll(SC timeStampStr, NULL, 16);
 
     xmlFree(timeStampStr);
     timeStampStr = xml_get_prop(node, "ut");
     if(timeStampStr)
-        ps->lastUpdateTime = strtoll(SCtimeStampStr, NULL, 16);
+        ps->lastUpdateTime = strtoll(SC timeStampStr, NULL, 16);
 
     xmlChar *idStr = xml_get_prop(node, "userId");
-    ps->appId = idStr ? atoi(SCidStr) : 0;
+    ps->appId = idStr ? atoi(SC idStr) : 0;
     if(ps->appId <= 0)
     {
         xmlChar *sharedIdStr = xml_get_prop(node, "sharedUserId");
-        ps->appId = sharedIdStr ? atoi(SCsharedIdStr) : 0;
+        ps->appId = sharedIdStr ? atoi(SC sharedIdStr) : 0;
         xmlFree(sharedIdStr);
     }
 
@@ -1670,7 +1686,7 @@ static void pm_settings_read_disabled_package(struct pm_settings *s, xmlNode *no
             continue;
         
         if(xml_str_equal(child->name, "perms"))
-            pm_settings_read_granted_permissions(s, child, ses->grantedPermissions);
+            pm_settings_read_granted_permissions(s, child, ps->grantedPermissions);
         else
             LOGE("Unknown element under <updated-package>: %s\n", child->name);
     }
@@ -1692,10 +1708,8 @@ static void pm_settings_add_pkg_to_clean(struct pm_settings *s, struct pkg_clean
     int i;
     const int size = list_item_count(s->packages_to_clean);
     for(i = 0; i < size; ++i)
-    {
         if(pkg_clean_item_equals(pic, s->packages_to_clean[i]))
             return;
-    }
     list_add(&s->packages_to_clean, pic);
 }
 
@@ -1703,7 +1717,7 @@ static void pm_settings_shared_users_to_disabled_scanner(void *payload, void *da
 {
     struct pkg_setting *disabledPs = payload;
     struct pm_settings *s = data;
-    struct shared_user_setting *id = pm_settings_get_user_id_obj(s, pp->sharedId);
+    struct shared_user_setting *id = pm_settings_get_user_id_obj(s, disabledPs->sharedId);
     if(id)
         disabledPs->sharedUser = id;
 }
@@ -1718,10 +1732,10 @@ int pm_settings_read(struct pm_settings *s, const char *path)
     if(!doc || (node = xmlDocGetRootElement(doc)) == NULL)
     {
         ERROR("Failed to read %s!\n", path);
-        goto exit
+        goto exit;
     }
 
-    node = xml_find_node(node, "packages")
+    node = xml_find_node(node, "packages");
     if(!node)
     {
         ERROR("Failed to find <packages> node!");
@@ -1762,10 +1776,10 @@ int pm_settings_read(struct pm_settings *s, const char *path)
                 int userId = 0;
                 int andCode = 1;
                 if(userStr)
-                    userId = atoi(SCuserStr);
+                    userId = atoi(SC userStr);
                 if(codeStr)
-                    andCode = strcasecmp(SCcodeStr, "true") == 0 ? 1 : 0;
-                pm_settings_add_pkg_to_clean(s, pkg_clean_item_create(userId, name, andCode));
+                    andCode = strcasecmp(SC codeStr, "true") == 0 ? 1 : 0;
+                pm_settings_add_pkg_to_clean(s, pkg_clean_item_create(userId, SC name, andCode));
             }
 
             xmlFree(name);
@@ -1791,9 +1805,9 @@ int pm_settings_read(struct pm_settings *s, const char *path)
             xmlChar *external = xml_get_prop(node, "external");
 
             if(internal)
-                s->internal_sdk_platform = atoi(SCinternal);
+                s->internal_sdk_platform = atoi(SC internal);
             if(external)
-                s->external_sdk_platform = atoi(SCexternal);
+                s->external_sdk_platform = atoi(SC external);
 
             xmlFree(internal);
             xmlFree(external);
@@ -1808,8 +1822,8 @@ int pm_settings_read(struct pm_settings *s, const char *path)
         }
         else if(xml_str_equal(node->name, "read-external-storage"))
         {
-            xmlChar *enforcement = xml_get_prog(node, "enforcement");
-            s->read_external_storage_enforced = atoi(SCenforcement);
+            xmlChar *enforcement = xml_get_prop(node, "enforcement");
+            s->read_external_storage_enforced = atoi(SC enforcement);
             xmlFree(enforcement);
         }
         else if(xml_str_equal(node->name, "keyset-settings"))
@@ -1822,7 +1836,7 @@ int pm_settings_read(struct pm_settings *s, const char *path)
     int i;
     for(i = 0; i < N; ++i)
     {
-        struct pkg_setting **pp = s->pending_packages[i];
+        struct pkg_setting *pp = s->pending_packages[i];
         struct shared_user_setting *idObj = pm_settings_get_user_id_obj(s, pp->sharedId);
         if(idObj)
         {
@@ -1838,7 +1852,7 @@ int pm_settings_read(struct pm_settings *s, const char *path)
         }
         else
         {
-            LOGE("Bad package setting: %s has shared uid %s that is not defined\n", pp->name, pp->sharedId);
+            LOGE("Bad package setting: %s has shared uid %d that is not defined\n", pp->name, pp->sharedId);
         }
     }
     list_clear(&s->pending_packages, pkg_setting_destroy);
@@ -1858,22 +1872,22 @@ static void pm_settings_write_base_perm(void *payload, void *data, xmlChar *name
     xmlTextWriter *writer = data;
     struct base_perm *perm = payload;
 
-    xmlTextWriterStartElement(writer, UC"item");
-    xmlTextWriterWriteAttribute(writer, UC"name", name);
-    xmlTextWriterWriteAttribute(writer, UC"package", UCperm->sourcePackage);
+    xmlTextWriterStartElement(writer, UC "item");
+    xmlTextWriterWriteAttribute(writer, UC "name", name);
+    xmlTextWriterWriteAttribute(writer, UC "package", UC perm->sourcePackage);
     if(perm->protectionLevel != PROTECTION_NORMAL)
-        xmlTextWriterWriteFormatAttribute(writer, UC"protection", "%d", perm->protectionLevel);
+        xmlTextWriterWriteFormatAttribute(writer, UC "protection", "%d", perm->protectionLevel);
     if(perm->type == BASEPERM_TYPE_DYNAMIC)
     {
         // FIXME: our base_perm doesn't have 'perm' - Settings.java:1616
         struct perm_info *pi = perm->pendingInfo;
         if(pi)
         {
-            xmlTextWriterWriteAttribute(writer, UC"type", UC"dynamic");
+            xmlTextWriterWriteAttribute(writer, UC "type", UC "dynamic");
             if(pi->icon)
-                xmlTextWriterWriteFormatAttribute(writer, UC"icon", "%d", pi->icon);
+                xmlTextWriterWriteFormatAttribute(writer, UC "icon", "%d", pi->icon);
             if(pi->nonLocalizedLabel)
-                xmlTextWriterWriteAttribute(writer, UC"label", pi->nonLocalizedLabel);
+                xmlTextWriterWriteAttribute(writer, UC "label", UC pi->nonLocalizedLabel);
         }
     }
     xmlTextWriterEndElement(writer);
@@ -1882,19 +1896,19 @@ static void pm_settings_write_base_perm(void *payload, void *data, xmlChar *name
 static void pm_settings_write_granted_perm(void *payload, void *data, xmlChar *name)
 {
     xmlTextWriter *writer = data;
-    xmlTextWriterStartElement(writer, UC"item");
-    xmlTextWriterWriteAttribute(writer, UC"name", name);
+    xmlTextWriterStartElement(writer, UC "item");
+    xmlTextWriterWriteAttribute(writer, UC "name", name);
     xmlTextWriterEndElement(writer);
 }
 
 static void pm_settings_write_key_set_alias(void *payload, void *data, xmlChar *name)
 {
-    xmlTextWriter *writer = d->writer;
-    int64_t id = *((int64_t)payload);
+    xmlTextWriter *writer = data;
+    int64_t id = *((int64_t*)payload);
 
-    xmlTextWriterStartElement(writer, UC"defined-keyset");
-    xmlTextWriterWriteAttribute(writer, UC"alias", name);
-    xmlTextWriterWriteFormatAttribute(writer, UC"identifier", "%lld", id);
+    xmlTextWriterStartElement(writer, UC "defined-keyset");
+    xmlTextWriterWriteAttribute(writer, UC "alias", name);
+    xmlTextWriterWriteFormatAttribute(writer, UC "identifier", "%lld", id);
     xmlTextWriterEndElement(writer);
 }
 
@@ -1910,38 +1924,38 @@ static void pm_settings_write_package(void *payload, void *data, xmlChar *name)
     xmlTextWriter *writer = d->writer;
     struct pkg_setting *pkg = payload;
 
-    xmlTextWriterStartElement(writer, UC"package");
+    xmlTextWriterStartElement(writer, UC "package");
 
-    xmlTextWriterWriteAttribute(writer, UC"name", name);
+    xmlTextWriterWriteAttribute(writer, UC "name", name);
     if(pkg->realName)
-        xmlTextWriterWriteAttribute(writer, UC"realName", UCpkg->realName);
-    xmlTextWriterWriteAttribute(writer, UC"codePath", UCpkg->codePath);
+        xmlTextWriterWriteAttribute(writer, UC "realName", UC pkg->realName);
+    xmlTextWriterWriteAttribute(writer, UC "codePath", UC pkg->codePath);
     if(strcmp(pkg->resourcePath, pkg->codePath) != 0)
-        xmlTextWriterWriteAttribute(writer, UC"resourcePath", UCpkg->resourcePath);
+        xmlTextWriterWriteAttribute(writer, UC "resourcePath", UC pkg->resourcePath);
     if(pkg->nativeLibraryPath)
-        xmlTextWriterWriteAttribute(writer, UC"nativeLibraryPath", UCpkg->nativeLibraryPath);
-    xmlTextWriterWriteFormatAttribute(writer, UC"flags", "%d", pkg->pkgFlags);
-    xmlTextWriterWriteFormatAttribute(writer, UC"ft", "%lld", pkg->timeStamp);
-    xmlTextWriterWriteFormatAttribute(writer, UC"it", "%lld", pkg->firstInstallTime);
-    xmlTextWriterWriteFormatAttribute(writer, UC"ut", "%lld", pkg->lastUpdateTime);
-    xmlTextWriterWriteFormatAttribute(writer, UC"version", "%d", pkg->versionCode);
+        xmlTextWriterWriteAttribute(writer, UC "nativeLibraryPath", UC pkg->nativeLibraryPath);
+    xmlTextWriterWriteFormatAttribute(writer, UC "flags", "%d", pkg->pkgFlags);
+    xmlTextWriterWriteFormatAttribute(writer, UC "ft", "%llx", pkg->timeStamp);
+    xmlTextWriterWriteFormatAttribute(writer, UC "it", "%llx", pkg->firstInstallTime);
+    xmlTextWriterWriteFormatAttribute(writer, UC "ut", "%llx", pkg->lastUpdateTime);
+    xmlTextWriterWriteFormatAttribute(writer, UC "version", "%d", pkg->versionCode);
     if(!pkg->sharedUser)
-        xmlTextWriterWriteFormatAttribute(writer, UC"userId", "%d", pkg->appId);
+        xmlTextWriterWriteFormatAttribute(writer, UC "userId", "%d", pkg->appId);
     else
-        xmlTextWriterWriteFormatAttribute(writer, UC"sharedUserId", "%d", pkg->appId);
+        xmlTextWriterWriteFormatAttribute(writer, UC "sharedUserId", "%d", pkg->appId);
     if(pkg->uidError)
-        xmlTextWriterWriteAttribute(writer, UC"uidError", UC"true");
+        xmlTextWriterWriteAttribute(writer, UC "uidError", UC "true");
     if(pkg->installStatus == PKG_INSTALL_INCOMPLETE)
-        xmlTextWriterWriteAttribute(writer, UC"installStatus", UC"false");
+        xmlTextWriterWriteAttribute(writer, UC "installStatus", UC "false");
     if(pkg->installerPackageName)
-        xmlTextWriterWriteAttribute(writer, UC"installer", UCpkg->installerPackageName);
+        xmlTextWriterWriteAttribute(writer, UC "installer", UC pkg->installerPackageName);
 
     pkg_signatures_write(pkg->signatures, writer, "sigs", &d->settings->past_signatures);
 
     if(!(pkg->pkgFlags & FLAG_SYSTEM))
     {
-        xmlTextWriterStartElement(writer, UC"perms");
-        if(!pkf->sharedUser)
+        xmlTextWriterStartElement(writer, UC "perms");
+        if(!pkg->sharedUser)
             xmlHashScan(pkg->grantedPermissions, pm_settings_write_granted_perm, writer);
         xmlTextWriterEndElement(writer);
     }
@@ -1949,8 +1963,8 @@ static void pm_settings_write_package(void *payload, void *data, xmlChar *name)
     int i;
     for(i = 0; i < pkg->keySetData->signingKeySetsSize; ++i)
     {
-        xmlTextWriterStartElement(writer, UC"signing-keyset");
-        xmlTextWriterWriteFormatAttribute(writer, UC"identifier", "%lld", pkg->keySetData->signingKeySets[i]);
+        xmlTextWriterStartElement(writer, UC "signing-keyset");
+        xmlTextWriterWriteFormatAttribute(writer, UC "identifier", "%lld", pkg->keySetData->signingKeySets[i]);
         xmlTextWriterEndElement(writer);
     }
 
@@ -1965,26 +1979,26 @@ static void pm_settings_write_disabled_package(void *payload, void *data, xmlCha
     xmlTextWriter *writer = d->writer;
     struct pkg_setting *pkg = payload;
 
-    xmlTextWriterStartElement(writer, UC"updated-package");
-    xmlTextWriterWriteAttribute(writer, UC"name", name);
+    xmlTextWriterStartElement(writer, UC "updated-package");
+    xmlTextWriterWriteAttribute(writer, UC "name", name);
     if(pkg->realName)
-        xmlTextWriterWriteAttribute(writer, UC"realName", UCpkg->realName);
-    xmlTextWriterWriteAttribute(writer, UC"codePath", UCpkg->codePath);
+        xmlTextWriterWriteAttribute(writer, UC "realName", UC pkg->realName);
+    xmlTextWriterWriteAttribute(writer, UC "codePath", UC pkg->codePath);
     if(strcmp(pkg->resourcePath, pkg->codePath) != 0)
-        xmlTextWriterWriteAttribute(writer, UC"resourcePath", UCpkg->resourcePath);
+        xmlTextWriterWriteAttribute(writer, UC "resourcePath", UC pkg->resourcePath);
     if(pkg->nativeLibraryPath)
-        xmlTextWriterWriteAttribute(writer, UC"nativeLibraryPath", UCpkg->nativeLibraryPath);
-    xmlTextWriterWriteFormatAttribute(writer, UC"ft", "%lld", pkg->timeStamp);
-    xmlTextWriterWriteFormatAttribute(writer, UC"it", "%lld", pkg->firstInstallTime);
-    xmlTextWriterWriteFormatAttribute(writer, UC"ut", "%lld", pkg->lastUpdateTime);
-    xmlTextWriterWriteFormatAttribute(writer, UC"version", "%d", pkg->versionCode);
+        xmlTextWriterWriteAttribute(writer, UC "nativeLibraryPath", UC pkg->nativeLibraryPath);
+    xmlTextWriterWriteFormatAttribute(writer, UC "ft", "%llx", pkg->timeStamp);
+    xmlTextWriterWriteFormatAttribute(writer, UC "it", "%llx", pkg->firstInstallTime);
+    xmlTextWriterWriteFormatAttribute(writer, UC "ut", "%llx", pkg->lastUpdateTime);
+    xmlTextWriterWriteFormatAttribute(writer, UC "version", "%d", pkg->versionCode);
     if(!pkg->sharedUser)
-        xmlTextWriterWriteFormatAttribute(writer, UC"userId", "%d", pkg->appId);
+        xmlTextWriterWriteFormatAttribute(writer, UC "userId", "%d", pkg->appId);
     else
-        xmlTextWriterWriteFormatAttribute(writer, UC"sharedUserId", "%d", pkg->appId);
+        xmlTextWriterWriteFormatAttribute(writer, UC "sharedUserId", "%d", pkg->appId);
 
-    xmlTextWriterStartElement(writer, UC"perms");
-    if(!pkf->sharedUser)
+    xmlTextWriterStartElement(writer, UC "perms");
+    if(!pkg->sharedUser)
         xmlHashScan(pkg->grantedPermissions, pm_settings_write_granted_perm, writer);
     xmlTextWriterEndElement(writer);
 
@@ -1997,14 +2011,14 @@ static void pm_settings_write_shared_user(void *payload, void *data, xmlChar *na
     xmlTextWriter *writer = d->writer;
     struct shared_user_setting *usr = payload;
 
-    xmlTextWriterStartElement(writer, UC"shared-user");
-    xmlTextWriterWriteAttribute(writer, UC"name", name);
-    xmlTextWriterWriteFormatAttribute(writer, UC"userId", "%d", user->userId);
+    xmlTextWriterStartElement(writer, UC "shared-user");
+    xmlTextWriterWriteAttribute(writer, UC "name", name);
+    xmlTextWriterWriteFormatAttribute(writer, UC "userId", "%d", usr->userId);
 
-    pkg_signatures_write(user->signatures, writer, "sigs", &d->settings->past_signatures);
+    pkg_signatures_write(usr->signatures, writer, "sigs", &d->settings->past_signatures);
 
-    xmlTextWriterStartElement(writer, UC"perms");
-    xmlHashScan(user->grantedPermissions, pm_settings_write_granted_perm, writer);
+    xmlTextWriterStartElement(writer, UC "perms");
+    xmlHashScan(usr->grantedPermissions, pm_settings_write_granted_perm, writer);
     xmlTextWriterEndElement(writer);
 
     xmlTextWriterEndElement(writer);
@@ -2016,9 +2030,9 @@ static void pm_settings_write_renamed_package(void *payload, void *data, xmlChar
     xmlTextWriter *writer = d->writer;
     xmlChar *oname = payload;
 
-    xmlTextWriterStartElement(writer, UC"renamed-package");
-    xmlTextWriterWriteAttribute(writer, UC"new", name);
-    xmlTextWriterWriteAttribute(writer, UC"old", oname);
+    xmlTextWriterStartElement(writer, UC "renamed-package");
+    xmlTextWriterWriteAttribute(writer, UC "new", name);
+    xmlTextWriterWriteAttribute(writer, UC "old", oname);
     xmlTextWriterEndElement(writer);
 }
 
@@ -2030,41 +2044,44 @@ int pm_settings_write(struct pm_settings *s, const char *path)
 
     list_clear(&s->past_signatures, NULL); // FIXME: leak
 
-    writer = xmlNewTextWriterFilename(path, );
+    writer = xmlNewTextWriterFilename(path, 0);
     if(!writer)
     {
         LOGE("Failed to open xml writer");
         goto exit;
     }
 
+    xmlTextWriterSetIndent(writer, 1);
+    xmlTextWriterSetIndentString(writer, UC "    ");
+
     // Settings.java:1285
     xmlTextWriterStartDocument(writer, NULL, "utf-8", "yes");
-    xmlTextWriterStartElement(writer, UC"packages");
+    xmlTextWriterStartElement(writer, UC "packages");
 
-    xmlTextWriterStartElement(writer, UC"last-platform-version");
-    xmlTextWriterWriteFormatAttribute(writer, UC"internal", "%d", s->internal_sdk_platform);
-    xmlTextWriterWriteFormatAttribute(writer, UC"external", "%d", s->external_sdk_platform);
+    xmlTextWriterStartElement(writer, UC "last-platform-version");
+    xmlTextWriterWriteFormatAttribute(writer, UC "internal", "%d", s->internal_sdk_platform);
+    xmlTextWriterWriteFormatAttribute(writer, UC "external", "%d", s->external_sdk_platform);
     xmlTextWriterEndElement(writer);
 
     if(s->verifier_device_id)
     {
-        xmlTextWriterStartElement(writer, UC"verifier");
-        xmlTextWriterWriteAttribute(writer, UC"device", UCs->verifier_device_id->identityString);
+        xmlTextWriterStartElement(writer, UC "verifier");
+        xmlTextWriterWriteAttribute(writer, UC "device", UC s->verifier_device_id->identityString);
         xmlTextWriterEndElement(writer);
     }
 
     if(s->read_external_storage_enforced)
     {
-        xmlTextWriterStartElement(writer, UC"read-external-storage");
-        xmlTextWriterWriteFormatAttribute(writer, UC"enforcement", "%d", s->read_external_storage_enforced);
+        xmlTextWriterStartElement(writer, UC "read-external-storage");
+        xmlTextWriterWriteFormatAttribute(writer, UC "enforcement", "%d", s->read_external_storage_enforced);
         xmlTextWriterEndElement(writer);
     }
 
-    xmlTextWriterStartElement(writer, UC"permission-trees");
+    xmlTextWriterStartElement(writer, UC "permission-trees");
     xmlHashScan(s->permission_trees, pm_settings_write_base_perm, writer);
     xmlTextWriterEndElement(writer);
 
-    xmlTextWriterStartElement(writer, UC"permissions");
+    xmlTextWriterStartElement(writer, UC "permissions");
     xmlHashScan(s->permissions, pm_settings_write_base_perm, writer);
     xmlTextWriterEndElement(writer);
 
@@ -2081,10 +2098,10 @@ int pm_settings_write(struct pm_settings *s, const char *path)
     for(i = 0; i < size; ++i)
     {
         struct pkg_clean_item *c = s->packages_to_clean[i];
-        xmlTextWriterStartElement(writer, UC"cleaning-package");
-        xmlTextWriterWriteAttribute(writer, UC"name", UCc->packageName);
-        xmlTextWriterWriteAttribute(writer, UC"code", c->andCode ? UC"true" : UC"false");
-        xmlTextWriterWriteFormatAttribute(writer, UC"user", "%d", c->userId);
+        xmlTextWriterStartElement(writer, UC "cleaning-package");
+        xmlTextWriterWriteAttribute(writer, UC "name", UC c->packageName);
+        xmlTextWriterWriteAttribute(writer, UC "code", c->andCode ? UC "true" : UC "false");
+        xmlTextWriterWriteFormatAttribute(writer, UC "user", "%d", c->userId);
         xmlTextWriterEndElement(writer);
     }
 

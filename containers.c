@@ -242,7 +242,7 @@ map *map_create(void)
     return m;
 }
 
-void map_destroy(map *m, void (*destroy_callback)(void*))
+void map_destroy(map *m, map_destroy_callback destroy_callback)
 {
     if(!m)
         return;
@@ -252,7 +252,7 @@ void map_destroy(map *m, void (*destroy_callback)(void*))
     free(m);
 }
 
-void map_add(map *m, const char *key, void *val, void (*destroy_callback)(void*))
+void map_add(map *m, const char *key, void *val, map_destroy_callback destroy_callback)
 {
     int idx = map_find(m, key);
     if(idx >= 0)
@@ -272,7 +272,7 @@ void map_add_not_exist(map *m, const char *key, void *val)
     ++m->size;
 }
 
-void map_rm(map *m, const char *key, void (*destroy_callback)(void*))
+void map_rm(map *m, const char *key, map_destroy_callback destroy_callback)
 {
     int idx = map_find(m, key);
     if(idx < 0)
@@ -308,29 +308,28 @@ void *map_get_ref(map *m, const char *key)
     return &m->values[idx];
 }
 
-#define BASETYPE_MAP_IMPL(name, type) \
-    name *name_create(void) \
+#define BASETYPE_MAP_IMPL(N, T) \
+    N *N##_create(void) \
     { \
-        return mzalloc(sizeof(name)); \
+        return mzalloc(sizeof(N)); \
     } \
-    void name_destroy(name *m, void (*destroy_callback)(void*)) \
+    void N##_destroy(N *m, map_destroy_callback destroy_callback) \
     { \
         if(!m) \
             return; \
-\
-        name_clear(m, destroy_callback); \
+        N##_clear(m, destroy_callback); \
         free(m); \
     } \
-    void name_clear(name *m, void (*destroy_callback)(void*)) \
+    void N##_clear(N *m, map_destroy_callback destroy_callback) \
     { \
         list_clear(&m->values, destroy_callback); \
         free(m->keys); \
         m->keys = NULL; \
         m->size = 0; \
     } \
-    void name_add(name *m, type key, void *val, void (*destroy_callback)(void*)) \
+    void N##_add(N *m, T key, void *val, map_destroy_callback destroy_callback) \
     { \
-        int idx = name_find(m, key); \
+        int idx = N##_find(m, key); \
         if(idx >= 0) \
         { \
             if(destroy_callback) \
@@ -338,30 +337,27 @@ void *map_get_ref(map *m, const char *key)
             m->values[idx] = val; \
         } \
         else \
-            name_add_not_exist(m, key, val); \
+            N##_add_not_exist(m, key, val); \
     } \
-    void name_add_not_exist(name *m, type key, void *val) \
+    void N##_add_not_exist(N *m, T key, void *val) \
     { \
-        m->keys = realloc(m->keys, sizeof(type)*(m->size+1)); \
+        m->keys = realloc(m->keys, sizeof(T)*(m->size+1)); \
         m->keys[m->size++] = key; \
-\
         list_add(&m->values, val); \
     } \
-    void name_rm(name *m, type key, void (*destroy_callback)(void*)) \
+    void N##_rm(N *m, T key, map_destroy_callback destroy_callback) \
     { \
         size_t i; \
-        int idx = name_find(m, key); \
+        int idx = N##_find(m, key); \
         if(idx < 0) \
             return; \
-\
         for(i = idx; i < m->size-1; ++i) \
             m->keys[i] = m->keys[i+1]; \
-\
         --m->size; \
-        m->keys = realloc(m->keys, sizeof(type)*m->size); \
+        m->keys = realloc(m->keys, sizeof(T)*m->size); \
         list_rm_at(&m->values, idx, destroy_callback); \
     } \
-    int name_find(name *m, type key) \
+    int N##_find(N *m, T key) \
     { \
         size_t i; \
         for(i = 0; i < m->size; ++i) \
@@ -369,16 +365,16 @@ void *map_get_ref(map *m, const char *key)
                 return i; \
         return -1;  \
     } \
-    void *name_get_val(name *m, type key) \
+    void *N##_get_val(N *m, T key) \
     { \
-        int idx = name_find(m, key); \
+        int idx = N##_find(m, key); \
         if(idx < 0) \
             return NULL; \
         return m->values[idx]; \
     } \
-    void *name_get_ref(name *m, type key) \
+    void *N##_get_ref(N *m, T key) \
     { \
-        int idx = name_find(m, key); \
+        int idx = N##_find(m, key); \
         if(idx < 0) \
             return NULL; \
         return &m->values[idx]; \

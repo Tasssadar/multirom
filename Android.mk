@@ -38,7 +38,9 @@ LOCAL_SRC_FILES:= \
     tabview.c \
     touch_tracker.c \
     util.c \
-    workers.c
+    workers.c \
+    pm/xmlutils.c \
+    pm/settings.c
 
 # With these, GCC optimizes aggressively enough so full-screen alpha blending
 # is quick enough to be done in an animation
