@@ -17,7 +17,7 @@ building (means branch android-4.4-mrom in device repos).
 MultiROM also needs libbootimg (https://github.com/Tasssadar/libbootimg)
 in folder `system/extras/libbootimg`. Use something like this to build:
 
-    . build/envsetup.h
+    . build/envsetup.sh
     lunch full_grouper-userdebug
     make -j4 multirom trampoline
 
