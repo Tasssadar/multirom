@@ -127,7 +127,9 @@ static void *fps_thread_work(void *data)
 }
 #endif
 
-#define MAX_CAPTURE_FRAMES (14*30)
+#define CAPTURE_FPS 30
+#define MAX_CAPTURE_FRAMES (14*CAPTURE_FPS)
+#define END_CAPTURE_WARNING (MAX_CAPTURE_FRAMES - 1*CAPTURE_FPS)
 static px_type *capture_data = NULL;
 static px_type *capture_end = NULL;
 static int capture_started = 1;
@@ -393,6 +395,13 @@ void fb_cpy_fb_with_rotation(px_type *dst, px_type *src)
     {
         case 0:
             memcpy(dst, src, fb.vi.xres_virtual * fb.vi.yres * PIXEL_SIZE);
+            if(capture_started)
+            {
+                if(capture_frames < END_CAPTURE_WARNING)
+                    fb_memset(dst, fb_convert_color(0xFF00FF00), fb.vi.xres_virtual * 15);
+                else
+                    fb_memset(dst, fb_convert_color(0xFF0000FF), fb.vi.xres_virtual * 15);
+            }
             break;
         case 90:
             fb_rotate_90deg(dst, src);
