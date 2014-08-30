@@ -54,6 +54,7 @@
 uint32_t fb_width = 0;
 uint32_t fb_height = 0;
 int fb_rotation = 0; // in degrees, clockwise
+fb_img *fb_touch_target = NULL;
 
 fb_item_pos DEFAULT_FB_PARENT = {
     .x = 0,
@@ -279,6 +280,7 @@ int fb_open(int rotation)
     fb.buffer = malloc(fb.size);
     fb_memset(fb.buffer, fb_convert_color(BLACK), fb.size);
 
+    fb_touch_target = fb_add_png_img_lvl(INT_MAX, fb_width, fb_height, 134, 134, ":/pointer_spot_touch.png");
     fb_alloc_capture();
 
 #if 0

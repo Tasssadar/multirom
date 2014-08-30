@@ -27,6 +27,7 @@
 #include <pthread.h>
 #include <dirent.h>
 #include <assert.h>
+#include <time.h>
 
 #include "input.h"
 #include "input_priv.h"
@@ -57,6 +58,8 @@ static pthread_t input_thread;
 
 static handler_list_it *mt_handlers = NULL;
 static handlers_ctx **inactive_ctx = NULL;
+
+static struct timespec last_touch_time;
 
 #define DIV_ROUND_UP(n,d)  (((n) + (d) - 1) / (d))
 #define BIT(nr)            (1UL << (nr))
@@ -273,6 +276,14 @@ void touch_commit_events(struct timeval ev_time)
         if(mt_events[i].changed & TCHNG_POS)
             mt_recalc_pos_rotation(&mt_events[i]);
 
+        if(mt_events[i].changed & TCHNG_POS)
+        {
+            clock_gettime(CLOCK_MONOTONIC, &last_touch_time);
+            fb_touch_target->x = mt_events[i].x - fb_touch_target->w/2;
+            fb_touch_target->y = mt_events[i].y - fb_touch_target->h/2;
+            fb_request_draw();
+        }
+
         pthread_mutex_lock(&touch_mutex);
         it = mt_handlers;
         while(it)
@@ -298,6 +309,7 @@ static void *input_thread_work(void *cookie)
 {
     ev_init();
     struct input_event ev;
+    struct timespec cur_time;
 
     memset(mt_events, 0, sizeof(mt_events));
 
@@ -322,6 +334,18 @@ static void *input_thread_work(void *cookie)
                     break;
             }
         }
+
+        if(fb_touch_target->x != fb_width)
+        {
+            clock_gettime(CLOCK_MONOTONIC, &cur_time);
+            if(timespec_diff(&last_touch_time, &cur_time) >= 150)
+            {
+                fb_touch_target->x = fb_width;
+                fb_touch_target->y = fb_height;
+                fb_request_draw();
+            }
+        }
+
         usleep(10000);
     }
     ev_exit();

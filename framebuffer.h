@@ -245,6 +245,8 @@ typedef struct
     int wrap_w;
 } fb_text_proto;
 
+extern fb_img *fb_touch_target;
+
 void fb_remove_item(void *item);
 int fb_generate_item_id(void);
 px_type fb_convert_color(uint32_t c);
