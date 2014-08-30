@@ -12,7 +12,6 @@ LOCAL_C_INCLUDES += $(multirom_local_path) \
 LOCAL_SRC_FILES:= \
     animation.c \
     button.c \
-    checkbox.c \
     containers.c \
     framebuffer.c \
     framebuffer_generic.c \
@@ -60,6 +59,8 @@ LOCAL_C_INCLUDES += system/extras/libbootimg/include
 # Defines from device files
 # Init default define values
 MULTIROM_DEFAULT_ROTATION := 0
+
+LOCAL_CFLAGS += -DMR_LOG_TAG=\"multirom\"
 
 # This value is used to have different folders on USB drives
 # for different devices. Grouper didn't have that, hence the hack
@@ -167,6 +168,14 @@ endif
 ifeq ($(MR_USE_QCOM_OVERLAY),true)
     LOCAL_CFLAGS += -DMR_USE_QCOM_OVERLAY
     LOCAL_SRC_FILES += framebuffer_qcom_overlay.c
+ifneq ($(MR_QCOM_OVERLAY_HEADER),)
+    LOCAL_CFLAGS += -DMR_QCOM_OVERLAY_HEADER=\"../../../$(MR_QCOM_OVERLAY_HEADER)\"
+else
+    $(error MR_USE_QCOM_OVERLAY is true but MR_QCOM_OVERLAY_HEADER was not specified!)
+endif
+ifneq ($(MR_QCOM_OVERLAY_CUSTOM_PIXEL_FORMAT),)
+    LOCAL_CFLAGS += -DMR_QCOM_OVERLAY_CUSTOM_PIXEL_FORMAT=$(MR_QCOM_OVERLAY_CUSTOM_PIXEL_FORMAT)
+endif
 endif
 
 ifeq ($(MR_CONTINUOUS_FB_UPDATE),true)

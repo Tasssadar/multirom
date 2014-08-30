@@ -19,8 +19,8 @@
 
 #include <cutils/klog.h>
 
-#define ERROR(x...)   KLOG_ERROR("multirom", x)
-#define NOTICE(x...)  KLOG_NOTICE("multirom", x)
-#define INFO(x...)    KLOG_INFO("multirom", x)
+#define ERROR(x...)   KLOG_ERROR(MR_LOG_TAG, x)
+#define NOTICE(x...)  KLOG_NOTICE(MR_LOG_TAG, x)
+#define INFO(x...)    KLOG_INFO(MR_LOG_TAG, x)
 
 #endif

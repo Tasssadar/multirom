@@ -19,6 +19,8 @@ LOCAL_UNSTRIPPED_PATH := $(TARGET_ROOT_OUT_UNSTRIPPED)
 
 LOCAL_STATIC_LIBRARIES := libcutils libc
 
+LOCAL_CFLAGS += -DMR_LOG_TAG=\"trampoline\"
+
 ifeq ($(MR_INIT_DEVICES),)
     $(info MR_INIT_DEVICES was not defined in device files!)
 endif

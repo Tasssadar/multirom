@@ -274,6 +274,8 @@ static void ncard_move_step(void *data, float interpolated)
     }
 
     pthread_mutex_unlock(&c->mutex);
+
+    fb_request_draw();
 }
 
 static void ncard_reveal_finished(void *data)

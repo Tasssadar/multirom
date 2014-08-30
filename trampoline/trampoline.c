@@ -26,7 +26,7 @@
 #include <dirent.h>
 
 #include "devices.h"
-#include "log.h"
+#include "../log.h"
 #include "../util.h"
 #include "../version.h"
 #include "adb.h"
