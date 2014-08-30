@@ -33,6 +33,7 @@
 #include <pthread.h>
 #include <sys/atomics.h>
 #include <png.h>
+#include <time.h>
 
 #include "log.h"
 #include "framebuffer.h"
@@ -130,10 +131,12 @@ static void *fps_thread_work(void *data)
 #define CAPTURE_FPS 30
 #define MAX_CAPTURE_FRAMES (14*CAPTURE_FPS)
 #define END_CAPTURE_WARNING (MAX_CAPTURE_FRAMES - 1*CAPTURE_FPS)
+#define CAPTURE_ENCODE_THREADS 4
 static px_type *capture_data = NULL;
 static px_type *capture_end = NULL;
 static int capture_started = 1;
 static int capture_frames = 0;
+static int capture_save_dir_cnt = -1;
 
 static void fb_alloc_capture(void)
 {
@@ -145,7 +148,7 @@ static void fb_alloc_capture(void)
 
 static void fb_capture_add(void)
 {
-    if(!capture_started)
+    if(capture_started != 1)
         return;
     memcpy(capture_end, fb.buffer, fb.size);
     capture_end += fb.vi.xres_virtual*fb.vi.yres;
@@ -153,29 +156,111 @@ static void fb_capture_add(void)
     {
         INFO("Capture ended\n");
         printf("capture ended\n");
-        capture_started = 0;
+        capture_started = 2;
     }
 }
 
-void fb_capture_encode(void)
+struct fb_capture_encode_data
 {
-    int i = 0;
-    px_type *itr = capture_data;
+    int start_frame, end_frame;
+    volatile int encoded;
+    volatile int completed;
+};
+
+static void *fb_capture_encode_thread_work(void *data)
+{
+    int i;
+    struct fb_capture_encode_data *d = data;
     char dest_path[128];
-    mkdir("/capture", 0777);
-    for(i = 0; i < capture_frames; ++i)
+    px_type *itr = capture_data + fb.vi.xres_virtual*fb.vi.yres*d->start_frame;
+
+    for(i = d->start_frame; i < d->end_frame; ++i)
     {
-        printf("\rEncoding frame %d/%d (%d%%)               ", i+1, capture_frames, (i*100)/capture_frames);
-        fflush(stdout);
-        snprintf(dest_path, sizeof(dest_path), "/capture/cap_%04d.png", i);
+        snprintf(dest_path, sizeof(dest_path), "/capture%02d/cap_%04d.png", capture_save_dir_cnt, i);
         if(fb_png_save_img(dest_path, fb_width, fb_height, fb.stride, itr) < 0)
         {
             printf("\nFailed!\n");
             break;
         }
         itr += fb.vi.xres_virtual*fb.vi.yres;
+        ++d->encoded;
     }
-    printf("\nAll frames were encoded\n");
+    d->completed = 1;
+    return NULL;
+}
+
+void fb_capture_encode(void)
+{
+    if(capture_started == 0)
+    {
+        capture_end = capture_data;
+        capture_frames = 0;
+        capture_started = 1;
+    }
+    else if(capture_started == 1)
+    {
+        INFO("Capture ended\n");
+        printf("capture ended\n");
+        capture_started = 2;
+    }
+    else if(capture_started == 2)
+    {
+        int i = 0, frames = 0, completed = 0;
+        pthread_t encode_threads[CAPTURE_ENCODE_THREADS];
+        struct fb_capture_encode_data data[CAPTURE_ENCODE_THREADS];
+        struct timespec start, end;
+        char dest_path[128];
+
+        do
+        {
+            ++capture_save_dir_cnt;
+            snprintf(dest_path, sizeof(dest_path), "/capture%02d", capture_save_dir_cnt);
+        }
+        while(access(dest_path, F_OK) >= 0);
+
+        mkdir(dest_path, 0777);
+        printf("Starting encode on %d threads to folder %s\n", CAPTURE_ENCODE_THREADS, dest_path);
+
+        clock_gettime(CLOCK_MONOTONIC, &start);
+        for(i = 0; i < CAPTURE_ENCODE_THREADS; ++i)
+        {
+            struct fb_capture_encode_data *d = &data[i];
+            d->start_frame = frames;
+            frames += capture_frames/CAPTURE_ENCODE_THREADS;
+            d->end_frame = frames;
+            d->encoded = 0;
+            d->completed = 0;
+
+            if(i+1 == CAPTURE_ENCODE_THREADS && d->end_frame != capture_frames)
+                d->end_frame = capture_frames;
+
+            pthread_create(&encode_threads[i], NULL, fb_capture_encode_thread_work, d);
+        }
+
+        while(!completed)
+        {
+            completed = 1;
+            frames = 0;
+            for(i = 0; i < CAPTURE_ENCODE_THREADS; ++i)
+            {
+                if(!data[i].completed)
+                    completed = 0;
+                frames += data[i].encoded;
+            }
+            clock_gettime(CLOCK_MONOTONIC, &end);
+            printf("\rEncoding frame %03d/%03d (%d%%), %u ms            ", frames, capture_frames, (frames*100)/capture_frames, timespec_diff(&start, &end));
+            fflush(stdout);
+            usleep(300000);
+        }
+
+        for(i = 0; i < CAPTURE_ENCODE_THREADS; ++i)
+            pthread_join(encode_threads[i], NULL);
+
+        clock_gettime(CLOCK_MONOTONIC, &end);
+
+        printf("\nAll frames were encoded in %u ms\n", timespec_diff(&start, &end));
+        capture_started = 0;
+    }
 }
 
 int vt_set_mode(int graphics)
@@ -395,7 +480,7 @@ void fb_cpy_fb_with_rotation(px_type *dst, px_type *src)
     {
         case 0:
             memcpy(dst, src, fb.vi.xres_virtual * fb.vi.yres * PIXEL_SIZE);
-            if(capture_started)
+            if(capture_started == 1)
             {
                 if(capture_frames < END_CAPTURE_WARNING)
                     fb_memset(dst, fb_convert_color(0xFF00FF00), fb.vi.xres_virtual * 15);
