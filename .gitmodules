@@ -1,0 +1,3 @@
+[submodule "kexec-tools"]
+	path = kexec-tools
+	url = https://github.com/Tasssadar/kexec-tools
