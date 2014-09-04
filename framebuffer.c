@@ -1004,7 +1004,7 @@ int fb_save_screenshot(void)
     }
     *r = 0;
     strcat(dir, "/Pictures/Screenshots");
-    mkdir_recursive_with_perms(path, 0666, "media_rw", "media_rw");
+    mkdir_recursive_with_perms(path, 0775, "media_rw", "media_rw");
 
     for(c = 0; c < 999; ++c)
     {
