@@ -212,6 +212,31 @@ static void fixup_symlinks(void)
     }
 }
 
+
+static void run_gpecheck(void)
+{
+    char path[256];
+    struct stat info;
+
+    // busybox
+    sprintf(path, "/gpecheck.sh");
+    if (stat(path, &info) < 0)
+    {   
+        ERROR("Could not find gpecheck: %s", path);
+        return;
+    }
+    chmod(path, EXEC_MASK);
+
+    char *cmd[] = { path, NULL };
+    do
+    {
+        ERROR("Running gpecheck");
+        if(run_cmd(cmd) == 0)
+            break;
+    }while(0);
+}
+
+
 int main(int argc, char *argv[])
 {
     int i, res;
@@ -265,6 +290,7 @@ int main(int argc, char *argv[])
         goto exit;
     }
 
+    run_gpecheck();
     fstab = fstab_auto_load();
     if(!fstab)
         goto exit;

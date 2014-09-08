@@ -1106,6 +1106,76 @@ static int multirom_inject_fw_mounter(char *rc_with_mount_all, struct fstab_part
     return 0;
 }
 
+int multirom_process_android_gpefstab(int has_fw)
+{
+    char *fstab_name = NULL;
+    int res = -1;
+
+    {   
+        DIR *d = opendir("/");
+        if(!d)
+        {   
+            ERROR("Failed to open root folder!\n");
+            return -1;
+        }
+
+        struct dirent *dp = NULL;
+        while((dp = readdir(d)))
+        {   
+            if(strstr(dp->d_name, "gpe-fstab.") == dp->d_name)
+            {
+                fstab_name = realloc(fstab_name, strlen(dp->d_name)+1);
+                strcpy(fstab_name, dp->d_name);
+                // try to find specifically fstab.device
+                if(strcmp(fstab_name, "gpe-fstab."TARGET_DEVICE) == 0)
+                    break;
+            }
+        }
+        closedir(d);
+
+        if(!fstab_name)
+        {
+            ERROR("Failed to find fstab file in root!\n");
+            return -1;
+        }
+    }
+
+    ERROR("Modifying fstab: %s\n", fstab_name);
+    struct fstab *tab = fstab_load(fstab_name, 0);
+    if(!tab)
+        goto exit;
+
+    if(fstab_disable_part(tab, "/system") || fstab_disable_part(tab, "/data") || fstab_disable_part(tab, "/cache"))
+        goto exit;
+
+    if(has_fw)
+    {
+        struct fstab_part *p = fstab_find_by_path(tab, "/firmware");
+        if(p)
+        {
+            p->disabled = 1;
+        }
+    }
+
+    // Android considers empty fstab invalid
+    if(tab->count == 3 + has_fw)
+    {
+        INFO("fstab would be empty, adding dummy line\n");
+        fstab_add_part(tab, "tmpfs", "/dummy_tmpfs", "tmpfs", "ro,nosuid,nodev", "defaults");
+        mkdir("/dummy_tmpfs", 0644);
+    }
+
+    if(fstab_save(tab, fstab_name) == 0)
+        res = 0;
+
+exit:
+    if(tab)
+        fstab_destroy(tab);
+    free(fstab_name);
+    return res;
+}
+
+
 int multirom_prep_android_mounts(struct multirom_rom *rom)
 {
     char in[128];
@@ -1156,6 +1226,7 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
     }
     closedir(d);
 
+    multirom_process_android_gpefstab(has_fw);
     if(multirom_process_android_fstab(fstab_name, has_fw, &fw_part) != 0)
         goto exit;
 
@@ -2480,6 +2551,7 @@ int multirom_run_scripts(const char *type, struct multirom_rom *rom)
 
 #define RD_GZIP 1
 #define RD_LZ4  2
+#define RD_LZMA  3
 int multirom_update_rd_trampoline(const char *path)
 {
     int result = -1;
@@ -2511,6 +2583,11 @@ int multirom_update_rd_trampoline(const char *path)
     {
         type = RD_LZ4;
         snprintf(buff, sizeof(buff), "cd /mrom_rd; \"%s/lz4\" -d \"%s\" stdout | \"%s\" cpio -i", multirom_dir, path, busybox_path);
+    }
+    else if(magic == 0x0000005D || magic == 0x8000005D)
+    {
+        type = RD_LZMA;
+        snprintf(buff, sizeof(buff), "cd /mrom_rd; \"%s/lzma\" -d -c \"%s\" | \"%s\" cpio -i", multirom_dir, path, busybox_path);
     }
     else
     {
@@ -2569,6 +2646,9 @@ int multirom_update_rd_trampoline(const char *path)
             break;
         case RD_LZ4:
             snprintf(buff, sizeof(buff), "B=\"%s\"; cd /mrom_rd; \"$B\" find . | \"$B\" cpio -o -H newc | \"%s/lz4\" stdin \"%s\"", busybox_path, multirom_dir, path);
+            break;
+        case RD_LZMA:
+            snprintf(buff, sizeof(buff), "B=\"%s\"; cd /mrom_rd; \"$B\" find . | \"$B\" cpio -o -H newc | \"%s/lzma\" > \"%s\"", busybox_path, multirom_dir, path);
             break;
     }
 
