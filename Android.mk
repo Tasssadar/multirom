@@ -196,6 +196,9 @@ include $(multirom_local_path)/install_zip/Android.mk
 # Kexec-tools
 include $(multirom_local_path)/kexec-tools/Android.mk
 
+# adbd
+include $(multirom_local_path)/adbd/Android.mk
+
 # We need static libtruetype but it isn't in standard android makefile :(
 LOCAL_PATH := external/freetype/
 include $(CLEAR_VARS)
