@@ -48,10 +48,12 @@ typedef struct
 typedef int (*touch_callback)(touch_event*, void*); // event, data
 
 void start_input_thread(void);
+void start_input_thread_wait(int wait_for_start);
 void stop_input_thread(void);
 
 int get_last_key(void);
 int wait_for_key(void);
+int is_any_key_pressed(void);
 
 void add_touch_handler(touch_callback callback, void *data);
 void rm_touch_handler(touch_callback callback, void *data);

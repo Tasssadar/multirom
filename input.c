@@ -55,6 +55,9 @@ static pthread_mutex_t key_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t touch_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t input_thread;
 
+static pthread_mutex_t input_start_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t input_start_cond = PTHREAD_COND_INITIALIZER;
+
 static handler_list_it *mt_handlers = NULL;
 static handlers_ctx **inactive_ctx = NULL;
 
@@ -301,6 +304,10 @@ static void *input_thread_work(void *cookie)
     key_itr = 10;
     mt_slot = 0;
 
+    pthread_mutex_lock(&input_start_mutex);
+    pthread_cond_broadcast(&input_start_cond);
+    pthread_mutex_unlock(&input_start_mutex);
+
     int res;
     while(input_run)
     {
@@ -346,21 +353,53 @@ int wait_for_key(void)
     return res;
 }
 
+int is_any_key_pressed(void)
+{
+    int n, i;
+    unsigned long keys[BITS_TO_LONGS(KEY_CNT)];
+    for(n = 0; n < ev_count; ++n)
+    {
+        if(ioctl(ev_fds[n].fd, EVIOCGKEY(KEY_CNT), keys) >= 0)
+            for(i = 0; i < BITS_TO_LONGS(KEY_CNT); ++i)
+                if(keys[i] != 0)
+                    return 1;
+    }
+    return 0;
+}
+
 void start_input_thread(void)
 {
+    start_input_thread_wait(0);
+}
+
+void start_input_thread_wait(int wait_for_start)
+{
+    pthread_mutex_lock(&input_start_mutex);
     if(input_run)
+    {
+        pthread_mutex_unlock(&input_start_mutex);
         return;
+    }
 
     input_run = 1;
     pthread_create(&input_thread, NULL, input_thread_work, NULL);
+    if(wait_for_start)
+        pthread_cond_wait(&input_start_cond, &input_start_mutex);
+    pthread_mutex_unlock(&input_start_mutex);
 }
 
 void stop_input_thread(void)
 {
+    pthread_mutex_lock(&input_start_mutex);
     if(!input_run)
+    {
+        pthread_mutex_unlock(&input_start_mutex);
         return;
+    }
+
     input_run = 0;
     pthread_join(input_thread, NULL);
+    pthread_mutex_unlock(&input_start_mutex);
 }
 
 
