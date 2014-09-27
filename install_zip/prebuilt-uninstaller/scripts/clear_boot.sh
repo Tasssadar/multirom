@@ -89,7 +89,7 @@ if [ -f "dtb.img" ]; then
     dtb_cmd="-d dtb.img"
 fi
 
-/tmp/bbootimg --create newboot.img -f bootimg.cfg -k zImage -r initrd.img $dtb
+/tmp/bbootimg --create newboot.img -f bootimg.cfg -k zImage -r initrd.img $dtb_cmd
 
 if [ ! -e "/tmp/newboot.img" ] ; then
     echo "Failed to inject boot.img!"
