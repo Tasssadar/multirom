@@ -25,6 +25,7 @@
 #include <sys/ioctl.h>
 #include <string.h>
 #include <linux/fb.h>
+#include <poll.h>
 
 #include "framebuffer.h"
 #include "log.h"
@@ -36,19 +37,154 @@
 
 #define ALIGN(x, align) (((x) + ((align)-1)) & ~((align)-1))
 #define MAX_DISPLAY_DIM  2048
+#define NUM_BUFFERS 2
 
-struct fb_qcom_overlay_data {
+struct fb_qcom_overlay_mem_info {
     uint8_t *mem_buf;
     int size;
     int ion_fd;
     int mem_fd;
+    int offset;
     struct ion_handle_data handle_data;
+};
+
+struct fb_qcom_vsync {
+    int fb_fd;
+    int enabled;
+    volatile int _run_thread;
+    pthread_t thread;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    struct timespec time;
+};
+
+struct fb_qcom_overlay_data {
+    struct fb_qcom_overlay_mem_info mem_info[NUM_BUFFERS];
+    struct fb_qcom_vsync *vsync;
+    int active_mem;
     int overlayL_id;
     int overlayR_id;
     int leftSplit;
     int rightSplit;
     int width;
 };
+
+#define VSYNC_PREFIX "VSYNC="
+
+static int fb_qcom_vsync_enable(struct fb_qcom_vsync *vs, int enable)
+{
+    clock_gettime(CLOCK_REALTIME, &vs->time);
+
+    if(vs->enabled != enable)
+    {
+        if(vs->fb_fd <= 0 || ioctl(vs->fb_fd, MSMFB_OVERLAY_VSYNC_CTRL, &enable) < 0)
+        {
+            ERROR("Failed to set vsync status\n");
+            return -1;
+        }
+
+        vs->enabled = enable;
+    }
+
+    return 0;
+}
+
+static void *fb_qcom_vsync_thread_work(void *data)
+{
+    struct fb_qcom_vsync *vs = data;
+    int fd, err, len;
+    struct pollfd pfd;
+    struct timespec now;
+    char buff[64];
+
+    fd = open("/sys/class/graphics/fb0/vsync_event", O_RDONLY);
+    if(fd < 0)
+    {
+        ERROR("Unable to open vsync_event!\n");
+        return NULL;
+    }
+
+    read(fd, buff, sizeof(buff));
+    pfd.fd = fd;
+    pfd.events = POLLPRI | POLLERR;
+
+    while(vs->_run_thread)
+    {
+        err = poll(&pfd, 1, 100);
+
+        if(pfd.revents & POLLPRI)
+        {
+            len = pread(pfd.fd, data, sizeof(data), 0);
+            if(len > 0)
+            {
+                if(strncmp(data, VSYNC_PREFIX, strlen(VSYNC_PREFIX)) == 0)
+                    pthread_cond_signal(&vs->cond);
+            }
+            else
+                ERROR("Unable to read from vsync_event!");
+        }
+
+        clock_gettime(CLOCK_REALTIME, &now);
+        if(timespec_diff(&vs->time, &now) >= 60)
+            fb_qcom_vsync_enable(vs, 0);
+    }
+
+    close(fd);
+    return NULL;
+}
+
+static struct fb_qcom_vsync *fb_qcom_vsync_init(int fb_fd)
+{
+    struct fb_qcom_vsync *res = mzalloc(sizeof(struct fb_qcom_vsync));
+    res->fb_fd = fb_fd;
+    res->_run_thread = 1;
+    pthread_mutex_init(&res->mutex, NULL);
+    pthread_cond_init(&res->cond, NULL);
+
+    pthread_create(&res->thread, NULL, &fb_qcom_vsync_thread_work, res);
+    return res;
+}
+
+static void fb_qcom_vsync_destroy(struct fb_qcom_vsync *vs)
+{
+    pthread_mutex_lock(&vs->mutex);
+    vs->_run_thread = 0;
+    pthread_mutex_unlock(&vs->mutex);
+    pthread_join(vs->thread, NULL);
+    pthread_mutex_destroy(&vs->mutex);
+    pthread_cond_destroy(&vs->cond);
+    free(vs);
+}
+
+static int fb_qcom_vsync_wait(struct fb_qcom_vsync *vs)
+{
+    int res;
+    struct timespec ts;
+
+    pthread_mutex_lock(&vs->mutex);
+
+    if(!vs->_run_thread)
+    {
+        pthread_mutex_unlock(&vs->mutex);
+        return 0;
+    }
+
+    fb_qcom_vsync_enable(vs, 1);
+
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 20*1000*1000;
+    if(ts.tv_nsec >= 1000000000)
+    {
+        ts.tv_nsec -= 1000000000;
+        ++ts.tv_sec;
+    }
+
+    res = pthread_cond_timedwait(&vs->cond, &vs->mutex, &ts);
+    pthread_mutex_unlock(&vs->mutex);
+
+    return res;
+}
+
 
 static int map_mdp_pixel_format()
 {
@@ -99,37 +235,37 @@ static int isDisplaySplit(struct fb_qcom_overlay_data *data)
 
 static int free_ion_mem(struct fb_qcom_overlay_data *data)
 {
-    int ret = 0;
-
-    if(data->mem_buf)
-        munmap(data->mem_buf, data->size);
-
-    if(data->ion_fd >= 0)
+    int ret = 0, i;
+    struct fb_qcom_overlay_mem_info *info;
+    for(i = 0; i < NUM_BUFFERS; ++i)
     {
-        ret = ioctl(data->ion_fd, ION_IOC_FREE, &data->handle_data);
-        if(ret < 0)
-            ERROR("free_mem failed ");
-    }
+        info = &data->mem_info[i];
 
-    if(data->mem_fd >= 0)
-        close(data->mem_fd);
-    if(data->ion_fd >= 0)
-        close(data->ion_fd);
+        if(info->mem_buf)
+            munmap(info->mem_buf, info->size);
+
+        if(info->ion_fd >= 0)
+        {
+            ret = ioctl(info->ion_fd, ION_IOC_FREE, &info->handle_data);
+            if(ret < 0)
+                ERROR("free_mem failed ");
+        }
+
+        if(info->mem_fd >= 0)
+            close(info->mem_fd);
+
+        if(info->ion_fd >= 0)
+            close(info->ion_fd);
+    }
     return 0;
 }
 
 static int alloc_ion_mem(struct fb_qcom_overlay_data *data, unsigned int size)
 {
-    int result;
+    int result, i;
     struct ion_fd_data fd_data;
     struct ion_allocation_data ionAllocData;
-
-    data->ion_fd = open("/dev/ion", O_RDWR|O_DSYNC|O_CLOEXEC);
-    if(data->ion_fd < 0)
-    {
-        ERROR("ERROR: Can't open ion ");
-        return -errno;
-    }
+    struct fb_qcom_overlay_mem_info *info;
 
     ionAllocData.flags = 0;
     ionAllocData.len = size;
@@ -138,32 +274,47 @@ static int alloc_ion_mem(struct fb_qcom_overlay_data *data, unsigned int size)
             ION_HEAP(ION_IOMMU_HEAP_ID) |
             ION_HEAP(21); // ION_SYSTEM_CONTIG_HEAP_ID
 
-    result = ioctl(data->ion_fd, ION_IOC_ALLOC,  &ionAllocData);
-    if(result)
+    for(i = 0; i < NUM_BUFFERS; ++i)
     {
-        ERROR("ION_IOC_ALLOC Failed ");
-        close(data->ion_fd);
-        return result;
-    }
+        info = &data->mem_info[i];
 
-    fd_data.handle = ionAllocData.handle;
-    data->handle_data.handle = ionAllocData.handle;
-    result = ioctl(data->ion_fd, ION_IOC_MAP, &fd_data);
-    if(result)
-    {
-        ERROR("ION_IOC_MAP Failed ");
-        free_ion_mem(data);
-        return result;
-    }
-    data->mem_buf = (uint8_t*)mmap(NULL, size, PROT_READ |
-                PROT_WRITE, MAP_SHARED, fd_data.fd, 0);
-    data->mem_fd = fd_data.fd;
+        info->ion_fd = open("/dev/ion", O_RDWR|O_DSYNC|O_CLOEXEC);
+        if(info->ion_fd < 0)
+        {
+            ERROR("ERROR: Can't open ion ");
+            return -errno;
+        }
 
-    if(!data->mem_buf)
-    {
-        ERROR("ERROR: mem_buf MAP_FAILED ");
-        free_ion_mem(data);
-        return -ENOMEM;
+        result = ioctl(info->ion_fd, ION_IOC_ALLOC,  &ionAllocData);
+        if(result)
+        {
+            ERROR("ION_IOC_ALLOC Failed ");
+            close(info->ion_fd);
+            return result;
+        }
+
+        fd_data.handle = ionAllocData.handle;
+        info->handle_data.handle = ionAllocData.handle;
+        result = ioctl(info->ion_fd, ION_IOC_MAP, &fd_data);
+        if(result)
+        {
+            ERROR("ION_IOC_MAP Failed ");
+            free_ion_mem(data);
+            return result;
+        }
+        info->mem_buf = (uint8_t*)mmap(NULL, size, PROT_READ |
+                    PROT_WRITE, MAP_SHARED, fd_data.fd, 0);
+        info->mem_fd = fd_data.fd;
+
+        if(info->mem_buf == MAP_FAILED)
+        {
+            ERROR("ERROR: mem_buf MAP_FAILED ");
+            info->mem_buf = NULL;
+            free_ion_mem(data);
+            return -ENOMEM;
+        }
+
+        info->offset = 0;
     }
 
     return 0;
@@ -322,7 +473,6 @@ static int free_overlay(struct fb_qcom_overlay_data *data, int fd)
 
     memset(&ext_commit, 0, sizeof(struct mdp_display_commit));
     ext_commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
-    ext_commit.wait_for_finish = 1;
     
     data->overlayL_id = MSMFB_NEW_REQUEST;
     data->overlayR_id = MSMFB_NEW_REQUEST;
@@ -356,6 +506,8 @@ static int impl_open(struct framebuffer *fb)
         goto fail;
     }
 
+    data->vsync = fb_qcom_vsync_init(fb->fd);
+
     fb->impl_data = data;
     return 0;
 
@@ -367,6 +519,7 @@ fail:
 static void impl_close(struct framebuffer *fb)
 {
     struct fb_qcom_overlay_data *data = fb->impl_data;
+    fb_qcom_vsync_destroy(data->vsync);
     free_overlay(data, fb->fd);
     free_ion_mem(data);
     free(data);
@@ -379,6 +532,9 @@ static int impl_update(struct framebuffer *fb)
     struct msmfb_overlay_data ovdataL, ovdataR;
     struct mdp_display_commit ext_commit;
     struct fb_qcom_overlay_data *data = fb->impl_data;
+    struct fb_qcom_overlay_mem_info *info = &data->mem_info[data->active_mem];
+
+    fb_qcom_vsync_wait(data->vsync);
 
     if(!isDisplaySplit(data))
     {
@@ -392,8 +548,8 @@ static int impl_update(struct framebuffer *fb)
 
         ovdataL.id = data->overlayL_id;
         ovdataL.data.flags = 0;
-        ovdataL.data.offset = 0;
-        ovdataL.data.memory_id = data->mem_fd;
+        ovdataL.data.offset = info->offset;
+        ovdataL.data.memory_id = info->mem_fd;
         ret = ioctl(fb->fd, MSMFB_OVERLAY_PLAY, &ovdataL);
         if(ret < 0)
         {
@@ -413,8 +569,8 @@ static int impl_update(struct framebuffer *fb)
 
         ovdataL.id = data->overlayL_id;
         ovdataL.data.flags = 0;
-        ovdataL.data.offset = 0;
-        ovdataL.data.memory_id = data->mem_fd;
+        ovdataL.data.offset = info->offset;
+        ovdataL.data.memory_id = info->mem_fd;
         ret = ioctl(fb->fd, MSMFB_OVERLAY_PLAY, &ovdataL);
         if(ret < 0)
         {
@@ -432,8 +588,8 @@ static int impl_update(struct framebuffer *fb)
 
         ovdataR.id = data->overlayR_id;
         ovdataR.data.flags = 0;
-        ovdataR.data.offset = 0;
-        ovdataR.data.memory_id = data->mem_fd;
+        ovdataR.data.offset = info->offset;
+        ovdataR.data.memory_id = info->mem_fd;
         ret = ioctl(fb->fd, MSMFB_OVERLAY_PLAY, &ovdataR);
         if(ret < 0)
         {
@@ -444,7 +600,6 @@ static int impl_update(struct framebuffer *fb)
 
     memset(&ext_commit, 0, sizeof(struct mdp_display_commit));
     ext_commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
-    ext_commit.wait_for_finish = 1;
     ret = ioctl(fb->fd, MSMFB_DISPLAY_COMMIT, &ext_commit);
     if(ret < 0)
     {
@@ -452,13 +607,15 @@ static int impl_update(struct framebuffer *fb)
         return -1;
     }
 
+    data->active_mem ^= 1;
+
     return ret;
 }
 
 static void *impl_get_frame_dest(struct framebuffer *fb)
 {
     struct fb_qcom_overlay_data *data = fb->impl_data;
-    return data->mem_buf;
+    return data->mem_info[data->active_mem].mem_buf;
 }
 
 const struct fb_impl fb_impl_qcom_overlay = {
