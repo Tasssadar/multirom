@@ -65,7 +65,8 @@ enum
 {
     AUTOBOOT_NAME            = 0x00,
     AUTOBOOT_LAST            = 0x01,
-    AUTOBOOT_FORCE_CURRENT   = 0x02
+    AUTOBOOT_FORCE_CURRENT   = 0x02,
+    AUTOBOOT_CHECK_KEYS      = 0x04,
 };
 
 struct usb_partition

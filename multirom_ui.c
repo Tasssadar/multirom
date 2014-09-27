@@ -109,6 +109,19 @@ static void reveal_rect_alpha_step(void *data, float interpolated)
 
 int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 {
+    if(s->auto_boot_rom && (s->auto_boot_type & AUTOBOOT_CHECK_KEYS))
+    {
+        start_input_thread_wait(1);
+        int res = is_any_key_pressed() || get_last_key() != -1;
+        stop_input_thread();
+
+        if(!res)
+        {
+            *to_boot = s->auto_boot_rom;
+            return UI_EXIT_BOOT_ROM;
+        }
+    }
+
     if(multirom_init_fb(s->rotation) < 0)
         return UI_EXIT_BOOT_ROM;
 
@@ -148,7 +161,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     multirom_set_brightness(s->brightness);
 
-    if(s->auto_boot_rom && s->auto_boot_seconds > 0)
+    if(s->auto_boot_rom && s->auto_boot_seconds > 0 && (s->auto_boot_type & AUTOBOOT_CHECK_KEYS) == 0)
         multirom_ui_auto_boot();
     else
     {
