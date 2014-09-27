@@ -355,7 +355,7 @@ int wait_for_key(void)
 
 int is_any_key_pressed(void)
 {
-    int n, i;
+    size_t n, i;
     unsigned long keys[BITS_TO_LONGS(KEY_CNT)];
     for(n = 0; n < ev_count; ++n)
     {
