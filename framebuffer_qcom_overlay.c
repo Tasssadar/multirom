@@ -72,6 +72,7 @@ struct fb_qcom_overlay_data {
 
 #define VSYNC_PREFIX "VSYNC="
 
+#ifdef MR_QCOM_OVERLAY_USE_VSYNC
 static int fb_qcom_vsync_enable(struct fb_qcom_vsync *vs, int enable)
 {
     clock_gettime(CLOCK_REALTIME, &vs->time);
@@ -133,32 +134,38 @@ static void *fb_qcom_vsync_thread_work(void *data)
     close(fd);
     return NULL;
 }
+#endif // #ifdef MR_QCOM_OVERLAY_USE_VSYNC
 
 static struct fb_qcom_vsync *fb_qcom_vsync_init(int fb_fd)
 {
     struct fb_qcom_vsync *res = mzalloc(sizeof(struct fb_qcom_vsync));
     res->fb_fd = fb_fd;
+#ifdef MR_QCOM_OVERLAY_USE_VSYNC
     res->_run_thread = 1;
     pthread_mutex_init(&res->mutex, NULL);
     pthread_cond_init(&res->cond, NULL);
-
     pthread_create(&res->thread, NULL, &fb_qcom_vsync_thread_work, res);
+#endif
     return res;
 }
 
 static void fb_qcom_vsync_destroy(struct fb_qcom_vsync *vs)
 {
+#ifdef MR_QCOM_OVERLAY_USE_VSYNC
     pthread_mutex_lock(&vs->mutex);
     vs->_run_thread = 0;
     pthread_mutex_unlock(&vs->mutex);
     pthread_join(vs->thread, NULL);
     pthread_mutex_destroy(&vs->mutex);
     pthread_cond_destroy(&vs->cond);
+#endif
+
     free(vs);
 }
 
 static int fb_qcom_vsync_wait(struct fb_qcom_vsync *vs)
 {
+#ifdef MR_QCOM_OVERLAY_USE_VSYNC
     int res;
     struct timespec ts;
 
@@ -173,7 +180,7 @@ static int fb_qcom_vsync_wait(struct fb_qcom_vsync *vs)
     fb_qcom_vsync_enable(vs, 1);
 
     clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_nsec += 10*1000*1000;
+    ts.tv_nsec += 20*1000*1000;
     if(ts.tv_nsec >= 1000000000)
     {
         ts.tv_nsec -= 1000000000;
@@ -184,6 +191,10 @@ static int fb_qcom_vsync_wait(struct fb_qcom_vsync *vs)
     pthread_mutex_unlock(&vs->mutex);
 
     return res;
+#else
+    usleep(10000);
+    return 0;
+#endif
 }
 
 
