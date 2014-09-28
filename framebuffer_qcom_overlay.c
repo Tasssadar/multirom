@@ -26,6 +26,7 @@
 #include <string.h>
 #include <linux/fb.h>
 #include <poll.h>
+#include <errno.h>
 
 #include "framebuffer.h"
 #include "log.h"
@@ -77,7 +78,7 @@ static int fb_qcom_vsync_enable(struct fb_qcom_vsync *vs, int enable)
 
     if(vs->enabled != enable)
     {
-        if(vs->fb_fd <= 0 || ioctl(vs->fb_fd, MSMFB_OVERLAY_VSYNC_CTRL, &enable) < 0)
+        if(vs->fb_fd < 0 || ioctl(vs->fb_fd, MSMFB_OVERLAY_VSYNC_CTRL, &enable) < 0)
         {
             ERROR("Failed to set vsync status\n");
             return -1;
@@ -110,14 +111,14 @@ static void *fb_qcom_vsync_thread_work(void *data)
 
     while(vs->_run_thread)
     {
-        err = poll(&pfd, 1, 100);
+        err = poll(&pfd, 1, 10);
 
         if(pfd.revents & POLLPRI)
         {
-            len = pread(pfd.fd, data, sizeof(data), 0);
+            len = pread(pfd.fd, buff, sizeof(buff), 0);
             if(len > 0)
             {
-                if(strncmp(data, VSYNC_PREFIX, strlen(VSYNC_PREFIX)) == 0)
+                if(strncmp(buff, VSYNC_PREFIX, strlen(VSYNC_PREFIX)) == 0)
                     pthread_cond_signal(&vs->cond);
             }
             else
@@ -172,7 +173,7 @@ static int fb_qcom_vsync_wait(struct fb_qcom_vsync *vs)
     fb_qcom_vsync_enable(vs, 1);
 
     clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_nsec += 20*1000*1000;
+    ts.tv_nsec += 10*1000*1000;
     if(ts.tv_nsec >= 1000000000)
     {
         ts.tv_nsec -= 1000000000;
