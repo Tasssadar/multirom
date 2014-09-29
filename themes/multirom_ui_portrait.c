@@ -65,7 +65,7 @@ static void init_header(multirom_theme_data *t)
     const int TAB_BTN_WIDTH = fb_width*0.21;
     int i;
     int x = fb_width - (TAB_BTN_WIDTH*TAB_COUNT);
-    static const char *str[] = { "Internal", "USB", "Misc", "MultiROM" };
+    static const char *str[] = { "Internal", "External", "Misc", "MultiROM" };
     char buff[64];
 
     fb_add_rect_lvl(100, 0, 0, fb_width, HEADER_HEIGHT, C_HIGHLIGHT_BG);
