@@ -1274,7 +1274,14 @@ int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_pa
         goto exit;
 
     if(fstab_disable_part(tab, "/system") || fstab_disable_part(tab, "/data") || fstab_disable_part(tab, "/cache"))
-        goto exit;
+    {
+#if MR_DEVICE_HOOKS >= 4
+        if(!mrom_hook_allow_incomplete_fstab())
+#endif
+        {
+            goto exit;
+        }
+    }
 
     if(has_fw)
     {
@@ -1287,7 +1294,7 @@ int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_pa
     }
 
     // Android considers empty fstab invalid
-    if(tab->count == 3 + has_fw)
+    if(tab->count <= 3 + has_fw)
     {
         INFO("fstab would be empty, adding dummy line\n");
         fstab_add_part(tab, "tmpfs", "/dummy_tmpfs", "tmpfs", "ro,nosuid,nodev", "defaults");

@@ -32,6 +32,10 @@ void mrom_hook_before_fb_close(void);
 void tramp_hook_before_device_init(void);
 #endif
 
+#if MR_DEVICE_HOOKS >= 4
+int mrom_hook_allow_incomplete_fstab(void);
+#endif
+
 #endif /* MR_DEVICE_HOOKS */
 
 #endif /* MR_DEVICE_HOOKS_H */
