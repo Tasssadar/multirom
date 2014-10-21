@@ -1360,15 +1360,28 @@ int multirom_create_media_link(void)
 
     if(api_level >= 17)
     {
-        FILE *f = fopen(LAYOUT_VERSION, "w");
-        if(!f)
+        char buf[16];
+        buf[0] = 0;
+
+        FILE *f = fopen(LAYOUT_VERSION, "r");
+        const int rewrite = (!f || !fgets(buf, sizeof(buf), f) || atoi(buf) < 2);
+
+        if(f)
+            fclose(f);
+
+        if(rewrite)
         {
-            ERROR("Failed to create .layout_version!\n");
-            return -1;
+            f = fopen(LAYOUT_VERSION, "w");
+            if(!f)
+            {
+                ERROR("Failed to create .layout_version!\n");
+                return -1;
+            }
+
+            fputc('2', f);
+            fclose(f);
+            chmod(LAYOUT_VERSION, 0600);
         }
-        fputs("2", f);
-        fclose(f);
-        chmod(LAYOUT_VERSION, 0600);
     }
 
     return 0;
