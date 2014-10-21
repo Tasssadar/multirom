@@ -960,8 +960,12 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     switch(type)
     {
         case ROM_DEFAULT:
+        {
+            mount("/realdata", "/data", "", MS_BIND, "");
             rom_quirks_on_android_mounted_fs(to_boot);
+            umount("/data");
             break;
+        }
         case ROM_LINUX_INTERNAL:
         case ROM_LINUX_USB:
             break;
