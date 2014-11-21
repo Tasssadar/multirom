@@ -75,7 +75,7 @@ struct fstab *fstab_load(const char *path, int resolve_symlinks)
     char *saveptr = NULL;
     char *p;
     char line[1024];
-    int len;
+    int len, is_dev_on_line = 0;
     struct fstab_part *part = NULL;
     while((p = fgets(line, sizeof(line), f)))
     {
@@ -89,6 +89,9 @@ struct fstab *fstab_load(const char *path, int resolve_symlinks)
         if(*p == '#' || *p == 0)
             continue;
 
+        if(t->version == -1)
+            is_dev_on_line = (strstr(line, "/dev/") != NULL);
+
         part = mzalloc(sizeof(struct fstab_part));
 
         if(!(p = strtok_r(line, delim, &saveptr)))
@@ -99,8 +102,10 @@ struct fstab *fstab_load(const char *path, int resolve_symlinks)
 
         if(t->version == -1)
         {
-            if(strstr(p, "/dev/") == p) t->version = 2;
-            else                        t->version = 1;
+            if(is_dev_on_line && strstr(p, "/dev/") != p)
+                t->version = 1;
+            else
+                t->version = 2;
         }
 
         if(t->version == 2)
