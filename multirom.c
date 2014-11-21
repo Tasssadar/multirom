@@ -1106,7 +1106,7 @@ static int multirom_inject_fw_mounter(char *rc_with_mount_all, struct fstab_part
     chmod(FW_MOUNTER_PATH, 0755);
 
     // prepare fstab for it
-    struct fstab *fw_fstab = fstab_create_empty(1);
+    struct fstab *fw_fstab = fstab_create_empty(2);
     fstab_add_part_struct(fw_fstab, fw_part);
     fstab_save(fw_fstab, FW_MOUNTER_FSTAB);
     fstab_destroy(fw_fstab);
