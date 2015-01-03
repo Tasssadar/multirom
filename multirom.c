@@ -375,7 +375,7 @@ int multirom_default_status(struct multirom_status *s)
     s->current_rom = NULL;
     s->roms = NULL;
     s->colors = 0;
-    s->brightness = 40;
+    s->brightness = MULTIROM_DEFAULT_BRIGHTNESS;
     s->enable_adb = 0;
     s->rotation = MULTIROM_DEFAULT_ROTATION;
     s->anim_duration_coef = 1.f;
