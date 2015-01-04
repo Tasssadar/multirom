@@ -107,12 +107,12 @@ static px_type *load_png(const char *path, int destW, int destH)
     png_structp png_ptr = NULL;
     png_infop info_ptr = NULL;
     uint32_t bytes_per_row;
-    uint8_t *row_buff;
     px_type *data_dest = NULL, *data_itr;
     size_t i, y;
     int si, alpha;
     int px_per_row;
     uint32_t src_pix;
+    png_bytep *rows = NULL;
 
     fp = fopen(path, "rb");
     if(!fp)
@@ -164,36 +164,40 @@ static px_type *load_png(const char *path, int destW, int destH)
         goto exit;
     }
 
+    if (color_type == PNG_COLOR_TYPE_PALETTE)
+        png_set_palette_to_rgb(png_ptr);
+
+    png_set_interlace_handling(png_ptr);
+    png_read_update_info(png_ptr, info_ptr);
+
 #if PIXEL_SIZE == 2
     // need another byte for alpha. Make it 4 to make it simpler
     data_dest = malloc(4 * width * height);
 #else
     data_dest = malloc(PIXEL_SIZE * width * height);
 #endif
-
-    if (color_type == PNG_COLOR_TYPE_PALETTE)
-        png_set_palette_to_rgb(png_ptr);
-
-    bytes_per_row = png_get_rowbytes(png_ptr, info_ptr);
-    px_per_row = bytes_per_row/channels;
-    row_buff = malloc(bytes_per_row);
     data_itr = data_dest;
 
-    for (y = 0; y < height; ++y)
+    bytes_per_row = png_get_rowbytes(png_ptr, info_ptr);
+    rows = malloc(sizeof(png_bytep)*height);
+    for(y = 0; y < height; ++y)
+        rows[y] = malloc(bytes_per_row);
+    png_read_image(png_ptr, rows);
+
+    for(y = 0; y < height; ++y)
     {
-        png_read_row(png_ptr, row_buff, NULL);
         for(i = 0, si = 0; i < width; ++i)
         {
             if(channels == 4)
             {
-                src_pix = ((uint32_t*)row_buff)[i];
+                src_pix = ((uint32_t*)rows[y])[i];
                 src_pix = (src_pix & 0xFF00FF00) | ((src_pix & 0xFF0000) >> 16) | ((src_pix & 0xFF) << 16);
             }
             else //if(channels == 3) - no other option
             {
-                src_pix = (row_buff[si++] << 16);  // R
-                src_pix |= (row_buff[si++] << 8);  // G
-                src_pix |= (row_buff[si++]);       // B
+                src_pix = (rows[y][si++] << 16);  // R
+                src_pix |= (rows[y][si++] << 8);  // G
+                src_pix |= (rows[y][si++]);       // B
                 src_pix |= 0xFF000000;             // A
             }
 
@@ -207,10 +211,11 @@ static px_type *load_png(const char *path, int destW, int destH)
             ++data_itr;
 #endif
         }
+        free(rows[y]);
     }
+    free(rows);
 
     data_dest = scale_png_img(data_dest, width, height, destW, destH);
-    free(row_buff);
 exit:
     png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
     fclose(fp);
