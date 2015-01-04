@@ -31,7 +31,6 @@
 #include <linux/kd.h>
 #include <cutils/memory.h>
 #include <pthread.h>
-#include <sys/atomics.h>
 #include <png.h>
 
 #include "log.h"
@@ -41,6 +40,7 @@
 #include "animation.h"
 #include "multirom.h"
 #include "listview.h"
+#include "atomics.h"
 
 #if PIXEL_SIZE == 4
 #define fb_memset(dst, what, len) android_memset32(dst, what, len)
@@ -62,7 +62,7 @@ static struct framebuffer fb;
 static int fb_frozen = 0;
 static int fb_force_generic = 0;
 
-static fb_context_t fb_ctx = { 
+static fb_context_t fb_ctx = {
     .first_item = NULL,
     .batch_started = 0,
     .background_color = BLACK,
@@ -75,7 +75,7 @@ static pthread_t fb_draw_thread;
 static pthread_mutex_t fb_update_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t fb_draw_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t fb_draw_cond = PTHREAD_COND_INITIALIZER;
-static volatile int fb_draw_requested = 0;
+static atomic_int fb_draw_requested = ATOMIC_VAR_INIT(0);
 static volatile int fb_draw_run = 0;
 static void *fb_draw_thread_work(void*);
 
@@ -892,8 +892,9 @@ void fb_freeze(int freeze)
     // wait for last draw to finish or prevent new draw
     if(fb_frozen == 1)
     {
+        atomic_int expected = ATOMIC_VAR_INIT(1);
         pthread_mutex_lock(&fb_draw_mutex);
-        __atomic_cmpxchg(1, 0, &fb_draw_requested);
+        int res = atomic_compare_exchange_strong(&fb_draw_requested, &expected, 0);
         pthread_mutex_unlock(&fb_draw_mutex);
     }
 }
@@ -938,14 +939,16 @@ void *fb_draw_thread_work(void *cookie)
     uint32_t diff = 0, prevSleepTime = 0;
     clock_gettime(CLOCK_MONOTONIC, &last);
 
+    atomic_int expected = ATOMIC_VAR_INIT(1);
+
     while(fb_draw_run)
     {
         clock_gettime(CLOCK_MONOTONIC, &curr);
         diff = timespec_diff(&last, &curr);
 
+        expected.__val = 1; // might be reseted by atomic_compare_exchange_strong
         pthread_mutex_lock(&fb_draw_mutex);
-
-        if(__atomic_cmpxchg(1, 0, &fb_draw_requested) == 0)
+        if(atomic_compare_exchange_strong(&fb_draw_requested, &expected, 0))
         {
             fb_draw();
             pthread_cond_broadcast(&fb_draw_cond);
@@ -977,13 +980,18 @@ void *fb_draw_thread_work(void *cookie)
 void fb_request_draw(void)
 {
     if(!fb_frozen)
-        __atomic_cmpxchg(0, 1, &fb_draw_requested);
+    {
+        atomic_int expected = ATOMIC_VAR_INIT(0);
+        atomic_compare_exchange_strong(&fb_draw_requested, &expected, 1);
+    }
 }
 
 void fb_force_draw(void)
 {
+    atomic_int expected = ATOMIC_VAR_INIT(0);
+
     pthread_mutex_lock(&fb_draw_mutex);
-    __atomic_cmpxchg(0, 1, &fb_draw_requested);
+    atomic_compare_exchange_strong(&fb_draw_requested, &expected, 1);
     pthread_cond_wait(&fb_draw_cond, &fb_draw_mutex);
     pthread_mutex_unlock(&fb_draw_mutex);
 }

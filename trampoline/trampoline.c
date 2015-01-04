@@ -269,7 +269,7 @@ int main(int argc, char *argv[])
     if(!fstab)
         goto exit;
 
-#if 0 
+#if 0
     fstab_dump(fstab); //debug
 #endif
 

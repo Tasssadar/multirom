@@ -185,6 +185,8 @@ ifeq ($(MR_CONTINUOUS_FB_UPDATE),true)
     LOCAL_CFLAGS += -DMR_CONTINUOUS_FB_UPDATE
 endif
 
+LOCAL_CFLAGS += -DPLATFORM_SDK_VERSION=$(PLATFORM_SDK_VERSION)
+
 include $(BUILD_EXECUTABLE)
 
 # Trampoline
@@ -232,6 +234,10 @@ LOCAL_SRC_FILES:= \
     src/cff/cff.c \
     src/psnames/psnames.c \
     src/pshinter/pshinter.c
+
+ifeq ($(shell if [ -e "$(ANDROID_BUILD_TOP)/external/freetype/src/gzip/ftgzip.c" ]; then echo "hasgzip"; fi),hasgzip)
+LOCAL_SRC_FILES += src/gzip/ftgzip.c
+endif
 
 LOCAL_C_INCLUDES += \
     $(LOCAL_PATH)/builds \
