@@ -491,6 +491,16 @@ int multirom_load_status(struct multirom_status *s)
 
     if(multirom_search_last_kmsg(SECOND_BOOT_KMESG) == 0)
         s->is_second_boot = 1;
+    else
+    {
+        FILE *cmdline = fopen("/proc/cmdline", "r");
+        if(cmdline)
+        {
+            if(fgets(line, sizeof(line), cmdline) && strstr(line, "mrom_kexecd=1"))
+                s->is_second_boot = 1;
+            fclose(cmdline);
+        }
+    }
 
     while((fgets(line, sizeof(line), f)))
     {
