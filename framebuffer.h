@@ -121,7 +121,7 @@ int fb_get_vi_xres(void);
 int fb_get_vi_yres(void);
 void fb_force_generic_impl(int force);
 
-enum 
+enum
 {
     FB_IT_RECT,
     FB_IT_IMG,
@@ -169,7 +169,7 @@ struct fb_item_header;
     int x, y; \
     int w, h;
 
-typedef struct 
+typedef struct
 {
     FB_ITEM_POS
 } fb_item_pos;

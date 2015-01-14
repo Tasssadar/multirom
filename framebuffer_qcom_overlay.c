@@ -282,7 +282,13 @@ static int alloc_ion_mem(struct fb_qcom_overlay_data *data, unsigned int size)
     ionAllocData.flags = 0;
     ionAllocData.len = size;
     ionAllocData.align = sysconf(_SC_PAGESIZE);
+
+// are you kidding me -.-
+#if (PLATFORM_SDK_VERSION >= 21)
+    ionAllocData.heap_id_mask =
+#else
     ionAllocData.heap_mask =
+#endif
             ION_HEAP(ION_IOMMU_HEAP_ID) |
             ION_HEAP(21); // ION_SYSTEM_CONTIG_HEAP_ID
 
@@ -428,7 +434,7 @@ static int allocate_overlay(struct fb_qcom_overlay_data *data, int fd, int width
             overlayR.transp_mask = MDP_TRANSP_NOP;
             overlayR.id = MSMFB_NEW_REQUEST;
             ret = ioctl(fd, MSMFB_OVERLAY_SET, &overlayR);
-            if(ret < 0) 
+            if(ret < 0)
             {
                 ERROR("OverlayR Set Failed");
                 return ret;
@@ -485,14 +491,14 @@ static int free_overlay(struct fb_qcom_overlay_data *data, int fd)
 
     memset(&ext_commit, 0, sizeof(struct mdp_display_commit));
     ext_commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
-    
+
     data->overlayL_id = MSMFB_NEW_REQUEST;
     data->overlayR_id = MSMFB_NEW_REQUEST;
 
     ret = ioctl(fd, MSMFB_DISPLAY_COMMIT, &ext_commit);
     if(ret < 0)
     {
-        ERROR("Clear MSMFB_DISPLAY_COMMIT failed!");   
+        ERROR("Clear MSMFB_DISPLAY_COMMIT failed!");
         return ret;
     }
 
