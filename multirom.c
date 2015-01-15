@@ -1741,6 +1741,10 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
         goto exit;
     }
 
+    if(!strstr(cmdline, "androidboot.selinux=permissive"))
+        if(sizeof(cmdline)-strlen(cmdline)-1 >= sizeof("androidboot.selinux=permissive"))
+            strcat(cmdline, "androidboot.selinux=permissive ");
+
     if(sizeof(cmdline)-strlen(cmdline)-1 >= sizeof("mrom_kexecd=1"))
         strcat(cmdline, "mrom_kexecd=1");
 
