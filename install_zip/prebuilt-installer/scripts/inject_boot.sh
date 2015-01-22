@@ -40,8 +40,13 @@ case "$magic" in
 esac
 
 if [ rd_cmpr == -1 ] || [ ! -f /tmp/boot/init ] ; then
-    echo "Failed to extract ramdisk!"
-    return 1
+    echo "Failed to extract ramdisk! Trying to unloki boot.img and unpack it"
+    # Some devs still use loki, so let's unloki boot.img and then extract ramdisk
+    /tmp/unloki.sh
+    if [ rd_cmpr == -1 ] || [ ! -f /tmp/boot/init ] ; then
+        echo "Failed to unloki boot.img and extract ramdisk!"
+        return 1
+    fi
 fi
 
 # copy trampoline
@@ -100,6 +105,15 @@ if [ ! -e "/tmp/newboot.img" ] ; then
     return 1
 fi
 
+# Bump boot.img - it's easier to unpack a bumped boot.img than a loki'd one
+cat newboot.img /tmp/sign > newboot_signed.img
+
+echo "Cleaning boot partition"
+
+dd if=/dev/zero of=$BOOT_DEV
+
 echo "Writing new boot.img..."
-dd bs=4096 if=/tmp/newboot.img of=$BOOT_DEV
+
+dd if=/tmp/newboot_signed.img of=$BOOT_DEV
+
 return $?
