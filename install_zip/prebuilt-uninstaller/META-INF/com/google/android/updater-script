@@ -11,6 +11,7 @@ package_extract_dir("scripts", "/tmp/");
 set_perm(0, 0, 0777, "/tmp/busybox");
 set_perm(0, 0, 0777, "/tmp/bbootimg");
 set_perm(0, 0, 0777, "/tmp/lz4");
+set_perm(0, 0, 0777, "/tmp/lzma");
 set_perm(0, 0, 0777, "/tmp/erase_multirom.sh");
 set_perm(0, 0, 0777, "/tmp/clear_boot.sh");
 
@@ -23,6 +24,7 @@ ui_print("Cleaning up...");
 delete_recursive("/tmp/boot");
 delete_recursive("/tmp/multirom");
 delete("/tmp/lz4");
+delete("/tmp/lzma");
 delete("/tmp/bootimg.cfg");
 delete("/tmp/initrd.img");
 delete("/tmp/zImage");

@@ -1,11 +1,13 @@
 #!/sbin/sh
 BUSYBOX="/tmp/busybox"
 LZ4="/tmp/lz4"
+LZMA="/tmp/lzma"
 BOOT_DEV="$(cat /tmp/bootdev)"
 RD_ADDR="$(cat /tmp/rd_addr)"
 
 CMPR_GZIP=0
 CMPR_LZ4=1
+CMPR_LZMA=2
 
 if [ ! -e "$BOOT_DEV" ]; then
     echo "BOOT_DEV \"$BOOT_DEV\" does not exist!"
@@ -33,6 +35,10 @@ case "$magic" in
     02214C18)        # LZ4
         $LZ4 -d "../initrd.img" stdout | $BUSYBOX cpio -i
         rd_cmpr=CMPR_LZ4;
+        ;;
+    5D*)        # LZMA
+        $LZMA -d -c "../initrd.img" | $BUSYBOX cpio -i
+        rd_cmpr=CMPR_LZMA;
         ;;
     *)
         echo "invalid ramdisk magic $magic"
@@ -73,6 +79,9 @@ case $rd_cmpr in
         ;;
     CMPR_LZ4)
         find . | $BUSYBOX cpio -o -H newc | $LZ4 stdin "../initrd.img"
+        ;;
+    CMPR_LZMA)
+        find . | $BUSYBOX cpio -o -H newc | $LZMA > "../initrd.img"
         ;;
 esac
 
