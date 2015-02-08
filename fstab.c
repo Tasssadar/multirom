@@ -237,7 +237,7 @@ void fstab_dump(struct fstab *f)
     }
 }
 
-struct fstab_part *fstab_find_by_path(struct fstab *f, const char *path)
+struct fstab_part *fstab_find_first_by_path(struct fstab *f, const char *path)
 {
     int i;
     for(i = 0; i < f->count; ++i)
@@ -247,16 +247,43 @@ struct fstab_part *fstab_find_by_path(struct fstab *f, const char *path)
     return NULL;
 }
 
-int fstab_disable_part(struct fstab *f, const char *path)
+struct fstab_part *fstab_find_next_by_path(struct fstab *f, const char *path, struct fstab_part *prev)
 {
-    struct fstab_part *p = fstab_find_by_path(f, path);
-    if(!p)
+    int i, found_prev = 0;
+    for(i = 0; i < f->count; ++i)
+    {
+        if(!found_prev)
+        {
+            if(f->parts[i] == prev)
+                found_prev = 1;
+        }
+        else if(strcmp(f->parts[i]->path, path) == 0)
+        {
+            return f->parts[i];
+        }
+    }
+    return NULL;
+}
+
+int fstab_disable_parts(struct fstab *f, const char *path)
+{
+    int i, cnt = 0;
+
+    for(i = 0; i < f->count; ++i)
+    {
+        if(strcmp(f->parts[i]->path, path) == 0)
+        {
+            f->parts[i]->disabled = 1;
+            ++cnt;
+        }
+    }
+
+    if(cnt == 0)
     {
         ERROR("Failed to disable partition %s, couldn't find it in fstab!\n", path);
         return -1;
     }
-    p->disabled = 1;
-    return 0;
+    return cnt;
 }
 
 void fstab_parse_options(char *opt, struct fstab_part *part)

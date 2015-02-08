@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    struct fstab_part *fw_part = fstab_find_by_path(f, "/firmware");
+    struct fstab_part *fw_part = fstab_find_first_by_path(f, "/firmware");
     if(!fw_part)
     {
         ERROR("Unable to find partition /firmware in %s!\n", FW_MOUNTER_FSTAB);
