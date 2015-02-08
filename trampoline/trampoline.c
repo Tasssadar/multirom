@@ -97,8 +97,11 @@ static void run_multirom(void)
     do
     {
         ERROR("Running multirom");
-        if(run_cmd(cmd) == 0)
+        int res = run_cmd(cmd);
+        if(res == 0)
             break;
+        else
+            ERROR("MultiROM exited with status code %d!", res);
     }
     while(restart);
 }
