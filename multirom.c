@@ -1400,7 +1400,7 @@ int multirom_create_media_link(void)
                 return -1;
             }
 
-            fputc('2', f);
+            fputc(api_level > 19 ? '3' : '2', f);
             fclose(f);
             chmod(LAYOUT_VERSION, 0600);
         }
