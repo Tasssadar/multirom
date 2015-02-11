@@ -2471,7 +2471,7 @@ int multirom_search_cmdline(char* line)
     int res = -1;
 	if(cmdline)
 	{
-		if(fgets(line, sizeof(*line), cmdline) && strstr(line, "mrom_kexecd=1"))
+		if(fgets(*line, sizeof(*line), cmdline) && strstr(*line, "mrom_kexecd=1"))
 		res = 0;
 		fclose(cmdline);
 	}
