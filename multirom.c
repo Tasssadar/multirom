@@ -489,7 +489,7 @@ int multirom_load_status(struct multirom_status *s)
     char name[64];
     char *pch;
 
-    if(multirom_search_cmdline(line) == 0 || multirom_search_last_kmsg(SECOND_BOOT_KMESG) == 0)
+    if(multirom_search_cmdline(&line) == 0 || multirom_search_last_kmsg(SECOND_BOOT_KMESG) == 0)
         s->is_second_boot = 1;
 
     while((fgets(line, sizeof(line), f)))
@@ -2471,7 +2471,7 @@ int multirom_search_cmdline(char* line)
     int res = -1;
 	if(cmdline)
 	{
-		if(fgets(line, sizeof(line), cmdline) && strstr(line, "mrom_kexecd=1"))
+		if(fgets(line, sizeof(*line), cmdline) && strstr(line, "mrom_kexecd=1"))
 		res = 0;
 		fclose(cmdline);
 	}
