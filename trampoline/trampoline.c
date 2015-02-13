@@ -124,18 +124,19 @@ static void mount_and_run(struct fstab *fstab)
     mkdir(REALDATA, 0755);
 
     int mount_err = -1;
+    struct fstab_part *p_itr = p;
     do
     {
         // Remove nosuid flag, because secondary ROMs have
         // su binaries on /data
-        p->mountflags &= ~(MS_NOSUID);
+        p_itr->mountflags &= ~(MS_NOSUID);
 
-        if(mount(p->device, REALDATA, p->type, p->mountflags, p->options) >= 0)
+        if(mount(p_itr->device, REALDATA, p_itr->type, p_itr->mountflags, p_itr->options) >= 0)
             mount_err = 0;
         else
             mount_err = -errno;
     }
-    while(mount_err < 0 && (p = fstab_find_next_by_path(fstab, "/data", p)));
+    while(mount_err < 0 && (p_itr = fstab_find_next_by_path(fstab, "/data", p_itr)));
 
     if(mount_err < 0)
     {
