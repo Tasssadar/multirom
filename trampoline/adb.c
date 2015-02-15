@@ -56,7 +56,7 @@ static void *adb_thread_work(void *mrom_path)
     int enabled = adb_is_enabled((char*)mrom_path);
     free(mrom_path);
 
-    if(enabled != 0)
+    if(enabled == 0)
         return NULL;
 
     adb_init_usb();
@@ -226,5 +226,5 @@ int adb_is_enabled(char *mrom_path)
     char *cmd[] = { busybox_path, "grep", "^enable_adb=1$", cfg, NULL };
     sprintf(cfg, "%s/multirom.ini", mrom_path);
 
-    return run_cmd(cmd) == 0 ? 0 : -1;
+    return run_cmd(cmd) == 0 ? 1 : 0;
 }

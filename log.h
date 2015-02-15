@@ -17,10 +17,17 @@
 #ifndef _INIT_LOG_H_
 #define _INIT_LOG_H_
 
-#include <cutils/klog.h>
+#ifdef LOG_TO_STDOUT
+  #include <stdio.h>
+  #define ERROR(fmt, ...) fprintf(stderr, MR_LOG_TAG ": " fmt "\n", ##__VA_ARGS__)
+  #define NOTICE(fmt, ...) printf(MR_LOG_TAG ": " fmt "\n", ##__VA_ARGS__)
+  #define INFO(fmt, ...) printf(MR_LOG_TAG ": " fmt "\n", ##__VA_ARGS__)
+#else
+  #include <cutils/klog.h>
 
-#define ERROR(x...)   KLOG_ERROR(MR_LOG_TAG, x)
-#define NOTICE(x...)  KLOG_NOTICE(MR_LOG_TAG, x)
-#define INFO(x...)    KLOG_INFO(MR_LOG_TAG, x)
+  #define ERROR(x...)   KLOG_ERROR(MR_LOG_TAG, x)
+  #define NOTICE(x...)  KLOG_NOTICE(MR_LOG_TAG, x)
+  #define INFO(x...)    KLOG_INFO(MR_LOG_TAG, x)
+#endif
 
 #endif

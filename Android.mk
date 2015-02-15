@@ -214,6 +214,11 @@ include $(multirom_local_path)/kexec-tools/Android.mk
 # adbd
 include $(multirom_local_path)/adbd/Android.mk
 
+# trampoline_encmnt
+ifeq ($(MR_ENCRYPTION),true)
+include $(multirom_local_path)/trampoline_encmnt/Android.mk
+endif
+
 # We need static libtruetype but it isn't in standard android makefile :(
 LOCAL_PATH := external/freetype/
 include $(CLEAR_VARS)
