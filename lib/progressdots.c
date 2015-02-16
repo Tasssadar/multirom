@@ -18,8 +18,7 @@
 #include <unistd.h>
 
 #include "progressdots.h"
-#include "multirom_ui.h"
-#include "multirom_ui_themes.h"
+#include "colors.h"
 #include "workers.h"
 #include "util.h"
 #include "animation.h"

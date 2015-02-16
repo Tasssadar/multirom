@@ -140,8 +140,8 @@ static inline void anim_int_step(int *prop, int *start, int *last, int *target, 
 static inline int item_anim_is_on_screen(item_anim *anim)
 {
     fb_item_header *it = anim->item;
-    return it->x + it->w > 0 && it->x < fb_width &&
-            it->y + it->h > 0 && it->y < fb_height;
+    return it->x + it->w > 0 && it->x < (int)fb_width &&
+            it->y + it->h > 0 && it->y < (int)fb_height;
 }
 
 static void item_anim_step(item_anim *anim, float interpolated, int *need_draw)
@@ -198,7 +198,7 @@ static void anim_update(uint32_t diff, void *data)
 
     pthread_mutex_lock(&list->mutex);
     list->in_update_loop = 1;
-    
+
     for(it = list->first; it; )
     {
         anim = it->anim;

@@ -17,17 +17,17 @@
 #ifndef _INIT_LOG_H_
 #define _INIT_LOG_H_
 
+#include "mrom_data.h"
+
 #ifdef LOG_TO_STDOUT
   #include <stdio.h>
-  #define ERROR(fmt, ...) fprintf(stderr, MR_LOG_TAG ": " fmt "\n", ##__VA_ARGS__)
-  #define NOTICE(fmt, ...) printf(MR_LOG_TAG ": " fmt "\n", ##__VA_ARGS__)
-  #define INFO(fmt, ...) printf(MR_LOG_TAG ": " fmt "\n", ##__VA_ARGS__)
+  #define ERROR(fmt, ...) fprintf(stderr, "%s: " fmt "\n", mrom_log_tag(), ##__VA_ARGS__)
+  #define INFO(fmt, ...) printf("%s: " fmt "\n", mrom_log_tag(),  ##__VA_ARGS__)
 #else
   #include <cutils/klog.h>
 
-  #define ERROR(x...)   KLOG_ERROR(MR_LOG_TAG, x)
-  #define NOTICE(x...)  KLOG_NOTICE(MR_LOG_TAG, x)
-  #define INFO(x...)    KLOG_INFO(MR_LOG_TAG, x)
+  #define ERROR(fmt, ...) klog_write(3, "<3>%s: " fmt, mrom_log_tag(), ##__VA_ARGS__)
+  #define INFO(fmt, ...) klog_write(6, "<6>%s: " fmt, mrom_log_tag(), ##__VA_ARGS__)
 #endif
 
 #endif

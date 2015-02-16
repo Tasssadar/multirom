@@ -15,24 +15,30 @@
  * along with MultiROM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef PROGRESSDOTS_H
-#define PROGRESSDOTS_H
+#include <string.h>
+#include <stdio.h>
 
-#include <pthread.h>
-#include "framebuffer.h"
+#include "mrom_data.h"
 
-#define PROGDOTS_W (400*DPI_MUL)
-#define PROGDOTS_H (10*DPI_MUL)
-#define PROGDOTS_CNT 8
+static char multirom_dir[128] = { 0 };
+static char log_tag[64] = { 0 };
 
-typedef struct
+void mrom_set_dir(const char *mrom_dir)
 {
-	FB_ITEM_POS
+    snprintf(multirom_dir, sizeof(multirom_dir), "%s", mrom_dir);
+}
 
-    fb_rect *rect;
-} progdots;
+void mrom_set_log_tag(const char *tag)
+{
+    snprintf(log_tag, sizeof(log_tag), "%s", tag);
+}
 
-progdots *progdots_create(int x, int y);
-void progdots_destroy(progdots *p);
+const char *mrom_log_tag(void)
+{
+    return log_tag;
+}
 
-#endif
+const char *mrom_dir(void)
+{
+    return multirom_dir;
+}

@@ -23,23 +23,25 @@
 #include <errno.h>
 #include <string.h>
 
+#include "lib/framebuffer.h"
+#include "lib/input.h"
+#include "lib/log.h"
+#include "lib/listview.h"
+#include "lib/util.h"
+#include "lib/button.h"
+#include "lib/progressdots.h"
+#include "lib/workers.h"
+#include "lib/containers.h"
+#include "lib/animation.h"
+#include "lib/notification_card.h"
+#include "lib/tabview.h"
+#include "lib/colors.h"
+
 #include "multirom_ui.h"
-#include "framebuffer.h"
-#include "input.h"
-#include "log.h"
-#include "listview.h"
-#include "util.h"
-#include "button.h"
+#include "multirom_ui_themes.h"
+#include "hooks.h"
 #include "version.h"
 #include "pong.h"
-#include "progressdots.h"
-#include "multirom_ui_themes.h"
-#include "workers.h"
-#include "hooks.h"
-#include "containers.h"
-#include "animation.h"
-#include "notification_card.h"
-#include "tabview.h"
 
 static struct multirom_status *mrom_status = NULL;
 static struct multirom_rom *selected_rom = NULL;
@@ -132,7 +134,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     exit_ui_code = -1;
     selected_rom = NULL;
 
-    multirom_ui_select_color(s->colors);
+    colors_select(s->colors);
     themes_info = multirom_ui_init_themes();
     if((cur_theme = multirom_ui_select_theme(themes_info, fb_width, fb_height)) == NULL)
     {
@@ -214,7 +216,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
             fb_freeze(1);
 
             multirom_ui_destroy_theme();
-            multirom_ui_select_color(s->colors);
+            colors_select(s->colors);
             multirom_ui_init_theme(TAB_MISC);
 
             fb_freeze(0);
@@ -272,7 +274,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     stop_input_thread();
     workers_stop();
-    
+
 #if MR_DEVICE_HOOKS >= 2
     mrom_hook_before_fb_close();
 #endif
@@ -509,6 +511,8 @@ void *multirom_ui_tab_rom_init(int tab_type)
 
     if(tab_type == TAB_INTERNAL)
         multirom_ui_fill_rom_list(t->list, MASK_INTERNAL);
+    else
+        multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
 
     listview_update_ui(t->list);
 

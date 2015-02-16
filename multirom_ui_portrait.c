@@ -15,22 +15,23 @@
  * along with MultiROM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "../multirom_ui.h"
-#include "../multirom_ui_themes.h"
-#include "../multirom.h"
-#include "../framebuffer.h"
-#include "../util.h"
-#include "../button.h"
-#include "../version.h"
-#include "../input.h"
-#include "../log.h"
-#include "../animation.h"
-#include "../notification_card.h"
-#include "../tabview.h"
+#include "multirom_ui.h"
+#include "multirom_ui_themes.h"
+#include "multirom.h"
+#include "version.h"
+#include "lib/framebuffer.h"
+#include "lib/util.h"
+#include "lib/button.h"
+#include "lib/input.h"
+#include "lib/log.h"
+#include "lib/animation.h"
+#include "lib/notification_card.h"
+#include "lib/tabview.h"
+#include "lib/colors.h"
 
-#define HEADER_HEIGHT (80*DPI_MUL)
+#define HEADER_HEIGHT (110*DPI_MUL)
 #define TABS_HEIGHT (HEADER_HEIGHT - STATUS_HEIGHT)
-#define MIRI_W (60*DPI_MUL)
+#define MIRI_W (90*DPI_MUL)
 
 #define LISTVIEW_MARGIN (20*DPI_MUL)
 
@@ -43,14 +44,19 @@
 #define CLRBTN_W (50*DPI_MUL)
 #define CLRBTN_B (10*DPI_MUL)
 #define CLRBTN_TOTAL (CLRBTN_W+CLRBTN_B)
-#define CLRBTN_Y (1150*DPI_MUL)
+#define CLRBTN_Y (1100*DPI_MUL)
 #define CLRBTN_MARGIN (8*DPI_MUL)
 
 #define SELECTED_RECT_H (10*DPI_MUL)
 
+static button *pong_btn = NULL;
 static void destroy(multirom_theme_data *t)
 {
-
+    if(pong_btn)
+    {
+        button_destroy(pong_btn);
+        pong_btn = NULL;
+    }
 }
 
 static void init_header(multirom_theme_data *t)
@@ -79,7 +85,17 @@ static void init_header(multirom_theme_data *t)
     x = fb_width/2 - (maxW*TAB_COUNT)/2;
 
     snprintf(buff, sizeof(buff), ":/miri_%dx%d.png", (int)MIRI_W, (int)MIRI_W);
-    fb_add_png_img_lvl(110, 10*DPI_MUL, HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, buff);
+    fb_img *logo = fb_add_png_img_lvl(110, 10*DPI_MUL, HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, buff);
+    if(logo)
+    {
+        pong_btn = mzalloc(sizeof(button));
+        pong_btn->x = logo->x;
+        pong_btn->y = logo->y;
+        pong_btn->w = logo->w;
+        pong_btn->h = logo->h;
+        pong_btn->clicked = &multirom_ui_start_pong;
+        button_init_ui(pong_btn, NULL, 0);
+    }
 
     for(i = 0; i < TAB_COUNT; ++i)
     {
@@ -107,6 +123,7 @@ static void init_header(multirom_theme_data *t)
 static void header_set_tab_selector_pos(multirom_theme_data *t, float pos)
 {
     const int TAB_BTN_WIDTH = t->tab_btns[0]->w;
+
     int dest_x = t->tab_btns[0]->x + TAB_BTN_WIDTH*pos;
     int dest_w = TAB_BTN_WIDTH;
 
@@ -126,19 +143,16 @@ static void header_set_tab_selector_pos(multirom_theme_data *t, float pos)
 
 static void tab_rom_init(multirom_theme_data *t, tab_data_roms *d, int tab_type)
 {
-    d->list->x = fb_width/2 - fb_height/2;
-    d->list->y = HEADER_HEIGHT + LISTVIEW_MARGIN;
-    d->list->w = fb_height;
+    d->list->x = LISTVIEW_MARGIN;
+    d->list->y = HEADER_HEIGHT+LISTVIEW_MARGIN;
+    d->list->w = fb_width - LISTVIEW_MARGIN;
     d->list->h = fb_height - d->list->y - LISTVIEW_MARGIN;
 }
 
 static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_scheme)
 {
-    int i;
-    int x = fb_width/2 - (MISCBTN_W + 30*DPI_MUL);
-    int y = HEADER_HEIGHT + ((fb_height - HEADER_HEIGHT)/2 - 2*(MISCBTN_H + 30*DPI_MUL));
-
-    y += MISCBTN_H + 30*DPI_MUL;
+    int x = fb_width/2 - MISCBTN_W/2;
+    int y = 270*DPI_MUL;
 
     button *b = mzalloc(sizeof(button));
     b->x = x;
@@ -152,36 +166,7 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
     tabview_add_item(t->tabs, TAB_MISC, b->rect);
     tabview_add_item(t->tabs, TAB_MISC, b);
 
-    const int max_colors = multirom_ui_get_color_theme_count();
-    x += (MISCBTN_W/2 - (max_colors*(CLRBTN_TOTAL+CLRBTN_MARGIN))/2);
-    y += MISCBTN_H+30*DPI_MUL + (MISCBTN_H/2 - CLRBTN_TOTAL/2);
-    fb_rect *r;
-    for(i = 0; i < max_colors; ++i)
-    {
-        const struct multirom_color_theme *th = multirom_ui_get_color_theme(i);
-
-        r = fb_add_rect(x, y, CLRBTN_TOTAL, CLRBTN_TOTAL, i == color_scheme ? 0xFFFFCC00 : WHITE);
-        list_add(&d->ui_elements, r);
-
-        r = fb_add_rect(x+CLRBTN_B/2, y+CLRBTN_B/2, CLRBTN_W, CLRBTN_W, th->highlight_bg);
-        list_add(&d->ui_elements, r);
-
-        b = mzalloc(sizeof(button));
-        b->x = x;
-        b->y = y;
-        b->w = CLRBTN_TOTAL;
-        b->h = CLRBTN_TOTAL;
-        b->action = i;
-        b->clicked = &multirom_ui_tab_misc_change_clr;
-        button_init_ui(b, NULL, 0);
-        list_add(&d->buttons, b);
-        tabview_add_item(t->tabs, TAB_MISC, b);
-
-        x += CLRBTN_TOTAL + CLRBTN_MARGIN;
-    }
-
-    x = fb_width/2 - (MISCBTN_W + 30*DPI_MUL) + MISCBTN_W + 30*DPI_MUL;
-    y = HEADER_HEIGHT + ((fb_height - HEADER_HEIGHT)/2 - 2*(MISCBTN_H + 30*DPI_MUL));
+    y += MISCBTN_H+70*DPI_MUL;
 
     static const char *texts[] =
     {
@@ -197,6 +182,7 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
         UI_EXIT_REBOOT_BOOTLOADER, UI_EXIT_SHUTDOWN
     };
 
+    int i;
     for(i = 0; texts[i]; ++i)
     {
         b = mzalloc(sizeof(button));
@@ -212,7 +198,9 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
         tabview_add_item(t->tabs, TAB_MISC, b->rect);
         tabview_add_item(t->tabs, TAB_MISC, b);
 
-        y += MISCBTN_H+30*DPI_MUL;
+        y += MISCBTN_H+20*DPI_MUL;
+        if(i == 2)
+            y += 50*DPI_MUL;
     }
 
     fb_text *text = fb_add_text(5*DPI_MUL, 0, C_TEXT_SECONDARY, SIZE_SMALL, "MultiROM v%d"VERSION_DEV_FIX" with trampoline v%d.",
@@ -224,6 +212,33 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
     text->x = fb_width - text->w - 5*DPI_MUL;
     text->y = fb_height - text->h;
     list_add(&d->ui_elements, text);
+
+    const int max_colors = colors_count();
+    x = fb_width/2 - (max_colors*(CLRBTN_TOTAL+CLRBTN_MARGIN))/2;
+    fb_rect *r;
+    for(i = 0; i < max_colors; ++i)
+    {
+        const struct mrom_color_theme *th = colors_get(i);
+
+        r = fb_add_rect(x, CLRBTN_Y, CLRBTN_TOTAL, CLRBTN_TOTAL, i == color_scheme ? 0xFFFFCC00 : WHITE);
+        list_add(&d->ui_elements, r);
+
+        r = fb_add_rect(x+CLRBTN_B/2, CLRBTN_Y+CLRBTN_B/2, CLRBTN_W, CLRBTN_W, th->highlight_bg);
+        list_add(&d->ui_elements, r);
+
+        b = mzalloc(sizeof(button));
+        b->x = x;
+        b->y = CLRBTN_Y;
+        b->w = CLRBTN_TOTAL;
+        b->h = CLRBTN_TOTAL;
+        b->action = i;
+        b->clicked = &multirom_ui_tab_misc_change_clr;
+        button_init_ui(b, NULL, 0);
+        list_add(&d->buttons, b);
+        tabview_add_item(t->tabs, TAB_MISC, b);
+
+        x += CLRBTN_TOTAL + CLRBTN_MARGIN;
+    }
 
     for(i = 0; d->buttons[i]; ++i)
         keyaction_add(d->buttons[i], button_keyaction_call, d->buttons[i]);
@@ -241,9 +256,9 @@ static int get_tab_height(multirom_theme_data *t)
     return fb_height - HEADER_HEIGHT;
 }
 
-const struct multirom_theme theme_info_landscape = {
-    .width = TH_LANDSCAPE,
-    .height = TH_LANDSCAPE,
+const struct multirom_theme theme_info_portrait = {
+    .width = TH_PORTRAIT,
+    .height = TH_PORTRAIT,
 
     .destroy = &destroy,
     .init_header = &init_header,

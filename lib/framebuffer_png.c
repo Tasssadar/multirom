@@ -95,11 +95,6 @@ static px_type *scale_png_img(px_type *fi_data, int orig_w, int orig_h, int new_
     return (px_type*)out;
 }
 
-// Kanged from TWRP
-double pow(double x, double y) {
-    return x;
-}
-
 static px_type *load_png(const char *path, int destW, int destH)
 {
     FILE *fp;

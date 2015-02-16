@@ -22,11 +22,11 @@
 #include <math.h>
 #include <stdio.h>
 
-#include "framebuffer.h"
-#include "input.h"
+#include "lib/framebuffer.h"
+#include "lib/input.h"
 #include "pong.h"
-#include "util.h"
-#include "containers.h"
+#include "lib/util.h"
+#include "lib/containers.h"
 
 #define SCORE_SPACE (75*DPI_MUL)
 #define L 0

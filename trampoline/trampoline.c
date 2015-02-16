@@ -26,11 +26,11 @@
 #include <dirent.h>
 
 #include "devices.h"
-#include "../log.h"
-#include "../util.h"
+#include "../lib/log.h"
+#include "../lib/util.h"
+#include "../lib/fstab.h"
 #include "../version.h"
 #include "adb.h"
-#include "../fstab.h"
 #include "../hooks.h"
 
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
@@ -260,6 +260,7 @@ int main(int argc, char *argv[])
     mount("sysfs", "/sys", "sysfs", 0, NULL);
 
     klog_init();
+    mrom_set_log_tag("trampoline");
     ERROR("Running trampoline v%d\n", VERSION_TRAMPOLINE);
 
     if(is_charger_mode())

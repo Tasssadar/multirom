@@ -38,9 +38,9 @@
 #include "util.h"
 #include "containers.h"
 #include "animation.h"
-#include "multirom.h"
 #include "listview.h"
 #include "atomics.h"
+#include "mrom_data.h"
 
 #if PIXEL_SIZE == 4
 #define fb_memset(dst, what, len) android_memset32(dst, what, len)
@@ -799,9 +799,9 @@ fb_img* fb_add_png_img_lvl(int level, int x, int y, int w, int h, const char *pa
     px_type *data = NULL;
     if(strncmp(path, ":/", 2) == 0)
     {
-        const int full_path_len = strlen(path) + strlen(multirom_dir) + 4;
+        const int full_path_len = strlen(path) + strlen(mrom_dir()) + 4;
         char *full_path = malloc(full_path_len);
-        snprintf(full_path, full_path_len, "%s/res%s", multirom_dir, path+1);
+        snprintf(full_path, full_path_len, "%s/res%s", mrom_dir(), path+1);
         data = fb_png_get(full_path, w, h);
         free(full_path);
     }
@@ -1003,7 +1003,7 @@ int fb_save_screenshot(void)
     char dir[256];
     char path[256];
 
-    strcpy(dir, multirom_dir);
+    strcpy(dir, mrom_dir());
     r = strrchr(dir, '/');
     if(!r)
     {

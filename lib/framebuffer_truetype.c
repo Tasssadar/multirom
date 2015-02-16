@@ -31,7 +31,7 @@
 #include "framebuffer.h"
 #include "util.h"
 #include "containers.h"
-#include "multirom.h"
+#include "mrom_data.h"
 
 #define LINE_SPACING 1.15
 
@@ -88,7 +88,7 @@ struct text_line
     FT_Vector *pos;
 };
 
-typedef struct 
+typedef struct
 {
     char *text;
     px_type color;
@@ -157,7 +157,7 @@ static struct glyphs_entry *get_cache_for_size(const int style, const int size)
     {
         char buff[128];
         res = mzalloc(sizeof(struct glyphs_entry));
-        snprintf(buff, sizeof(buff), "%s/res/%s", multirom_dir, FONT_FILES[style]);
+        snprintf(buff, sizeof(buff), "%s/res/%s", mrom_dir(), FONT_FILES[style]);
         error = FT_New_Face(cache.ft_lib, buff, 0, &res->face);
         if(error)
         {

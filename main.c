@@ -26,10 +26,11 @@
 #include <time.h>
 
 #include "multirom.h"
-#include "framebuffer.h"
-#include "log.h"
+#include "lib/framebuffer.h"
+#include "lib/log.h"
 #include "version.h"
-#include "util.h"
+#include "lib/util.h"
+#include "lib/mrom_data.h"
 
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 #define KEEP_REALDATA "/dev/.keep_realdata"
@@ -83,6 +84,8 @@ int main(int argc, const char *argv[])
     // output all messages to dmesg,
     // but it is possible to filter out INFO messages
     klog_set_level(6);
+
+    mrom_set_log_tag("multirom");
 
     ERROR("Running MultiROM v%d%s\n", VERSION_MULTIROM, VERSION_DEV_FIX);
 

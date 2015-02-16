@@ -1,24 +1,19 @@
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
-LOCAL_C_INCLUDES += $(multirom_local_path)
+LOCAL_C_INCLUDES += $(multirom_local_path) $(multirom_local_path)/lib
 LOCAL_SRC_FILES:= \
     trampoline.c \
     devices.c \
-    ../util.c \
     adb.c \
-    ../fstab.c \
-    ../containers.c
 
 LOCAL_MODULE:= trampoline
 LOCAL_MODULE_TAGS := eng
 
 LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT)
 LOCAL_UNSTRIPPED_PATH := $(TARGET_ROOT_OUT_UNSTRIPPED)
-LOCAL_STATIC_LIBRARIES := libcutils libc
+LOCAL_STATIC_LIBRARIES := libcutils libc libmultirom_static
 LOCAL_FORCE_STATIC_EXECUTABLE := true
-
-LOCAL_CFLAGS += -DMR_LOG_TAG=\"trampoline\"
 
 ifeq ($(MR_INIT_DEVICES),)
     $(info MR_INIT_DEVICES was not defined in device files!)

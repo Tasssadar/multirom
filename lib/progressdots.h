@@ -15,18 +15,23 @@
  * along with MultiROM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef PONG_H
-#define PONG_H
+#ifndef PROGRESSDOTS_H
+#define PROGRESSDOTS_H
 
-#include "lib/input.h"
+#include "framebuffer.h"
 
-void pong(void);
-int pong_touch_handler(touch_event *ev, void *data);
-void pong_spawn_ball(int side);
-void pong_calc_movement(void);
-void pong_add_score(int side);
-void pong_handle_ai(void);
-int pong_do_movement(int step);
-int pong_get_collision(int x, int y);
+#define PROGDOTS_W (400*DPI_MUL)
+#define PROGDOTS_H (10*DPI_MUL)
+#define PROGDOTS_CNT 8
+
+typedef struct
+{
+	FB_ITEM_POS
+
+    fb_rect *rect;
+} progdots;
+
+progdots *progdots_create(int x, int y);
+void progdots_destroy(progdots *p);
 
 #endif

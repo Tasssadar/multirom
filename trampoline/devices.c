@@ -45,8 +45,8 @@
 #include <cutils/uevent.h>
 
 #include "devices.h"
-#include "../util.h"
-#include "../log.h"
+#include "../lib/util.h"
+#include "../lib/log.h"
 
 //#define DEBUG_MISSING_UEVENTS 1
 
@@ -610,7 +610,7 @@ static char **parse_platform_block_device(struct uevent *uevent)
         p = strdup(uevent->partition_name);
         sanitize(p);
         if (strcmp(uevent->partition_name, p))
-            NOTICE("Linking partition '%s' as '%s'\n", uevent->partition_name, p);
+            INFO("Linking partition '%s' as '%s'\n", uevent->partition_name, p);
         if (asprintf(&links[link_num], "%s/by-name/%s", link_path, p) > 0)
             link_num++;
         else

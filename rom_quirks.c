@@ -26,8 +26,8 @@
 
 #include "multirom.h"
 #include "rom_quirks.h"
-#include "log.h"
-#include "util.h"
+#include "lib/log.h"
+#include "lib/util.h"
 
 #define MULTIROM_DIR_ANDROID "/data/media/0/multirom"
 #define MULTIROM_DIR_ANDROID_LEN 22

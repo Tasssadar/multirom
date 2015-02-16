@@ -21,8 +21,8 @@
 #include <dirent.h>
 #include <errno.h>
 
-#include "../log.h"
-#include "../fstab.h"
+#include "../lib/log.h"
+#include "../lib/fstab.h"
 
 #include "crypto/lollipop/cryptfs.h"
 

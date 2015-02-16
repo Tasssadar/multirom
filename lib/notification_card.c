@@ -26,7 +26,7 @@
 #include "containers.h"
 #include "log.h"
 #include "input.h"
-#include "multirom_ui_themes.h"
+#include "colors.h"
 
 enum
 {

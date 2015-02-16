@@ -19,8 +19,8 @@
 #define MULTIROM_UI_H
 
 #include "multirom.h"
-#include "input.h"
-#include "listview.h"
+#include "lib/input.h"
+#include "lib/listview.h"
 
 enum
 {

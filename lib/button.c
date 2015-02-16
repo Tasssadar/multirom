@@ -20,9 +20,9 @@
 #include "button.h"
 #include "input.h"
 #include "util.h"
-#include "multirom_ui.h"
-#include "multirom_ui_themes.h"
+#include "colors.h"
 #include "log.h"
+#include "containers.h"
 
 void button_init_ui(button *b, const char *text, int size)
 {

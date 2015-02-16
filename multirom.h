@@ -21,8 +21,8 @@
 #include <pthread.h>
 #include <stdio.h>
 
-#include "fstab.h"
-#include "containers.h"
+#include "lib/fstab.h"
+#include "lib/containers.h"
 #include "kexec.h"
 
 enum
@@ -49,7 +49,7 @@ enum
 #define MASK_LINUX (M(ROM_LINUX_INTERNAL) | M(ROM_LINUX_USB))
 #define MASK_KEXEC (MASK_LINUX)
 
-enum 
+enum
 {
     EXIT_REBOOT              = 0x01,
     EXIT_UMOUNT              = 0x02,
@@ -114,8 +114,6 @@ struct multirom_status
     char *curr_rom_part;
     struct fstab *fstab;
 };
-
-extern char multirom_dir[64];
 
 int multirom(const char *rom_to_boot);
 int multirom_find_base_dir(void);
