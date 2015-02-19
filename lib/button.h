@@ -21,7 +21,7 @@
 #include "framebuffer.h"
 #include "input.h"
 
-enum 
+enum
 {
     BTN_HOVER         = 0x01,
     BTN_DISABLED      = 0x02,
@@ -48,12 +48,12 @@ typedef struct
     int level_off;
 
     uint32_t c[CLR_MAX][2];
- 
+
     int flags;
     int touch_id;
 
-    int action;
-    void (*clicked)(int); // action
+    void *clicked_data;
+    void (*clicked)(void*); // clicked_data
 } button;
 
 void button_init_ui(button *b, const char *text, int size);
