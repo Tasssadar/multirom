@@ -454,20 +454,19 @@ int64_t timeval_us_diff(struct timeval now, struct timeval prev)
         (now.tv_usec - prev.tv_usec);
 }
 
+// Tries to recursively resolve symlinks. If lstat fails at some point,
+// presumably because the target does not exist, returns the last resolved path.
 char *readlink_recursive(const char *link)
 {
     struct stat info;
-    if(lstat(link, &info) < 0)
-        return NULL;
-
-    if(!S_ISLNK(info.st_mode))
+    if(lstat(link, &info) < 0 || !S_ISLNK(info.st_mode))
         return strdup(link);
 
     char path[256];
     char buff[256];
     char *p = (char*)link;
 
-    while(S_ISLNK(info.st_mode))
+    do
     {
         if(info.st_size >= sizeof(path)-1)
         {
@@ -484,13 +483,8 @@ char *readlink_recursive(const char *link)
         buff[info.st_size] = 0;
         strcpy(path, buff);
         p = path;
-
-        if(lstat(buff, &info) < 0)
-        {
-            ERROR("readlink_recursive: couldn't do lstat on %s!\n", buff);
-            return NULL;
-        }
     }
+    while(lstat(buff, &info) >= 0 && S_ISLNK(info.st_mode));
 
     return strdup(buff);
 }
