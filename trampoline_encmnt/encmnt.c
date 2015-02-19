@@ -23,8 +23,11 @@
 
 #include "../lib/log.h"
 #include "../lib/fstab.h"
+#include "../lib/framebuffer.h"
 
 #include "crypto/lollipop/cryptfs.h"
+
+#include "pw_ui.h"
 
 #define CMD_NONE 0
 #define CMD_DECRYPT 1
@@ -86,12 +89,13 @@ static int handle_pwtype(int stdout_fd)
     return 0;
 }
 
-static int handle_decrypt(int stdout_fd, char *password)
+static int handle_decrypt(int stdout_fd, const char *password)
 {
     DIR *d;
     struct dirent *de;
     char buff[256];
     int res = -1;
+    static const char *default_password = "default_password";
 
     if(cryptfs_check_footer() < 0)
     {
@@ -99,9 +103,26 @@ static int handle_decrypt(int stdout_fd, char *password)
         return -1;
     }
 
-    if(cryptfs_check_passwd(password) < 0)
+    int pwtype = cryptfs_get_password_type();
+    if(pwtype < 0)
     {
-        ERROR("cryptfs_check_passwd failed!");
+        ERROR("cryptfs_get_password_type failed!");
+        return -1;
+    }
+    else if (pwtype == CRYPT_TYPE_DEFAULT)
+        password = default_password;
+
+    if(password)
+    {
+        if(cryptfs_check_passwd(password) < 0)
+        {
+            ERROR("cryptfs_check_passwd failed!");
+            return -1;
+        }
+    }
+    else if(pw_ui_run(pwtype) < 0)
+    {
+        ERROR("pw_ui_get() failed!");
         return -1;
     }
 
@@ -150,6 +171,9 @@ int main(int argc, char *argv[])
     struct fstab_part *p;
     char *argument = NULL;
 
+    mrom_set_log_tag("trampoline_encmnt");
+    mrom_set_dir("/adb_sbin/");
+
     for(i = 1; i < argc; ++i)
     {
         if(!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help"))
@@ -172,7 +196,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    if(argc == 1 || cmd == CMD_NONE || (cmd == CMD_DECRYPT && !argument))
+    if(argc == 1 || cmd == CMD_NONE)
     {
         print_help(argv);
         return 0;

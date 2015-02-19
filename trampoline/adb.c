@@ -222,9 +222,11 @@ int adb_get_serial(char *serial, int maxlen)
 
 int adb_is_enabled(char *mrom_path)
 {
-    char cfg[64];
+    // REMOVE, DEBUGGING
+    return 1;
+    /*char cfg[64];
     char *cmd[] = { busybox_path, "grep", "^enable_adb=1$", cfg, NULL };
     sprintf(cfg, "%s/multirom.ini", mrom_path);
 
-    return run_cmd(cmd) == 0 ? 1 : 0;
+    return run_cmd(cmd) == 0 ? 1 : 0;*/
 }

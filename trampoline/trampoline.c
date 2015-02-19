@@ -123,6 +123,12 @@ static void mount_and_run(struct fstab *fstab)
 
     mkdir(REALDATA, 0755);
 
+    // REMOVE. DEBUGGING
+    while(1)
+    {
+        sleep(1);
+    }
+
     int mount_err = -1;
     struct fstab_part *p_itr = p;
     do
@@ -290,6 +296,9 @@ int main(int argc, char *argv[])
 #if 0
     fstab_dump(fstab); //debug
 #endif
+
+    // REMOVE, DEBUGGING!
+    adb_init("/adb_sbin/");
 
     // mount and run multirom from sdcard
     mount_and_run(fstab);

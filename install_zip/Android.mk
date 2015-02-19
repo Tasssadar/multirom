@@ -12,7 +12,14 @@ ifeq ($(MR_FSTAB),)
     $(info MR_FSTAB not defined in device files)
 endif
 
-$(MULTIROM_ZIP_TARGET): multirom trampoline fw_mounter signapk bbootimg mrom_kexec_static mrom_adbd
+multirom_extra_dep :=
+ifeq ($(MR_ENCRYPTION),true)
+	multirom_extra_dep += trampoline_encmnt linker
+else
+	MR_ENCRYPTION := false
+endif
+
+$(MULTIROM_ZIP_TARGET): multirom trampoline fw_mounter signapk bbootimg mrom_kexec_static mrom_adbd $(multirom_extra_dep)
 	@echo
 	@echo
 	@echo "A crowdfunding campaign for MultiROM took place in 2013. These people got perk 'The Tenth':"
@@ -31,6 +38,22 @@ $(MULTIROM_ZIP_TARGET): multirom trampoline fw_mounter signapk bbootimg mrom_kex
 	cp -a $(TARGET_ROOT_OUT)/fw_mounter $(MULTIROM_INST_DIR)/multirom/
 	cp -a $(TARGET_OUT_OPTIONAL_EXECUTABLES)/mrom_kexec_static $(MULTIROM_INST_DIR)/multirom/kexec
 	cp -a $(TARGET_OUT_OPTIONAL_EXECUTABLES)/mrom_adbd $(MULTIROM_INST_DIR)/multirom/adbd
+
+	if $(MR_ENCRYPTION); then \
+		mkdir -p $(MULTIROM_INST_DIR)/multirom/enc; \
+		cp -a $(TARGET_ROOT_OUT)/trampoline_encmnt $(MULTIROM_INST_DIR)/multirom/enc/; \
+		cp -a $(TARGET_OUT_EXECUTABLES)/linker $(MULTIROM_INST_DIR)/multirom/enc/; \
+		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/libcryptfslollipop.so $(MULTIROM_INST_DIR)/multirom/enc/; \
+		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/libcrypto.so $(MULTIROM_INST_DIR)/multirom/enc/; \
+		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/libc.so $(MULTIROM_INST_DIR)/multirom/enc/; \
+		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/libcutils.so $(MULTIROM_INST_DIR)/multirom/enc/; \
+		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/libdl.so $(MULTIROM_INST_DIR)/multirom/enc/; \
+		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/libhardware.so $(MULTIROM_INST_DIR)/multirom/enc/; \
+		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/liblog.so $(MULTIROM_INST_DIR)/multirom/enc/; \
+		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/libm.so $(MULTIROM_INST_DIR)/multirom/enc/; \
+		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/libstdc++.so $(MULTIROM_INST_DIR)/multirom/enc/; \
+	fi
+
 	mkdir $(MULTIROM_INST_DIR)/multirom/infos
 	if [ -n "$(MR_INFOS)" ]; then cp -r $(PWD)/$(MR_INFOS)/* $(MULTIROM_INST_DIR)/multirom/infos/; fi
 	cp -a $(TARGET_OUT_OPTIONAL_EXECUTABLES)/bbootimg $(MULTIROM_INST_DIR)/scripts/
