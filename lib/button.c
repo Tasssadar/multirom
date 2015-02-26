@@ -141,7 +141,7 @@ int button_touch_handler(touch_event *ev, void *data)
     if(ev->changed & TCHNG_REMOVED)
     {
         if((b->flags & BTN_HOVER) && b->clicked)
-            (*b->clicked)(b->action);
+            (*b->clicked)(b->clicked_data);
         button_set_hover(b, 0);
         b->touch_id = -1;
     }
@@ -211,7 +211,7 @@ int button_keyaction_call(void *data, int act)
         case KEYACT_CONFIRM:
         {
             if(b->clicked && !(b->flags & BTN_DISABLED))
-                (*b->clicked)(b->action);
+                (*b->clicked)(b->clicked_data);
             return 0;
         }
         default:

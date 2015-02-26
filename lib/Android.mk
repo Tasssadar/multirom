@@ -12,6 +12,7 @@ common_SRC_FILES := \
     fstab.c \
     input.c \
     listview.c \
+    keyboard.c \
     mrom_data.c \
     notification_card.c \
     progressdots.c \

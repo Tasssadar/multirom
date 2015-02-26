@@ -361,6 +361,11 @@ void multirom_ui_destroy_tab(int tab)
     themes_info->data->tab_data[tab] = NULL;
 }
 
+void multirom_ui_switch_btn(void *data)
+{
+    multirom_ui_switch(*((int*)data));
+}
+
 void multirom_ui_switch(int tab)
 {
     if(tab == themes_info->data->selected_tab)
@@ -549,10 +554,10 @@ void multirom_ui_tab_rom_destroy(void *data)
 
 void multirom_ui_tab_rom_confirmed(listview_item *it)
 {
-    multirom_ui_tab_rom_boot_btn(0);
+    multirom_ui_tab_rom_boot();
 }
 
-void multirom_ui_tab_rom_boot_btn(int action)
+void multirom_ui_tab_rom_boot(void)
 {
     int cur_tab = themes_info->data->selected_tab;
     if(!themes_info->data->tab_data[cur_tab])
@@ -678,8 +683,10 @@ void multirom_ui_tab_misc_destroy(void *data)
     free(t);
 }
 
-void multirom_ui_tab_misc_change_clr(int clr)
+void multirom_ui_tab_misc_change_clr(void *data)
 {
+    int clr = *((int*)data);
+
     if((loop_act & LOOP_CHANGE_CLR) || mrom_status->colors == clr)
         return;
 
@@ -689,14 +696,15 @@ void multirom_ui_tab_misc_change_clr(int clr)
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-void multirom_ui_reboot_btn(int action)
+void multirom_ui_reboot_btn(void *data)
 {
+    int action = *((int*)data);
     pthread_mutex_lock(&exit_code_mutex);
     exit_ui_code = action;
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-void multirom_ui_tab_misc_copy_log(int action)
+void multirom_ui_tab_misc_copy_log(void *data)
 {
     multirom_dump_status(mrom_status);
 

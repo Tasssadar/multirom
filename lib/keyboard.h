@@ -30,7 +30,7 @@ struct keyboard
     const uint32_t *keycode_map;
 };
 
-struct keyboard *keyboard_create(void);
+struct keyboard *keyboard_create(int x, int y, int w, int h);
 void keyboard_destroy(struct keyboard *k);
 
 #endif

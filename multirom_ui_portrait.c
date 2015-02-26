@@ -106,8 +106,9 @@ static void init_header(multirom_theme_data *t)
         tab_btns[i]->y = 0;
         tab_btns[i]->w = maxW;
         tab_btns[i]->h = HEADER_HEIGHT;
-        tab_btns[i]->action = i;
-        tab_btns[i]->clicked = &multirom_ui_switch;
+        tab_btns[i]->clicked_data = malloc(sizeof(int));
+        *((int*)tab_btns[i]->clicked_data) = i;
+        tab_btns[i]->clicked = &multirom_ui_switch_btn;
         tab_btns[i]->level_off = 100;
         button_init_ui(tab_btns[i], "", 0);
 
@@ -141,12 +142,15 @@ static void header_set_tab_selector_pos(multirom_theme_data *t, float pos)
     t->selected_tab_rect->w = dest_w;
 }
 
+#include "lib/keyboard.h"
 static void tab_rom_init(multirom_theme_data *t, tab_data_roms *d, int tab_type)
 {
     d->list->x = LISTVIEW_MARGIN;
     d->list->y = HEADER_HEIGHT+LISTVIEW_MARGIN;
     d->list->w = fb_width - LISTVIEW_MARGIN;
     d->list->h = fb_height - d->list->y - LISTVIEW_MARGIN;
+
+    keyboard_create(0, (fb_height/3)*2, fb_width, fb_height/3);
 }
 
 static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_scheme)
@@ -190,7 +194,8 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
         b->y = y;
         b->w = MISCBTN_W;
         b->h = MISCBTN_H;
-        b->action = exit_codes[i];
+        b->clicked_data = malloc(sizeof(int));
+        *((int*)b->clicked_data) = exit_codes[i];
         b->clicked = &multirom_ui_reboot_btn;
         button_init_ui(b, texts[i], SIZE_BIG);
         list_add(&d->buttons, b);
@@ -231,7 +236,8 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
         b->y = CLRBTN_Y;
         b->w = CLRBTN_TOTAL;
         b->h = CLRBTN_TOTAL;
-        b->action = i;
+        b->clicked_data = malloc(sizeof(int));
+        *((int*)b->clicked_data) = i;
         b->clicked = &multirom_ui_tab_misc_change_clr;
         button_init_ui(b, NULL, 0);
         list_add(&d->buttons, b);
