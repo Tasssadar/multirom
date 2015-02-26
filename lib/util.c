@@ -633,6 +633,11 @@ char *strtoupper(const char *str)
     return res;
 }
 
+int strstartswith(const char *haystack, const char *needle)
+{
+    return strncmp(haystack, needle, strlen(needle)) == 0;
+}
+
 int create_loop_device(const char *dev_path, const char *img_path, int loop_num, int loop_chmod)
 {
     int file_fd, device_fd, res = -1;

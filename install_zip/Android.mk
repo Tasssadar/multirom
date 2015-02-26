@@ -59,8 +59,6 @@ $(MULTIROM_ZIP_TARGET): multirom trampoline fw_mounter signapk bbootimg mrom_kex
 	cp -a $(TARGET_OUT_OPTIONAL_EXECUTABLES)/bbootimg $(MULTIROM_INST_DIR)/scripts/
 	cp $(PWD)/$(MR_FSTAB) $(MULTIROM_INST_DIR)/multirom/mrom.fstab
 	$(install_zip_path)/extract_boot_dev.sh $(PWD)/$(MR_FSTAB) $(MULTIROM_INST_DIR)/scripts/bootdev
-	echo $(MR_RD_ADDR) > $(MULTIROM_INST_DIR)/scripts/rd_addr
-	echo "$(MR_USE_MROM_FSTAB)" > $(MULTIROM_INST_DIR)/scripts/use_mrom_fstab
 	$(install_zip_path)/make_updater_script.sh $(TARGET_DEVICE) $(MULTIROM_INST_DIR)/META-INF/com/google/android "Installing MultiROM for"
 	rm -f $(MULTIROM_ZIP_TARGET).zip $(MULTIROM_ZIP_TARGET)-unsigned.zip
 	cd $(MULTIROM_INST_DIR) && zip -qr ../$(notdir $@)-unsigned.zip *

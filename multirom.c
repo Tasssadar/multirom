@@ -39,6 +39,7 @@
 
 #include "lib/containers.h"
 #include "lib/framebuffer.h"
+#include "lib/inject.h"
 #include "lib/input.h"
 #include "lib/log.h"
 #include "lib/util.h"
@@ -1669,6 +1670,14 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
     char img_path[256];
     sprintf(img_path, "%s/boot.img", rom->base_path);
 
+    // Trampolines in ROM boot images may get out of sync, so we need to check it and
+    // update if needed. I can't do that during ZIP installation because of USB drives.
+    if(inject_bootimg(img_path, 0) < 0)
+    {
+        ERROR("Failed to inject bootimg!");
+        return -1;
+    }
+
     struct bootimg img;
     if(libbootimg_init_load(&img, img_path, LIBBOOTIMG_LOAD_ALL) < 0)
     {
@@ -1691,36 +1700,6 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
     else
         kexec_add_arg(kexec, "--dtb");
 #endif
-
-    // Trampolines in ROM boot images may get out of sync, so we need to check it and
-    // update if needed. I can't do that during ZIP installation because of USB drives.
-    // That header.name is added by recovery.
-    int ver = 0;
-    if(strncmp((char*)img.hdr.name, "tr_ver", 6) == 0)
-        ver = atoi((char*)img.hdr.name + 6);
-
-    if(ver < multirom_get_trampoline_ver())
-    {
-        if(multirom_update_rd_trampoline("/initrd.img") != 0)
-            goto exit;
-        else
-        {
-            // Update the boot.img
-            snprintf((char*)img.hdr.name, BOOT_NAME_SIZE, "tr_ver%d", multirom_get_trampoline_ver());
-
-            if(libbootimg_load_ramdisk(&img, "/initrd.img") >= 0)
-            {
-                char tmp[256];
-                strcpy(tmp, img_path);
-                strcat(tmp, ".new");
-                if(libbootimg_write_img(&img, tmp) >= 0)
-                {
-                    INFO("Writing boot.img updated with trampoline v%d\n", multirom_get_trampoline_ver());
-                    rename(tmp, img_path);
-                }
-            }
-        }
-    }
 
     char cmdline[1536];
     strcpy(cmdline, "--command-line=");
@@ -2522,114 +2501,6 @@ int multirom_run_scripts(const char *type, struct multirom_rom *rom)
         return res;
     }
     return 0;
-}
-
-#define RD_GZIP 1
-#define RD_LZ4  2
-int multirom_update_rd_trampoline(const char *path)
-{
-    int result = -1;
-    uint32_t magic = 0;
-
-    FILE *f = fopen(path, "r");
-    if(!f)
-    {
-        ERROR("Couldn't open %s!\n", path);
-        return -1;
-    }
-    fread(&magic, sizeof(magic), 1, f);
-    fclose(f);
-
-    remove_dir("/mrom_rd");
-    mkdir("/mrom_rd", 0755);
-
-    // Decompress initrd
-    int type;
-    char buff[256];
-    char *cmd[] = { busybox_path, "sh", "-c", buff, NULL };
-
-    if((magic & 0xFFFF) == 0x8B1F)
-    {
-        type = RD_GZIP;
-        snprintf(buff, sizeof(buff), "B=\"%s\"; cd /mrom_rd; \"$B\" gzip -d -c \"%s\" | \"$B\" cpio -i", busybox_path, path);
-    }
-    else if(magic == 0x184C2102)
-    {
-        type = RD_LZ4;
-        snprintf(buff, sizeof(buff), "cd /mrom_rd; \"%s/lz4\" -d \"%s\" stdout | \"%s\" cpio -i", mrom_dir(), path, busybox_path);
-    }
-    else
-    {
-        ERROR("Unknown ramdisk magic 0x%08X, can't update trampoline\n", magic);
-        goto success;
-    }
-
-    int r = run_cmd(cmd);
-    if(r != 0)
-    {
-        ERROR("Failed to unpack ramdisk!\n");
-        goto fail;
-    }
-
-    if(access("/mrom_rd/init", F_OK) < 0 || access("/mrom_rd/main_init", F_OK) < 0)
-    {
-        ERROR("This ramdisk is not injected, skipping\n");
-        goto success;
-    }
-
-    // Check version
-    char *cmd_t[] = { "/mrom_rd/init", "-v", NULL };
-    char *res = run_get_stdout(cmd_t);
-    int ver = 0;
-    if(res)
-    {
-        ver = atoi(res);
-        free(res);
-    }
-    else
-    {
-        ERROR("Failed to run trampoline!\n");
-        goto fail;
-    }
-
-    if(ver >= multirom_get_trampoline_ver())
-    {
-        INFO("No need to update trampoline for this rd\n");
-        goto success;
-    }
-
-    INFO("Updating trampoline in %s from ver %d to %d\n", path, ver, multirom_get_trampoline_ver());
-
-    if(copy_file("/init", "/mrom_rd/init") < 0)
-    {
-        ERROR("Failed to update trampoline\n");
-        goto fail;
-    }
-    chmod("/mrom_rd/init", 0755);
-
-    // Pack initrd again
-    switch(type)
-    {
-        case RD_GZIP:
-            snprintf(buff, sizeof(buff), "B=\"%s\"; cd /mrom_rd; \"$B\" find . | \"$B\" cpio -o -H newc | \"$B\" gzip > \"%s\"", busybox_path, path);
-            break;
-        case RD_LZ4:
-            snprintf(buff, sizeof(buff), "B=\"%s\"; cd /mrom_rd; \"$B\" find . | \"$B\" cpio -o -H newc | \"%s/lz4\" stdin \"%s\"", busybox_path, mrom_dir(), path);
-            break;
-    }
-
-    r = run_cmd(cmd);
-    if(r != 0)
-    {
-        ERROR("Failed to pack ramdisk!\n");
-        goto fail;
-    }
-
-success:
-    result = 0;
-fail:
-    remove_dir("/mrom_rd");
-    return result;
 }
 
 #define IC_TYPE_PREDEF 0

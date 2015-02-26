@@ -10,6 +10,7 @@ common_SRC_FILES := \
     framebuffer_png.c \
     framebuffer_truetype.c \
     fstab.c \
+    inject.c \
     input.c \
     listview.c \
     keyboard.c \
@@ -24,7 +25,8 @@ common_SRC_FILES := \
 common_C_INCLUDES := $(multirom_local_path)/lib \
     external/libpng \
     external/zlib \
-    external/freetype/include
+    external/freetype/include \
+    system/extras/libbootimg/include \
 
 # With these, GCC optimizes aggressively enough so full-screen alpha blending
 # is quick enough to be done in an animation

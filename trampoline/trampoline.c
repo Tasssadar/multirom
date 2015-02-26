@@ -29,6 +29,7 @@
 #include "../lib/log.h"
 #include "../lib/util.h"
 #include "../lib/fstab.h"
+#include "../lib/inject.h"
 #include "../version.h"
 #include "adb.h"
 #include "../hooks.h"
@@ -240,6 +241,9 @@ int main(int argc, char *argv[])
     int i, res;
     static char *const cmd[] = { "/init", NULL };
     struct fstab *fstab = NULL;
+    char *inject_path = NULL;
+    char *mrom_dir = NULL;
+    int force_inject = 0;
 
     for(i = 1; i < argc; ++i)
     {
@@ -249,6 +253,26 @@ int main(int argc, char *argv[])
             fflush(stdout);
             return 0;
         }
+        else if(strstartswith(argv[i], "--inject="))
+            inject_path = argv[i] + strlen("--inject=");
+        else if(strstartswith(argv[i], "--mrom_dir="))
+            mrom_dir = argv[i] + strlen("--mrom_dir=");
+        else if(strcmp(argv[i], "-f") == 0)
+            force_inject = 1;
+    }
+
+    if(inject_path)
+    {
+        if(!mrom_dir)
+        {
+            printf("--mrom_dir=[path to multirom's data dir] needs to be specified!\n");
+            fflush(stdout);
+            return 1;
+        }
+
+        mrom_set_dir(mrom_dir);
+        mrom_set_log_tag("trampoline_inject");
+        return inject_bootimg(inject_path, force_inject);
     }
 
     umask(000);

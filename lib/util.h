@@ -33,6 +33,7 @@ int make_link(const char *oldpath, const char *newpath);
 void remove_link(const char *oldpath, const char *newpath);
 int wait_for_file(const char *filename, int timeout);
 int copy_file(const char *from, const char *to);
+int copy_dir(const char *from, const char *to);
 int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const char *group);
 int write_file(const char *path, const char *value);
 int remove_dir(const char *dir);
@@ -55,5 +56,6 @@ inline int in_rect(int x, int y, int rx, int ry, int rw, int rh);
 
 inline void *mzalloc(size_t size); // alloc and fill with 0s
 char *strtoupper(const char *str);
+int strstartswith(const char *haystack, const char *needle);
 
 #endif
