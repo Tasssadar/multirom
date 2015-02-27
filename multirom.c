@@ -2324,20 +2324,23 @@ void *multirom_usb_refresh_thread_work(void *status)
 
     // stat.st_ctime is defined as unsigned long instead
     // of time_t in android
-    unsigned long last_change = 0;
+    unsigned long last_ctime = 0;
+    unsigned long last_ctime_nsec = 0;
 
     while(run_usb_refresh)
     {
         if(timer <= 50)
         {
-            if(stat("/dev/block", &info) >= 0 && info.st_ctime > last_change)
+            if (stat("/dev/block", &info) >= 0 &&
+                (info.st_ctime != last_ctime || info.st_ctime_nsec != last_ctime_nsec))
             {
                 multirom_update_partitions((struct multirom_status*)status);
 
                 if(usb_refresh_handler)
                     (*usb_refresh_handler)();
 
-                last_change = info.st_ctime;
+                last_ctime = info.st_ctime;
+                last_ctime_nsec = info.st_ctime_nsec;
             }
             timer = 500;
         }
