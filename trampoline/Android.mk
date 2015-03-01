@@ -36,7 +36,8 @@ endif
 endif
 
 ifeq ($(MR_ENCRYPTION),true)
-LOCAL_CFLAGS += -DMR_ENCRYPTION
+    LOCAL_CFLAGS += -DMR_ENCRYPTION
+    LOCAL_SRC_FILES += encryption.c
 endif
 
 include $(BUILD_EXECUTABLE)

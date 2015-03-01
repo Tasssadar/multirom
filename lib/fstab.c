@@ -77,6 +77,9 @@ struct fstab *fstab_load(const char *path, int resolve_symlinks)
     char line[1024];
     int len, is_dev_on_line = 0;
     struct fstab_part *part = NULL;
+
+    t->path = strdup(path);
+
     while((p = fgets(line, sizeof(line), f)))
     {
         len = strlen(line);
@@ -204,6 +207,7 @@ int fstab_save(struct fstab *f, const char *path)
 void fstab_destroy(struct fstab *f)
 {
     list_clear(&f->parts, fstab_destroy_part);
+    free(f->path);
     free(f);
 }
 
@@ -414,4 +418,21 @@ void fstab_add_part_struct(struct fstab *f, struct fstab_part *p)
 {
     list_add(&f->parts, p);
     ++f->count;
+}
+
+void fstab_update_device(struct fstab *f, const char *oldDev, const char *newDev)
+{
+    int i;
+    char *tmp = strdup(oldDev);
+
+    for(i = 0; i < f->count; ++i)
+    {
+        if(strcmp(f->parts[i]->device, tmp) == 0)
+        {
+            f->parts[i]->device = realloc(f->parts[i]->device, strlen(newDev)+1);
+            strcpy(f->parts[i]->device, newDev);
+        }
+    }
+
+    free(tmp);
 }

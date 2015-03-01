@@ -15,11 +15,15 @@
  * along with MultiROM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef VERSION_H
-#define VERSION_H
-    #define VERSION_MULTIROM 31
-    #define VERSION_TRAMPOLINE 17
+#ifndef ENCRYPTION_H
+#define ENCRYPTION_H
 
-    // For device-specific fixes. Use letters, the version will then be like "12a"
-    #define VERSION_DEV_FIX ""
+#ifdef MR_ENCRYPTION
+int encryption_before_mount(struct fstab *fstab);
+int encryption_destroy(void);
+#else
+int encryption_before_mount(struct fstab *) { return 0; }
+int encryption_destroy(void) { return 0; }
+#endif
+
 #endif

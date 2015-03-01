@@ -142,15 +142,12 @@ static void header_set_tab_selector_pos(multirom_theme_data *t, float pos)
     t->selected_tab_rect->w = dest_w;
 }
 
-#include "lib/keyboard.h"
 static void tab_rom_init(multirom_theme_data *t, tab_data_roms *d, int tab_type)
 {
     d->list->x = LISTVIEW_MARGIN;
     d->list->y = HEADER_HEIGHT+LISTVIEW_MARGIN;
     d->list->w = fb_width - LISTVIEW_MARGIN;
     d->list->h = fb_height - d->list->y - LISTVIEW_MARGIN;
-
-    keyboard_create(0, (fb_height/3)*2, fb_width, fb_height/3);
 }
 
 static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_scheme)

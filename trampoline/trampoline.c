@@ -33,6 +33,7 @@
 #include "../version.h"
 #include "adb.h"
 #include "../hooks.h"
+#include "encryption.h"
 
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 #define REALDATA "/realdata"
@@ -124,11 +125,8 @@ static void mount_and_run(struct fstab *fstab)
 
     mkdir(REALDATA, 0755);
 
-    // REMOVE. DEBUGGING
-    while(1)
-    {
-        sleep(1);
-    }
+    if(encryption_before_mount(fstab) < 0)
+        ERROR("Decryption failed, trying to mount anyway - might be unencrypted device.");
 
     int mount_err = -1;
     struct fstab_part *p_itr = p;
@@ -185,9 +183,17 @@ static void mount_and_run(struct fstab *fstab)
         return;
     }
 
-    adb_init(path_multirom);
+    //adb_init(path_multirom);
     run_multirom();
     adb_quit();
+
+    return;
+fail:
+    // REMOVE. DEBUGGING
+    while(1)
+    {
+        sleep(1);
+    }
 }
 
 static int is_charger_mode(void)
@@ -290,6 +296,10 @@ int main(int argc, char *argv[])
     mount("sysfs", "/sys", "sysfs", 0, NULL);
 
     klog_init();
+    // output all messages to dmesg,
+    // but it is possible to filter out INFO messages
+    klog_set_level(6);
+
     mrom_set_log_tag("trampoline");
     ERROR("Running trampoline v%d\n", VERSION_TRAMPOLINE);
 
@@ -344,6 +354,7 @@ run_main_init:
         rmdir("/dev/socket");
         rmdir("/dev");
         rmdir(REALDATA);
+        encryption_destroy();
     }
 
     umount("/proc");

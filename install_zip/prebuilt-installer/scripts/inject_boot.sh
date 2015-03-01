@@ -6,5 +6,8 @@ if [ ! -e "$BOOT_DEV" ]; then
     return 1
 fi
 
-/tmp/multirom/trampoline --inject="$BOOT_DEV" --mrom_dir="/tmp_multirom" -f
+chmod 755 /tmp/multirom/trampoline
+chmod 755 /tmp/multirom/busybox
+chmod 755 /tmp/multirom/lz4
+/tmp/multirom/trampoline --inject="$BOOT_DEV" --mrom_dir="/tmp/multirom" -f
 return $?

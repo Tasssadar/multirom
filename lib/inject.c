@@ -132,7 +132,7 @@ static int inject_rd(const char *path)
     int r = run_cmd(cmd);
     if(r != 0)
     {
-        ERROR("Failed to unpack ramdisk!\n");
+        ERROR("Failed to unpack ramdisk! %s\n", buff);
         goto fail;
     }
 

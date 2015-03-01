@@ -56,6 +56,12 @@
 #define UEVENT_ERR(x...)
 #endif
 
+#if 0
+#define DEBUG(x...) INFO(x)
+#else
+#define DEBUG(x...)
+#endif
+
 #define SYSFS_PREFIX    "/sys"
 #define FIRMWARE_DIR1   "/etc/firmware"
 #define FIRMWARE_DIR2   "/vendor/firmware"
@@ -95,7 +101,7 @@ static void init_single_path(const char *path)
     int fd, dfd;
     DIR *d;
 
-    INFO("Initializing device %s", path);
+    DEBUG("Initializing device %s", path);
     d = opendir(path);
     if(!d)
     {
@@ -283,7 +289,7 @@ void fixup_sys_perms(const char *upath)
             return;
 
         sprintf(buf,"/sys%s/%s", upath, dp->attr);
-        INFO("fixup %s %d %d 0%o\n", buf, dp->uid, dp->gid, dp->perm);
+        DEBUG("fixup %s %d %d 0%o\n", buf, dp->uid, dp->gid, dp->perm);
         chown(buf, dp->uid, dp->gid);
         chmod(buf, dp->perm);
     }
@@ -405,7 +411,7 @@ static void add_platform_device(const char *path)
             return;
     }
 
-    INFO("adding platform device %s (%s)\n", name, path);
+    DEBUG("adding platform device %s (%s)\n", name, path);
 
     bus = calloc(1, sizeof(struct platform_node));
     bus->path = strdup(path);
@@ -444,7 +450,7 @@ static void remove_platform_device(const char *path)
     list_for_each_reverse(node, &platform_names) {
         bus = node_to_item(node, struct platform_node, list);
         if (!strcmp(path, bus->path)) {
-            INFO("removing platform device %s\n", bus->name);
+            DEBUG("removing platform device %s\n", bus->name);
             free(bus->path);
             list_remove(node);
             free(bus);
@@ -602,7 +608,7 @@ static char **parse_platform_block_device(struct uevent *uevent)
         return NULL;
     memset(links, 0, sizeof(char *) * 4);
 
-    INFO("found platform device %s\n", device);
+    DEBUG("found platform device %s\n", device);
 
     snprintf(link_path, sizeof(link_path), "/dev/block/platform/%s", device);
 
@@ -872,7 +878,7 @@ static void process_firmware_event(struct uevent *uevent)
     int l, loading_fd, data_fd, fw_fd;
     int booting = is_booting();
 
-    INFO("firmware: loading '%s' for '%s'\n",
+    DEBUG("firmware: loading '%s' for '%s'\n",
          uevent->firmware, uevent->path);
 
     l = asprintf(&root, SYSFS_PREFIX"%s/", uevent->path);
@@ -916,16 +922,16 @@ try_loading_again:
                 booting = is_booting();
                 goto try_loading_again;
             }
-            INFO("firmware: could not open '%s' %d\n", uevent->firmware, errno);
+            ERROR("firmware: could not open '%s' %d\n", uevent->firmware, errno);
             write(loading_fd, "-1", 2);
             goto data_close_out;
         }
     }
 
     if(!load_firmware(fw_fd, loading_fd, data_fd))
-        INFO("firmware: copy success { '%s', '%s' }\n", root, uevent->firmware);
+        DEBUG("firmware: copy success { '%s', '%s' }\n", root, uevent->firmware);
     else
-        INFO("firmware: copy failure { '%s', '%s' }\n", root, uevent->firmware);
+        ERROR("firmware: copy failure { '%s', '%s' }\n", root, uevent->firmware);
 
     close(fw_fd);
 data_close_out:

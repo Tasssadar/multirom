@@ -34,6 +34,7 @@ struct fstab
 {
     int version;
     int count;
+    char *path;
     struct fstab_part **parts;
 };
 
@@ -51,6 +52,7 @@ int fstab_disable_parts(struct fstab *f, const char *path);
 void fstab_add_part(struct fstab *f, const char *dev, const char *path, const char *type, const char *options, const char *options2);
 void fstab_add_part_struct(struct fstab *f, struct fstab_part *p);
 struct fstab_part *fstab_clone_part(struct fstab_part *p);
+void fstab_update_device(struct fstab *f, const char *oldDev, const char *newDev);
 
 
 #endif

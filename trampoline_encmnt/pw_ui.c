@@ -45,7 +45,6 @@ int pw_ui_run(int pwtype)
 
     stop_input_thread();
 
-    fb_clear();
     fb_close();
     return -1;
 }

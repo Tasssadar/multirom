@@ -61,7 +61,8 @@ exit:
 static void print_help(char *argv[]) {
     printf("Usage: %s COMMAND ARGUMENTS\n"
         "Available commands:\n"
-        "     decrypt PASSWORD - mount encrypted data partition to /realdata using PASSWORD\n"
+        "     decrypt PASSWORD - decrypt data using PASSWORD.\n"
+        "             Prints out dm block device path on success.\n"
         "     remove - unmounts encrypted data\n"
         "     pwtype - prints password type as integer\n",
         argv[0]);
@@ -170,6 +171,12 @@ int main(int argc, char *argv[])
     struct fstab *fstab;
     struct fstab_part *p;
     char *argument = NULL;
+
+    klog_init();
+
+    // output all messages to dmesg,
+    // but it is possible to filter out INFO messages
+    klog_set_level(6);
 
     mrom_set_log_tag("trampoline_encmnt");
     mrom_set_dir("/adb_sbin/");
