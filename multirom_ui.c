@@ -490,7 +490,7 @@ void multirom_ui_refresh_usb_handler(void)
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-void multirom_ui_start_pong(int action)
+void multirom_ui_start_pong(void *data)
 {
     pthread_mutex_lock(&exit_code_mutex);
     loop_act |= LOOP_START_PONG;

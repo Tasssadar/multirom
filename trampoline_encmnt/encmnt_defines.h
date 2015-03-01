@@ -15,19 +15,13 @@
  * along with MultiROM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef ENCRYPTION_H
-#define ENCRYPTION_H
+#ifndef ENCMNT_DEFINES_H
+#define ENCMNT_DEFINES_H
 
-#define ENC_RES_ERR -1
-#define ENC_RES_OK 0
-#define ENC_RES_BOOT_INTERNAL 1
+#define ENCMNT_BOOT_INTERNAL_OUTPUT "boot-internal-requested"
 
-#ifdef MR_ENCRYPTION
-int encryption_before_mount(struct fstab *fstab);
-int encryption_destroy(void);
-#else
-int encryption_before_mount(struct fstab *) { return 0; }
-int encryption_destroy(void) { return 0; }
-#endif
+#define ENCMNT_UIRES_BOOT_INTERNAL 1
+#define ENCMNT_UIRES_PASS_OK 0
+#define ENCMNT_UIRES_ERROR -1
 
 #endif

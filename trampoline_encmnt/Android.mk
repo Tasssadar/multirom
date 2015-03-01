@@ -16,4 +16,6 @@ LOCAL_SRC_FILES := \
     encmnt.c \
     pw_ui.c \
 
+include $(multirom_local_path)/device_defines.mk
+
 include $(BUILD_EXECUTABLE)

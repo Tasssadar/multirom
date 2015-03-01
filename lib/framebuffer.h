@@ -255,6 +255,7 @@ fb_img *fb_text_finalize(fb_text_proto *p);
 void fb_text_set_color(fb_img *img, uint32_t color);
 void fb_text_set_size(fb_img *img, int size);
 void fb_text_set_content(fb_img *img, const char *text);
+char *fb_text_get_content(fb_img *img);
 
 void fb_text_drop_cache_unused(void);
 void fb_text_destroy(fb_img *i);

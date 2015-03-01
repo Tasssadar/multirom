@@ -28,6 +28,7 @@
 #include "crypto/lollipop/cryptfs.h"
 
 #include "pw_ui.h"
+#include "encmnt_defines.h"
 
 #define CMD_NONE 0
 #define CMD_DECRYPT 1
@@ -121,10 +122,22 @@ static int handle_decrypt(int stdout_fd, const char *password)
             return -1;
         }
     }
-    else if(pw_ui_run(pwtype) < 0)
+    else
     {
-        ERROR("pw_ui_get() failed!");
-        return -1;
+        switch(pw_ui_run(pwtype))
+        {
+            default:
+            case ENCMNT_UIRES_ERROR:
+                ERROR("pw_ui_run() failed!");
+                return -1;
+            case ENCMNT_UIRES_BOOT_INTERNAL:
+                INFO("Wants to boot internal!");
+                write(stdout_fd, ENCMNT_BOOT_INTERNAL_OUTPUT, strlen(ENCMNT_BOOT_INTERNAL_OUTPUT));
+                fsync(stdout_fd);
+                return 0;
+            case ENCMNT_UIRES_PASS_OK:
+                break;
+        }
     }
 
     d = opendir("/dev/block/");
@@ -179,7 +192,7 @@ int main(int argc, char *argv[])
     klog_set_level(6);
 
     mrom_set_log_tag("trampoline_encmnt");
-    mrom_set_dir("/adb_sbin/");
+    mrom_set_dir("/mrom_enc/");
 
     for(i = 1; i < argc; ++i)
     {

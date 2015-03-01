@@ -23,6 +23,8 @@
 #include "../lib/fstab.h"
 #include "../lib/util.h"
 #include "../lib/log.h"
+#include "encryption.h"
+#include "../trampoline_encmnt/encmnt_defines.h"
 
 static char encmnt_cmd_arg[64] = { 0 };
 static char *const encmnt_cmd[] = { "/mrom_enc/trampoline_encmnt", encmnt_cmd_arg, NULL };
@@ -32,7 +34,7 @@ int encryption_before_mount(struct fstab *fstab)
 {
     int exit_code = -1;
     char *output = NULL, *itr;
-    int res = -1;
+    int res = ENC_RES_ERR;
 
     mkdir_recursive("/system/bin", 0755);
     remove("/system/bin/linker");
@@ -54,6 +56,13 @@ int encryption_before_mount(struct fstab *fstab)
     while(itr >= output && isspace(*itr))
         *itr-- = 0;
 
+    if(strcmp(output, ENCMNT_BOOT_INTERNAL_OUTPUT) == 0)
+    {
+        INFO("trampoline_encmnt requested to boot internal ROM.");
+        res = ENC_RES_BOOT_INTERNAL;
+        goto exit;
+    }
+
     if(!strstartswith(output, "/dev"))
     {
         ERROR("Invalid trampoline_encmnt output: %s", output);
@@ -71,7 +80,7 @@ int encryption_before_mount(struct fstab *fstab)
     fstab_update_device(fstab, datap->device, output);
     fstab_dump(fstab);
 
-    res = 0;
+    res = ENC_RES_OK;
 exit:
     free(output);
     return res;

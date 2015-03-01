@@ -125,8 +125,11 @@ static void mount_and_run(struct fstab *fstab)
 
     mkdir(REALDATA, 0755);
 
-    if(encryption_before_mount(fstab) < 0)
+    int enc_res = encryption_before_mount(fstab);
+    if(enc_res == ENC_RES_ERR)
         ERROR("Decryption failed, trying to mount anyway - might be unencrypted device.");
+    else if(enc_res == ENC_RES_BOOT_INTERNAL)
+        return;
 
     int mount_err = -1;
     struct fstab_part *p_itr = p;
@@ -183,7 +186,7 @@ static void mount_and_run(struct fstab *fstab)
         return;
     }
 
-    //adb_init(path_multirom);
+    adb_init(path_multirom);
     run_multirom();
     adb_quit();
 
@@ -332,7 +335,7 @@ int main(int argc, char *argv[])
 #endif
 
     // REMOVE, DEBUGGING!
-    adb_init("/adb_sbin/");
+    //adb_init("/adb_sbin/");
 
     // mount and run multirom from sdcard
     mount_and_run(fstab);

@@ -134,7 +134,7 @@ static int convert_ft_bitmap(FT_BitmapGlyph bit, px_type color, px_type *res_dat
     return 0;
 }
 
-static struct glyphs_entry *get_cache_for_size(const int style, const int size)
+static struct glyphs_entry *get_cache_for_size(int style, const int size)
 {
     int error;
     struct glyphs_entry *res;
@@ -152,6 +152,7 @@ static struct glyphs_entry *get_cache_for_size(const int style, const int size)
     if(!cache.glyphs[style])
         cache.glyphs[style] = imap_create();
 
+retry_load:
     res = imap_get_val(cache.glyphs[style], size);
     if(!res)
     {
@@ -161,8 +162,16 @@ static struct glyphs_entry *get_cache_for_size(const int style, const int size)
         error = FT_New_Face(cache.ft_lib, buff, 0, &res->face);
         if(error)
         {
-            ERROR("font load failed with %d\n", error);
+            ERROR("font style %d load failed with %d\n", style, error);
             free(res);
+
+            if(style != STYLE_NORMAL)
+            {
+                ERROR("Retrying with STYLE_NORMAL instead.");
+                style = STYLE_NORMAL;
+                goto retry_load;
+            }
+
             return NULL;
         }
 
@@ -688,6 +697,12 @@ void fb_text_set_content(fb_img *img, const char *text)
     strcpy(ex->text, text);
     fb_text_render(img);
     fb_items_unlock();
+}
+
+char *fb_text_get_content(fb_img *img)
+{
+    text_extra *ex = img->extra;
+    return ex->text;
 }
 
 inline void center_text(fb_img *text, int targetX, int targetY, int targetW, int targetH)

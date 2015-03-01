@@ -25,38 +25,37 @@
 #define KS(x) ((x-1) << 16)
 #define GET_KS(x) ((x & 0xFF0000)>> 16)
 
-#define KEY_EMPTY 0xFF
-#define KEY_EMPTY_HALF 0xFE
-#define KEY_ENTER 0xFD
-#define KEY_CLEAR 0xFC
-#define KEY_SHIFT 0xFB
+#define KF(x) ((x) << 8)
+#define GET_KF(x) ((x & 0xFF00) >> 8)
+#define KFLAG_HALF KF(0x01)
 
 static const char *specialKeys[] = {
-    NULL,  // KEY_EMPTY
-    NULL,  // KEY_EMPTY_HALF
-    "OK",  // KEY_ENTER
-    "X",   // KEY_CLEAR
+    NULL,  // OSK_EMPTY
+    "OK",  // OSK_ENTER
+    "<",   // OSK_BACKSPACE
+    "^",  // OSK_SHIFT
+    "X",   // OSK_CLEAR
 };
 
 // One keycode
 // bits | 0         | 8       | 16      |
 // data | character | flags   | colspan |
 static const uint32_t pinKeycodeMap[] = {
-    '1', '2', '3', KEY_EMPTY,
-    '4', '5', '6', KEY_EMPTY,
-    '7', '8', '9', KEY_CLEAR,
-    '0' | KS(3),   KEY_ENTER,
+    OSK_EMPTY | KFLAG_HALF, '1', '2', '3', OSK_EMPTY,
+    OSK_EMPTY | KFLAG_HALF, '4', '5', '6', OSK_CLEAR,
+    OSK_EMPTY | KFLAG_HALF, '7', '8', '9', OSK_BACKSPACE,
+    OSK_EMPTY | KFLAG_HALF, '0' | KS(3),   OSK_ENTER,
     0
 };
 
 // rows, cols
-static const uint32_t pinKeycodeMapDimensions[] = { 4, 4 };
+static const uint32_t pinKeycodeMapDimensions[] = { 4, 5 };
 
 static const uint32_t normalKeycodeMap[] = {
     'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p',
-    KEY_EMPTY_HALF, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l',
-    KEY_SHIFT, 'z', 'x', 'c', 'v', 'b', 'n', 'm', KEY_CLEAR | KS(2),
-    KEY_CLEAR, ' ' | KS(6), '.', KEY_ENTER | KS(2),
+    OSK_EMPTY| KFLAG_HALF, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l',
+    OSK_SHIFT, 'z', 'x', 'c', 'v', 'b', 'n', 'm', OSK_BACKSPACE | KS(2),
+    OSK_BACKSPACE, ' ' | KS(6), '.', OSK_ENTER | KS(2),
     0
 };
 
@@ -73,7 +72,9 @@ struct keyboard_btn_data {
 static void keyboard_btn_clicked(void *data)
 {
     struct keyboard_btn_data *d = data;
-    INFO("keyboard %c pressed.", (char)(d->k->keycode_map[d->btn_idx] & 0xFF));
+    uint8_t keycode = (d->k->keycode_map[d->btn_idx] & 0xFF);
+    if(d->k->key_pressed)
+        d->k->key_pressed(d->k->key_pressed_data, keycode);
 }
 
 static int keyboard_init_map(struct keyboard *k, const uint32_t *map, const uint32_t *dimen)
@@ -95,9 +96,10 @@ static int keyboard_init_map(struct keyboard *k, const uint32_t *map, const uint
         code = (map[i] & 0xFF);
         w = (GET_KS(map[i])+1)*btn_w + PADDING*GET_KS(map[i]);
 
-        if(code == KEY_EMPTY_HALF)
+        if(map[i] & KFLAG_HALF)
             w /= 2;
-        else if(code != KEY_EMPTY)
+
+        if(code != OSK_EMPTY)
         {
             btn = mzalloc(sizeof(button));
             btn->x = x;
@@ -112,7 +114,7 @@ static int keyboard_init_map(struct keyboard *k, const uint32_t *map, const uint
             btn->clicked = keyboard_btn_clicked;
 
             buf[0] = (map[i] & 0xFF);
-            button_init_ui(btn, buf[0] >= 0 ? buf : specialKeys[0xFF - (map[i] & 0xFF)], SIZE_NORMAL);
+            button_init_ui(btn, ((int8_t)buf[0]) >= 0 ? buf : specialKeys[0xFF - (map[i] & 0xFF)], SIZE_NORMAL);
             list_add(&k->btns, btn);
         }
 
@@ -131,7 +133,7 @@ static int keyboard_init_map(struct keyboard *k, const uint32_t *map, const uint
     return 0;
 }
 
-struct keyboard *keyboard_create(int x, int y, int w, int h)
+struct keyboard *keyboard_create(int type, int x, int y, int w, int h)
 {
     struct keyboard *k = mzalloc(sizeof(struct keyboard));
     k->x = x;
@@ -139,13 +141,28 @@ struct keyboard *keyboard_create(int x, int y, int w, int h)
     k->w = w;
     k->h = h;
 
-    //keyboard_init_map(k, pinKeycodeMap, pinKeycodeMapDimensions);
-    keyboard_init_map(k, normalKeycodeMap, normalKeycodeMapDimensions);
+    switch(type)
+    {
+        case KEYBOARD_PIN:
+            keyboard_init_map(k, pinKeycodeMap, pinKeycodeMapDimensions);
+            break;
+        case KEYBOARD_NORMAL:
+        default:
+            keyboard_init_map(k, normalKeycodeMap, normalKeycodeMapDimensions);
+            break;
+    }
 
     return k;
 }
 
 void keyboard_destroy(struct keyboard *k)
 {
+    list_clear(&k->btns, &button_destroy);
+    free(k);
+}
 
+void keyboard_set_callback(struct keyboard *k, keyboard_on_pressed_callback callback, void *data)
+{
+    k->key_pressed = callback;
+    k->key_pressed_data = data;
 }
