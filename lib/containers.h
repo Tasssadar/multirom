@@ -30,7 +30,7 @@ int list_add_from_list(ptrToList list_p, listItself src_p);
 int list_rm(ptrToList list_p, void *item, callback destroy_callback_p);
 int list_rm_noreorder(ptrToList list_p, void *item, callback destroy_callback_p);
 int list_rm_opt(ptrToList list_p, void *item, callback destroy_callback_p, int reorder);
-int list_rm_at(ptrToList list_p, int idx, callback destroy_callback_p);
+listItself list_rm_at(ptrToList list_p, int idx, callback destroy_callback_p); // returns pointer to the next item in list or NULL
 int list_size(listItself list);
 int list_item_count(listItself list);
 int list_copy(ptrToList dest_p, listItself src);

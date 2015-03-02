@@ -143,14 +143,14 @@ int list_rm_noreorder(ptrToList list_p, void *item, callback destroy_callback_p)
     return list_rm_opt(list_p, item, destroy_callback_p, 0);
 }
 
-int list_rm_at(ptrToList list_p, int idx, callback destroy_callback_p)
+listItself list_rm_at(ptrToList list_p, int idx, callback destroy_callback_p)
 {
     void ***list = (void***)list_p;
     callbackPtr destroy_callback = (callbackPtr)destroy_callback_p;
 
     int size = list_size(*list);
     if(idx < 0 || idx >= size-1)
-        return -1;
+        return NULL;
 
     void *item = (*list)[idx];
     if(destroy_callback)
@@ -161,15 +161,15 @@ int list_rm_at(ptrToList list_p, int idx, callback destroy_callback_p)
     {
         free(*list);
         *list = NULL;
-        return 0;
+        return NULL;
     }
 
     int i = idx;
     for(; i < size; ++i)
         (*list)[i] = (*list)[i+1];
 
-    *list= realloc(*list, size*sizeof(item));
-    return 0;
+    *list = realloc(*list, size*sizeof(item));
+    return *list + idx;
 }
 
 void list_clear(ptrToList list_p, callback destroy_callback_p)
@@ -289,7 +289,7 @@ int map_find(map *m, const char *key)
     for(i = 0; m->keys && m->keys[i]; ++i)
         if(strcmp(m->keys[i], key) == 0)
             return i;
-    return -1; 
+    return -1;
 }
 
 void *map_get_val(map *m, const char *key)
@@ -367,7 +367,7 @@ int imap_find(imap *m, int key)
     for(i = 0; i < m->size; ++i)
         if(key == m->keys[i])
             return i;
-    return -1; 
+    return -1;
 }
 
 void *imap_get_val(imap *m, int key)

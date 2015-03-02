@@ -21,6 +21,7 @@
 #include "keyboard.h"
 #include "util.h"
 #include "log.h"
+#include "workers.h"
 
 #define KS(x) ((x-1) << 16)
 #define GET_KS(x) ((x & 0xFF0000)>> 16)
@@ -28,13 +29,17 @@
 #define KF(x) ((x) << 8)
 #define GET_KF(x) ((x & 0xFF00) >> 8)
 #define KFLAG_HALF KF(0x01)
+#define KFLAG_PLUS_HALF KF(0x02)
 
 static const char *specialKeys[] = {
     NULL,  // OSK_EMPTY
     "OK",  // OSK_ENTER
     "<",   // OSK_BACKSPACE
-    "^",  // OSK_SHIFT
     "X",   // OSK_CLEAR
+    "abc", // OSK_CHARSET1
+    "ABC", // OSK_CHARSET2
+    "?123",// OSK_CHARSET3
+    "=\\<",// OSK_CHARSET4
 };
 
 // One keycode
@@ -51,12 +56,43 @@ static const uint32_t pinKeycodeMap[] = {
 // rows, cols
 static const uint32_t pinKeycodeMapDimensions[] = { 4, 5 };
 
-static const uint32_t normalKeycodeMap[] = {
+static const uint32_t normalKeycodeMapCharset1[] = {
     'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p',
     OSK_EMPTY| KFLAG_HALF, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l',
-    OSK_SHIFT, 'z', 'x', 'c', 'v', 'b', 'n', 'm', OSK_BACKSPACE | KS(2),
-    OSK_BACKSPACE, ' ' | KS(6), '.', OSK_ENTER | KS(2),
+    OSK_CHARSET2 | KFLAG_PLUS_HALF, 'z', 'x', 'c', 'v', 'b', 'n', 'm', OSK_BACKSPACE | KFLAG_PLUS_HALF, OSK_EMPTY,
+    OSK_CHARSET3 | KS(2), ' ' | KS(5), '.', OSK_ENTER | KS(2),
     0
+};
+
+static const uint32_t normalKeycodeMapCharset2[] = {
+    'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P',
+    OSK_EMPTY| KFLAG_HALF, 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L',
+    OSK_CHARSET1 | KFLAG_PLUS_HALF, 'Z', 'X', 'C', 'V', 'B', 'N', 'M', OSK_BACKSPACE | KFLAG_PLUS_HALF, OSK_EMPTY,
+    OSK_CHARSET3 | KS(2), ' ' | KS(5), '.', OSK_ENTER | KS(2),
+    0
+};
+
+static const uint32_t normalKeycodeMapCharset3[] = {
+    '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
+    OSK_EMPTY | KFLAG_HALF, '@', '#', '$', '%', '&', '-', '+', '(', ')',
+    OSK_CHARSET4 | KFLAG_PLUS_HALF, '*', '"', '\'', ':', ';', '!', '?', OSK_BACKSPACE | KFLAG_PLUS_HALF, OSK_EMPTY,
+    OSK_CHARSET1 | KS(2), ',', '_', ' ' | KS(3), '/', OSK_ENTER | KS(2),
+    0
+};
+
+static const uint32_t normalKeycodeMapCharset4[] = {
+    '~', '`', '|', '<', '>', '-', '+', '!', '?', ';',
+    OSK_EMPTY | KFLAG_HALF, '^', '\\', '$', '%', '&', '-', '+', '{', '}',
+    OSK_CHARSET3 | KFLAG_PLUS_HALF, '*', '"', '\'', ':', ';', '[', ']', OSK_BACKSPACE | KFLAG_PLUS_HALF, OSK_EMPTY,
+    OSK_CHARSET1 | KS(2), ',', ' ' | KS(4), '/', OSK_ENTER | KS(2),
+    0
+};
+
+static const uint32_t *normalKeycodeMapCharsetMapping[] = {
+    normalKeycodeMapCharset4, // OSK_CHARSET4
+    normalKeycodeMapCharset3, // OSK_CHARSET3
+    normalKeycodeMapCharset2, // OSK_CHARSET2
+    normalKeycodeMapCharset1, // OSK_CHARSET1
 };
 
 // rows, cols
@@ -69,15 +105,38 @@ struct keyboard_btn_data {
     int btn_idx;
 };
 
+static int keyboard_init_map(struct keyboard *k, const uint32_t *map, const uint32_t *dimen);
+
+
+static int keyboard_charset_switch_worker(uint32_t diff, void *data)
+{
+    void **keyboard_bnt_data_old = NULL;
+    struct keyboard_btn_data *d = data;
+    uint8_t keycode = (d->k->keycode_map[d->btn_idx] & 0xFF);
+
+    fb_batch_start();
+    list_clear(&d->k->btns, &button_destroy);
+    list_swap(&d->k->keyboard_bnt_data, &keyboard_bnt_data_old);
+    keyboard_init_map(d->k, normalKeycodeMapCharsetMapping[keycode - OSK_CHARSET4], normalKeycodeMapDimensions);
+    fb_batch_end();
+    fb_request_draw();
+
+    list_clear(&keyboard_bnt_data_old, free);
+    return 1;
+}
+
 static void keyboard_btn_clicked(void *data)
 {
     struct keyboard_btn_data *d = data;
     uint8_t keycode = (d->k->keycode_map[d->btn_idx] & 0xFF);
-    if(d->k->key_pressed)
+
+    if(keycode >= OSK_CHARSET4 && keycode <= OSK_CHARSET1)
+        workers_add(keyboard_charset_switch_worker, data);
+    else if(d->k->key_pressed)
         d->k->key_pressed(d->k->key_pressed_data, keycode);
 }
 
-static int keyboard_init_map(struct keyboard *k, const uint32_t *map, const uint32_t *dimen)
+int keyboard_init_map(struct keyboard *k, const uint32_t *map, const uint32_t *dimen)
 {
     button *btn;
     int i, idx = 0;
@@ -98,6 +157,8 @@ static int keyboard_init_map(struct keyboard *k, const uint32_t *map, const uint
 
         if(map[i] & KFLAG_HALF)
             w /= 2;
+        else if(map[i] & KFLAG_PLUS_HALF)
+            w = w*1.5 + PADDING*0.5;
 
         if(code != OSK_EMPTY)
         {
@@ -116,6 +177,7 @@ static int keyboard_init_map(struct keyboard *k, const uint32_t *map, const uint
             buf[0] = (map[i] & 0xFF);
             button_init_ui(btn, ((int8_t)buf[0]) >= 0 ? buf : specialKeys[0xFF - (map[i] & 0xFF)], SIZE_NORMAL);
             list_add(&k->btns, btn);
+            list_add(&k->keyboard_bnt_data, d);
         }
 
         col += GET_KS(map[i])+1;
@@ -148,7 +210,7 @@ struct keyboard *keyboard_create(int type, int x, int y, int w, int h)
             break;
         case KEYBOARD_NORMAL:
         default:
-            keyboard_init_map(k, normalKeycodeMap, normalKeycodeMapDimensions);
+            keyboard_init_map(k, normalKeycodeMapCharset1, normalKeycodeMapDimensions);
             break;
     }
 
@@ -158,6 +220,7 @@ struct keyboard *keyboard_create(int type, int x, int y, int w, int h)
 void keyboard_destroy(struct keyboard *k)
 {
     list_clear(&k->btns, &button_destroy);
+    list_clear(&k->keyboard_bnt_data, free);
     free(k);
 }
 

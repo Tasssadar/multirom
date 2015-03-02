@@ -26,14 +26,18 @@
 #define OSK_EMPTY 0xFF
 #define OSK_ENTER 0xFE
 #define OSK_BACKSPACE 0xFD
-#define OSK_SHIFT 0xFC
-#define OSK_CLEAR 0xFB
+#define OSK_CLEAR 0xFC
+#define OSK_CHARSET1 0xFB
+#define OSK_CHARSET2 0xFA
+#define OSK_CHARSET3 0xF9
+#define OSK_CHARSET4 0xF8
 
 typedef void (*keyboard_on_pressed_callback)(void *data, uint8_t keycode);
 struct keyboard
 {
     FB_ITEM_POS
     button **btns;
+    void **keyboard_bnt_data;
     const uint32_t *keycode_map;
     keyboard_on_pressed_callback key_pressed;
     void *key_pressed_data;

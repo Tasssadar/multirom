@@ -21,7 +21,7 @@
 #include <stdint.h>
 #include <pthread.h>
 
-typedef void (*worker_call)(uint32_t, void *); // ms_diff, data
+typedef int (*worker_call)(uint32_t, void *); // ms_diff, data. Returns 1 if it should be removed
 
 void workers_start(void);
 void workers_stop(void);

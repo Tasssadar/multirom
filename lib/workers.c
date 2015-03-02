@@ -61,10 +61,12 @@ static void *worker_thread_work(void *data)
         clock_gettime(CLOCK_MONOTONIC, &curr);
         diff = timespec_diff(&last, &curr);
 
-        if(t->workers)
+        for(w = t->workers; w && *w;)
         {
-            for(w = t->workers; *w; ++w)
-                (*w)->call(diff, (*w)->data);
+            if((*w)->call(diff, (*w)->data))
+                w = list_rm_at(&worker_thread.workers, w - t->workers, &free);
+            else
+                ++w;
         }
 
         pthread_mutex_unlock(&t->mutex);

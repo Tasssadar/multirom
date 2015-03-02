@@ -39,6 +39,9 @@ struct pwui_type_pass_data {
     fb_text *passwd_text;
     fb_rect *cursor_rect;
     struct keyboard *keyboard;
+    char *pass_buf;
+    char *pass_buf_stars;
+    size_t pass_buf_cap;
 };
 
 static pthread_mutex_t exit_code_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -112,12 +115,26 @@ static void type_pass_key_pressed(void *data, uint8_t code)
 
     if(code < 128)
     {
-        char *old = fb_text_get_content(d->passwd_text);
-        char *new_text = malloc(strlen(old)+2);
-        sprintf(new_text, "%s%c", old, (char)code);
-        fb_text_set_content(d->passwd_text, new_text);
+        size_t pass_len = strlen(d->pass_buf);
+        while(d->pass_buf_cap < pass_len + 2)
+        {
+            d->pass_buf_cap *= 2;
+            d->pass_buf = realloc(d->pass_buf, d->pass_buf_cap);
+            d->pass_buf_stars = realloc(d->pass_buf_stars, d->pass_buf_cap);
+        }
+
+        if(pass_len > 0)
+            d->pass_buf_stars[pass_len-1] = '*';
+        d->pass_buf_stars[pass_len] = (char)code;
+        d->pass_buf_stars[pass_len+1] = 0;
+
+        d->pass_buf[pass_len++] = (char)code;
+        d->pass_buf[pass_len] = 0;
+
+        fb_text_set_content(d->passwd_text, d->pass_buf_stars);
         center_text(d->passwd_text, 0, 0, fb_width, fb_height);
-        free(new_text);
+        fb_request_draw();
+
         return;
     }
 
@@ -125,23 +142,26 @@ static void type_pass_key_pressed(void *data, uint8_t code)
     {
         case OSK_BACKSPACE:
         {
-            char *old = fb_text_get_content(d->passwd_text);
-            int len = strlen(old);
-            if(len <= 0)
+            size_t pass_len = strlen(d->pass_buf);
+            if(pass_len == 0)
                 break;
 
-            char *new_text = strdup(old);
-            new_text[len-1] = 0;
-            fb_text_set_content(d->passwd_text, new_text);
+            d->pass_buf_stars[--pass_len] = 0;
+            d->pass_buf[pass_len] = 0;
+
+            fb_text_set_content(d->passwd_text, d->pass_buf_stars);
             center_text(d->passwd_text, 0, 0, fb_width, fb_height);
-            free(new_text);
+            fb_request_draw();
             break;
         }
         case OSK_CLEAR:
+            d->pass_buf[0] = 0;
+            d->pass_buf_stars[0] = 0;
             fb_text_set_content(d->passwd_text, "");
+            fb_request_draw();
             break;
         case OSK_ENTER:
-            try_password(fb_text_get_content(d->passwd_text));
+            try_password(d->pass_buf);
             break;
     }
 }
@@ -156,13 +176,20 @@ static void type_pass_init(int pwtype)
     d->passwd_text = fb_add_text(0, 0, C_TEXT, SIZE_BIG, "");
     center_text(d->passwd_text, 0, 0, fb_width, fb_height);
 
+    d->pass_buf_cap = 12;
+    d->pass_buf = mzalloc(d->pass_buf_cap);
+    d->pass_buf_stars = mzalloc(d->pass_buf_cap);
+
     pwui_type_data = d;
 }
 
 static void type_pass_destroy(int pwtype)
 {
     struct pwui_type_pass_data *d = pwui_type_data;
+
     keyboard_destroy(d->keyboard);
+    free(d->pass_buf);
+    free(d->pass_buf_stars);
     free(d);
     pwui_type_data = NULL;
 }

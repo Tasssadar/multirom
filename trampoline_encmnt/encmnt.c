@@ -153,6 +153,7 @@ static int handle_decrypt(int stdout_fd, const char *password)
         if(de->d_type == DT_BLK && strncmp(de->d_name, "dm-", 3) == 0)
         {
             snprintf(buff, sizeof(buff), "/dev/block/%s\n", de->d_name);
+            INFO("Found block device %s", buff);
             write(stdout_fd, buff, strlen(buff));
             fsync(stdout_fd);
             res = 0;

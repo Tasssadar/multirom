@@ -425,7 +425,6 @@ char *run_get_stdout_with_exit_with_env(char **cmd, int *exit_code, char *const 
         close(fd[0]);
 
         waitpid(pid, exit_code, 0);
-        *exit_code = WEXITSTATUS(*exit_code);
 
         if(written == 0)
         {

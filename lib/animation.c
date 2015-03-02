@@ -188,7 +188,7 @@ static void call_anim_step(call_anim *anim, float interpolated)
         anim->callback(anim->data, interpolated);
 }
 
-static void anim_update(uint32_t diff, void *data)
+static int anim_update(uint32_t diff, void *data)
 {
     struct anim_list *list = data;
     struct anim_list_it *it;
@@ -275,6 +275,8 @@ static void anim_update(uint32_t diff, void *data)
 
     list->in_update_loop = 0;
     pthread_mutex_unlock(&list->mutex);
+
+    return 0;
 }
 
 static uint32_t anim_generate_id(void)

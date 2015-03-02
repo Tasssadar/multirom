@@ -48,7 +48,7 @@ int encryption_before_mount(struct fstab *fstab)
     output = run_get_stdout_with_exit_with_env(encmnt_cmd, &exit_code, encmnt_envp);
     if(exit_code != 0 || !output)
     {
-        ERROR("Failed to run trampoline_encmnt: %s", output);
+        ERROR("Failed to run trampoline_encmnt, exit code %d: %s", exit_code, output);
         goto exit;
     }
 

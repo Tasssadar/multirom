@@ -687,7 +687,7 @@ static void keyaction_call_cur_act(struct keyaction_ctx *c, int action)
     ERROR("keyaction_call_cur_act: current action not found in actions!\n");
 }
 
-static void keyaction_repeat_worker(uint32_t diff, void *data)
+static int keyaction_repeat_worker(uint32_t diff, void *data)
 {
     struct keyaction_ctx *c = data;
 
@@ -703,6 +703,8 @@ static void keyaction_repeat_worker(uint32_t diff, void *data)
             c->repeat_timer -= diff;
     }
     pthread_mutex_unlock(&c->lock);
+
+    return 0;
 }
 
 void keyaction_clear_active(void)

@@ -115,6 +115,12 @@ static int convert_ft_bitmap(FT_BitmapGlyph bit, px_type color, px_type *res_dat
 
     buff = (uint8_t*)bit->bitmap.buffer;
     res_itr = (px_type*)(((uint32_t*)res_data) + (line->offY + line->base - bit->top)*stride + (line->offX + pos->x + bit->left));
+
+    // FIXME: if bit->left is negative and everything else is 0 (e.g. letter 'j' in Roboto-Regular),
+    // the result might end up being before the buffer - I'm not sure how to properly handle this.
+    if(res_itr < res_data)
+        res_itr = res_data;
+
     for(y = 0; y < bit->bitmap.rows; ++y)
     {
         for(x = 0; x < bit->bitmap.width; ++x)

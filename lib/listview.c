@@ -37,7 +37,7 @@
 #define OVERSCROLL_MARK_H (4*DPI_MUL)
 #define OVERSCROLL_RETURN_SPD (10*DPI_MUL)
 
-static void listview_bounceback(uint32_t diff, void *data)
+static int listview_bounceback(uint32_t diff, void *data)
 {
     listview *v = (listview*)data;
     const int max = v->fullH - v->h;
@@ -59,11 +59,13 @@ static void listview_bounceback(uint32_t diff, void *data)
             v->overscroll_marks[0]->w = 0;
         if(v->overscroll_marks[1]->w != 0)
             v->overscroll_marks[1]->w = 0;
-        return;
+        return 0;
     }
 
     if(v->touch.id == -1)
         listview_scroll_by(v, step);
+
+    return 0;
 }
 
 void listview_init_ui(listview *view)

@@ -9,7 +9,14 @@ LOCAL_SHARED_LIBRARIES := libcryptfslollipop libcutils
 LOCAL_STATIC_LIBRARIES := libmultirom_static
 LOCAL_WHOLE_STATIC_LIBRARIES := libm libpng libz libft2_mrom_static
 
-mr_twrp_path := bootable/recovery
+ifneq ($(wildcard bootable/recovery/crypto/lollipop/cryptfs.h),)
+    mr_twrp_path := bootable/recovery
+else ifneq($(wildcard bootable/recovery-twrp/crypto/lollipop/cryptfs.h),)
+    mr_twrp_path := bootable/recovery-twrp
+else
+    $(error Failed to find path to TWRP, which is required to build MultiROM with encryption support)
+endif
+
 LOCAL_C_INCLUDES += $(multirom_local_path) $(mr_twrp_path) $(mr_twrp_path)/crypto/scrypt/lib/crypto external/openssl/include
 
 LOCAL_SRC_FILES := \
