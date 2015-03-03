@@ -54,6 +54,7 @@ $(MULTIROM_ZIP_TARGET): multirom trampoline fw_mounter signapk bbootimg mrom_kex
 		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/liblog.so $(MULTIROM_INST_DIR)/multirom/enc/; \
 		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/libm.so $(MULTIROM_INST_DIR)/multirom/enc/; \
 		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/libstdc++.so $(MULTIROM_INST_DIR)/multirom/enc/; \
+		if [ -n "$(MR_ENCRYPTION_SETUP_SCRIPT)" ]; then sh "$(ANDROID_BUILD_TOP)/$(MR_ENCRYPTION_SETUP_SCRIPT)" "$(ANDROID_BUILD_TOP)" "$(MULTIROM_INST_DIR)/multirom/enc"; fi; \
 	fi
 
 	mkdir $(MULTIROM_INST_DIR)/multirom/infos
