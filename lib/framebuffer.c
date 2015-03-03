@@ -404,16 +404,22 @@ px_type fb_convert_color(uint32_t c)
     return (c & 0xFF000000) | ((c & 0xFF) << 16) | (c & 0xFF00) | ((c & 0xFF0000) >> 16);
 #elif defined(RECOVERY_RGB_565)
     const uint8_t alpha_pct = (((c >> 24) & 0xFF)*100) / 0xFF;
-    uint8_t *px_itr = ((uint8_t*)&px) + 2;
-    px_itr[0] = ((((alpha*100)/0xFF)*31)/100);
-    px_itr[1] = ((((alpha*100)/0xFF)*63)/100);
     //            R                                G                              B
-    return (((c & 0xFF0000) >> 19) << 11) | (((c & 0xFF00) >> 10) << 5) | ((c & 0xFF) >> 3) |
-    //      Alpha - RB                    // Alpha - G
-            (((alpha_pct*31)/100) << 16) | (((alpha_pct*63)/100) << 24);
+    return (((c & 0xFF0000) >> 19) << 11) | (((c & 0xFF00) >> 10) << 5) | ((c & 0xFF) >> 3);
 #else
 #error "Unknown pixel format"
 #endif
+}
+
+uint32_t fb_convert_color_img(uint32_t clr)
+{
+    uint32_t c = fb_convert_color(clr);
+#if PIXEL_SIZE == 2
+    const uint8_t alpha_pct = (((clr >> 24) & 0xFF)*100) / 0xFF;
+    //      Alpha - RB                    Alpha - G
+    c |= (((alpha_pct*31)/100) << 16) | (((alpha_pct*63)/100) << 24);
+#endif
+    return c;
 }
 
 void fb_set_background(uint32_t color)
@@ -920,8 +926,8 @@ fb_img* fb_add_png_img_lvl(int level, int x, int y, int w, int h, const char *pa
 fb_circle *fb_add_circle_lvl(int level, int x, int y, int radius, uint32_t color)
 {
     const int diameter = radius*2 + 1;
-    px_type *data = mzalloc(diameter * diameter * 4);
-    px_type px = fb_convert_color(color);
+    uint32_t *data = mzalloc(diameter * diameter * 4);
+    uint32_t px = fb_convert_color_img(color);
 
     int rx, ry;
     const int radius_check = radius*radius + radius*0.8;

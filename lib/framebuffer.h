@@ -260,6 +260,7 @@ typedef struct
 void fb_remove_item(void *item);
 int fb_generate_item_id(void);
 px_type fb_convert_color(uint32_t c);
+uint32_t fb_convert_color_img(uint32_t c);
 
 fb_img *fb_add_text(int x, int y, uint32_t color, int size, const char *fmt, ...);
 fb_text_proto *fb_text_create(int x, int y, uint32_t color, int size, const char *text);
