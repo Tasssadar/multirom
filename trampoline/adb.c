@@ -128,6 +128,10 @@ void adb_quit(void)
 
 void adb_init_usb(void)
 {
+    mkdir_with_perms("/dev/usb-ffs", 0770, "shell", "shell");
+    mkdir_with_perms("/dev/usb-ffs/adb", 0770, "shell", "shell");
+    mount("adb", "/dev/usb-ffs/adb", "functionfs", 0, "uid=2000,gid=2000");
+
     write_file("/sys/class/android_usb/android0/enable", "0");
 
     char serial[64] = { 0 };
@@ -137,6 +141,7 @@ void adb_init_usb(void)
     // for all devices, so I guess it is universal
     write_file("/sys/class/android_usb/android0/idVendor", "18d1");
     write_file("/sys/class/android_usb/android0/idProduct", "d001");
+    write_file("/sys/class/android_usb/android0/f_ffs/aliases", "adb");
     write_file("/sys/class/android_usb/android0/functions", "adb");
     write_file("/sys/class/android_usb/android0/iManufacturer", PRODUCT_MANUFACTURER);
     write_file("/sys/class/android_usb/android0/iProduct", PRODUCT_MODEL);
@@ -190,6 +195,10 @@ void adb_cleanup(void)
 
     umount("/dev/pts");
     rmdir("/dev/pts");
+
+    umount("/dev/usb-ffs/adb");
+    rmdir("/dev/usb-ffs/adb");
+    rmdir("/dev/usb-ffs");
 }
 
 int adb_get_serial(char *serial, int maxlen)
