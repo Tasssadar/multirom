@@ -197,6 +197,11 @@ int fb_open(int rotation)
     DEFAULT_FB_PARENT.w = fb_width;
     DEFAULT_FB_PARENT.h = fb_height;
 
+#ifdef TW_SCREEN_BLANK_ON_BOOT
+    ioctl(fb.fd, FBIOBLANK, FB_BLANK_POWERDOWN);
+    ioctl(fb.fd, FBIOBLANK, FB_BLANK_UNBLANK);
+#endif
+
     fb_update();
 
     fb_draw_run = 1;
