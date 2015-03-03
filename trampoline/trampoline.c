@@ -77,7 +77,7 @@ static void run_multirom(void)
     sprintf(path, "%s/%s", path_multirom, BUSYBOX_BIN);
     if (stat(path, &info) < 0)
     {
-        ERROR("Could not find busybox: %s", path);
+        ERROR("Could not find busybox: %s\n", path);
         return;
     }
     chmod(path, EXEC_MASK);
@@ -90,7 +90,7 @@ static void run_multirom(void)
     sprintf(path, "%s/%s", path_multirom, MULTIROM_BIN);
     if (stat(path, &info) < 0)
     {
-        ERROR("Could not find multirom: %s", path);
+        ERROR("Could not find multirom: %s\n", path);
         return;
     }
     chmod(path, EXEC_MASK);
@@ -98,12 +98,12 @@ static void run_multirom(void)
     char *cmd[] = { path, NULL };
     do
     {
-        ERROR("Running multirom");
+        ERROR("Running multirom\n");
         int res = run_cmd(cmd);
         if(res == 0)
             break;
         else
-            ERROR("MultiROM exited with status code %d!", res);
+            ERROR("MultiROM exited with status code %d!\n", res);
     }
     while(restart);
 }
@@ -119,7 +119,7 @@ static void mount_and_run(struct fstab *fstab)
 
     if(wait_for_file(p->device, 5) < 0)
     {
-        ERROR("Waiting too long for dev %s", p->device);
+        ERROR("Waiting too long for dev %s\n", p->device);
         return;
     }
 
@@ -175,14 +175,14 @@ static void mount_and_run(struct fstab *fstab)
 
         if(!mounted)
         {
-            ERROR("Failed to mount /realdata with all possible filesystems!");
+            ERROR("Failed to mount /realdata with all possible filesystems!\n");
             return;
         }
     }
 
     if(find_multirom() == -1)
     {
-        ERROR("Could not find multirom folder!");
+        ERROR("Could not find multirom folder!\n");
         return;
     }
 
@@ -304,11 +304,11 @@ int main(int argc, char *argv[])
     klog_set_level(6);
 
     mrom_set_log_tag("trampoline");
-    ERROR("Running trampoline v%d\n", VERSION_TRAMPOLINE);
+    INFO("Running trampoline v%d\n", VERSION_TRAMPOLINE);
 
     if(is_charger_mode())
     {
-        ERROR("Charger mode detected, skipping multirom\n");
+        INFO("Charger mode detected, skipping multirom\n");
         goto run_main_init;
     }
 
@@ -316,9 +316,9 @@ int main(int argc, char *argv[])
     tramp_hook_before_device_init();
 #endif
 
-    ERROR("Initializing devices...");
+    INFO("Initializing devices...\n");
     devices_init();
-    ERROR("Done initializing");
+    INFO("Done initializing\n");
 
     if(wait_for_file("/dev/graphics/fb0", 5) < 0)
     {
@@ -365,7 +365,7 @@ run_main_init:
     rmdir("/proc");
     rmdir("/sys");
 
-    ERROR("Running main_init\n");
+    INFO("Running main_init\n");
 
     fixup_symlinks();
 
