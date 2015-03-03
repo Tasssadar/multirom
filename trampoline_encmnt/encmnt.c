@@ -40,15 +40,26 @@ static int get_footer_from_opts(char *output, size_t output_size, const char *op
     char *r, *saveptr;
     char *dup = strdup(opts2);
     int res = -1;
+    int i;
 
     r = strtok_r(dup, ",", &saveptr);
+
+    static const char *names[] = {
+        "encryptable=",
+        "forceencrypt=",
+        NULL
+    };
+
     while(r)
     {
-        if(strncmp(r, "encryptable=", sizeof("encryptable=")-1) == 0)
+        for(i = 0; names[i]; ++i)
         {
-            snprintf(output, output_size, "%s", r + sizeof("encryptable=") - 1);
-            res = 0;
-            goto exit;
+            if(strstartswith(r, names[i]))
+            {
+                snprintf(output, output_size, "%s", r + strlen(names[i]));
+                res = 0;
+                goto exit;
+            }
         }
 
         r = strtok_r(NULL, ",", &saveptr);
