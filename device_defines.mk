@@ -66,6 +66,10 @@ else ifeq ($(MR_DPI),xhdpi)
 ifeq ($(MR_DPI_MUL),)
     MR_DPI_MUL := 1.5
 endif
+else ifeq ($(MR_DPI),xxhdpi)
+ifeq ($(MR_DPI_MUL),)
+    MR_DPI_MUL := 2.0
+endif
 endif
 
 ifeq ($(MR_DPI_FONT),)
