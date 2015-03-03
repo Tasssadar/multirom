@@ -32,6 +32,7 @@
 #include <cutils/memory.h>
 #include <pthread.h>
 #include <png.h>
+#include <math.h>
 
 #include "log.h"
 #include "framebuffer.h"
@@ -381,8 +382,14 @@ px_type fb_convert_color(uint32_t c)
     //             A              B                   G                  R
     return (c & 0xFF000000) | ((c & 0xFF) << 16) | (c & 0xFF00) | ((c & 0xFF0000) >> 16);
 #elif defined(RECOVERY_RGB_565)
+    const uint8_t alpha_pct = (((c >> 24) & 0xFF)*100) / 0xFF;
+    uint8_t *px_itr = ((uint8_t*)&px) + 2;
+    px_itr[0] = ((((alpha*100)/0xFF)*31)/100);
+    px_itr[1] = ((((alpha*100)/0xFF)*63)/100);
     //            R                                G                              B
-    return (((c & 0xFF0000) >> 19) << 11) | (((c & 0xFF00) >> 10) << 5) | ((c & 0xFF) >> 3);
+    return (((c & 0xFF0000) >> 19) << 11) | (((c & 0xFF00) >> 10) << 5) | ((c & 0xFF) >> 3) |
+    //      Alpha - RB                    // Alpha - G
+            (((alpha_pct*31)/100) << 16) | (((alpha_pct*63)/100) << 24);
 #else
 #error "Unknown pixel format"
 #endif
@@ -505,6 +512,9 @@ void fb_remove_item(void *item)
         case FB_IT_LISTVIEW:
             listview_destroy((listview*)item);
             break;
+        case FB_IT_LINE:
+            fb_rm_line((fb_line*)item);
+            break;
     }
 }
 
@@ -515,6 +525,7 @@ void fb_destroy_item(void *item)
     switch(((fb_item_header*)item)->type)
     {
         case FB_IT_RECT:
+        case FB_IT_LINE:
             break;
         case FB_IT_IMG:
         {
@@ -727,6 +738,78 @@ void fb_draw_img(fb_img *i)
     }
 }
 
+// from http://members.chello.at/~easyfilter/bresenham.html
+void fb_draw_line(fb_line *l)
+{
+    const px_type px = fb_convert_color(l->color);
+
+    int x0 = imin(imax(l->x, l->parent->x), l->parent->x + l->parent->w);
+    int x1 = imin(imax(l->x2, l->parent->x), l->parent->x + l->parent->w);
+    int y0 = imin(imax(l->y, l->parent->y), l->parent->y + l->parent->h);
+    int y1 = imin(imax(l->y2, l->parent->y), l->parent->y + l->parent->h);
+
+    int dx = abs(x1-x0);
+    int dy = abs(y1-y0);
+    const int sx = x0 < x1 ? 1 : -1;
+    const int sy = y0 < y1 ? 1 : -1;
+
+    int err;
+    double e2 = sqrt((double)(dx*dx) + (double)(dy*dy));
+
+    if(e2 == 0.0)
+        return;
+
+    dx *= 255/e2;
+    dy *= 255/e2;
+    double th = 255*((double)(l->thickness - 1));
+
+    if(dx < dy)
+    {
+        x1 = (e2+th/2) / dy;
+        err = x1*dy - th/2;
+        for(x0 -= x1*sx; ; y0 += sy)
+        {
+            x1 = x0;
+            for(e2 = dy-err-th; e2+dy < 255; e2 += dy)
+            {
+                x1 += sx;
+                *(fb.buffer + fb.stride*y0 + x1) = px;
+            }
+            if(y0 == y1)
+                break;
+            err += dx;
+            if(err > 255)
+            {
+                err -= dy;
+                x0 += sx;
+            }
+        }
+    }
+    else
+    {
+        y1 = (e2 + th/2) / dx;
+        err = y1*dx - th/2;
+        for(y0 -= y1*sy; ; x0 += sx)
+        {
+            y1 = y0;
+            for(e2 = dx - err - th; e2+dx < 255; e2 += dx)
+            {
+                y1 += sy;
+                *(fb.buffer + fb.stride*y1 + x0) = px;
+            }
+
+            if(x0 == x1)
+                break;
+            err += dy;
+            if(err > 255)
+            {
+                err -= dx;
+                y0 += sy;
+            }
+        }
+    }
+}
+
 int fb_generate_item_id(void)
 {
     fb_items_lock();
@@ -813,6 +896,40 @@ fb_img* fb_add_png_img_lvl(int level, int x, int y, int w, int h, const char *pa
     return fb_add_img(level, x, y, w, h, FB_IMG_TYPE_PNG, data);
 }
 
+fb_circle *fb_add_circle_lvl(int level, int x, int y, int radius, uint32_t color)
+{
+    const int diameter = radius*2 + 1;
+    px_type *data = mzalloc(diameter * diameter * 4);
+    px_type px = fb_convert_color(color);
+
+    int rx, ry;
+    const int radius_check = radius*radius + radius*0.8;
+
+    for(ry = -radius; ry <= radius; ++ry)
+        for(rx = -radius; rx <= radius; ++rx)
+            if(rx*rx+ry*ry <= radius_check)
+                *(data + diameter*(radius + ry) + (radius+rx)) = px;
+
+    return fb_add_img(level, x, y, diameter, diameter, FB_IMG_TYPE_GENERIC, data);
+}
+
+fb_line *fb_add_line_lvl(int level, int x1, int y1, int x2, int y2, int thickness, uint32_t color)
+{
+    fb_line *res = mzalloc(sizeof(fb_line));
+    res->id = fb_generate_item_id();
+    res->type = FB_IT_LINE;
+    res->parent = &DEFAULT_FB_PARENT;
+    res->level = level;
+    res->x = x1;
+    res->y = y1;
+    res->x2 = x2;
+    res->y2 = y2;
+    res->thickness = thickness;
+    res->color = color;
+    fb_ctx_add_item(res);
+    return res;
+}
+
 void fb_rm_rect(fb_rect *r)
 {
     if(!r)
@@ -834,6 +951,20 @@ void fb_rm_img(fb_img *i)
 
     fb_ctx_rm_item(i);
     fb_destroy_item(i);
+}
+
+void fb_rm_circle(fb_circle *c)
+{
+    fb_rm_img(c);
+}
+
+void fb_rm_line(fb_line *l)
+{
+    if(!l)
+        return;
+
+    fb_ctx_rm_item(l);
+    fb_destroy_item(l);
 }
 
 void fb_clear(void)
@@ -872,6 +1003,9 @@ static void fb_draw(void)
                 break;
             case FB_IT_LISTVIEW:
                 listview_update_ui_args((listview*)it, 1, 1);
+                break;
+            case FB_IT_LINE:
+                fb_draw_line((fb_line*)it);
                 break;
         }
     }

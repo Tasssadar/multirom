@@ -126,6 +126,7 @@ enum
     FB_IT_RECT,
     FB_IT_IMG,
     FB_IT_LISTVIEW,
+    FB_IT_LINE,
 };
 
 enum
@@ -159,7 +160,9 @@ enum
 {
     LEVEL_LISTVIEW = 0,
     LEVEL_RECT = 1,
+    LEVEL_CIRCLE = 1,
     LEVEL_PNG  = 2,
+    LEVEL_LINE = 2,
     LEVEL_TEXT = 3,
 };
 
@@ -222,6 +225,15 @@ typedef struct
 } fb_img;
 
 typedef fb_img fb_text;
+typedef fb_img fb_circle;
+
+typedef struct
+{
+    FB_ITEM_HEAD;
+    int x2, y2;
+    int thickness;
+    uint32_t color;
+} fb_line;
 
 typedef struct
 {
@@ -268,12 +280,21 @@ fb_img *fb_add_img(int level, int x, int y, int w, int h, int img_type, px_type 
 fb_img *fb_add_png_img_lvl(int level, int x, int y, int w, int h, const char *path);
 #define fb_add_png_img(x, y, w, h, path) fb_add_png_img_lvl(LEVEL_PNG, x, y, w, h, path)
 
+fb_circle *fb_add_circle_lvl(int level, int x, int y, int radius, uint32_t color);
+#define fb_add_circle(x, y, radius, color) fb_add_circle_lvl(LEVEL_CIRCLE, x, y, radius, color)
+
+fb_line *fb_add_line_lvl(int level, int x1, int y1, int x2, int y2, int thickness, uint32_t color);
+#define fb_add_line(x1, y1, x2, y2, thickness, color) fb_add_line_lvl(LEVEL_LINE, x1, y1, x2, y2, thickness, color)
+
 void fb_rm_text(fb_img *i);
 void fb_rm_rect(fb_rect *r);
 void fb_rm_img(fb_img *i);
+void fb_rm_circle(fb_circle *c);
+void fb_rm_line(fb_line *l);
 
 void fb_draw_rect(fb_rect *r);
 void fb_draw_img(fb_img *i);
+void fb_draw_line(fb_line *l);
 void fb_fill(uint32_t color);
 void fb_request_draw(void);
 void fb_force_draw(void);
