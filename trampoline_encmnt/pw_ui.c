@@ -35,6 +35,11 @@
 #include "crypto/lollipop/cryptfs.h"
 
 #define HEADER_HEIGHT (110*DPI_MUL)
+#define PWUI_DOT_R (15*DPI_MUL)
+#define PWUI_DOT_ACTIVE_R (PWUI_DOT_R/2)
+#define PWUI_DOT_ACTIVE_OFF (PWUI_DOT_R - PWUI_DOT_ACTIVE_R)
+#define PWUI_LINE_W (12*DPI_MUL)
+#define PWUI_DOTS_CNT 9
 
 struct pwui_type_pass_data {
     fb_text *passwd_text;
@@ -50,9 +55,8 @@ struct pwui_type_pattern_data {
     fb_circle **active_dots;
     fb_line **complete_lines;
     fb_line *cur_line;
-    int *connected_dots;
+    int connected_dots[PWUI_DOTS_CNT];
     size_t connected_dots_len;
-    size_t connected_dots_cap;
     int touch_id;
 };
 
@@ -208,11 +212,6 @@ static void type_pass_destroy(void)
     pwui_type_data = NULL;
 }
 
-#define PWUI_DOT_R (15*DPI_MUL)
-#define PWUI_DOT_ACTIVE_R (PWUI_DOT_R/2)
-#define PWUI_DOT_ACTIVE_OFF (PWUI_DOT_R - PWUI_DOT_ACTIVE_R)
-#define PWUI_LINE_W (12*DPI_MUL)
-
 static inline int type_pattern_in_dot(struct pwui_type_pattern_data *d, touch_event *ev)
 {
     int i;
@@ -237,13 +236,13 @@ static inline int type_pattern_dot_used(struct pwui_type_pattern_data *d, int do
 
 static inline void type_pattern_connect_dot(struct pwui_type_pattern_data *d,  int dot_idx)
 {
-    ++d->connected_dots_len;
-    while(d->connected_dots_len > d->connected_dots_cap)
+    if(d->connected_dots_len >= PWUI_DOTS_CNT)
     {
-        d->connected_dots_cap *= 2;
-        d->connected_dots = realloc(d->connected_dots, sizeof(int)*d->connected_dots_cap);
+        ERROR("d->connected_dots_len overflowed PWUI_DOTS_CNT!");
+        return;
     }
-    d->connected_dots[d->connected_dots_len-1] = dot_idx;
+
+    d->connected_dots[d->connected_dots_len++] = dot_idx;
 
     fb_circle *c = d->dots[dot_idx];
     c = fb_add_circle_lvl(100, c->x+PWUI_DOT_ACTIVE_OFF, c->y+PWUI_DOT_ACTIVE_OFF, PWUI_DOT_ACTIVE_R, C_HIGHLIGHT_TEXT);
@@ -260,10 +259,10 @@ static int type_pattern_touch_handler(touch_event *ev, void *data)
         if(dot_idx == -1)
             return -1;
 
-        d->connected_dots_len = 0;
-        type_pattern_connect_dot(d, dot_idx);
-
         d->touch_id = ev->id;
+        d->connected_dots_len = 0;
+
+        type_pattern_connect_dot(d, dot_idx);
 
         fb_circle *c = d->dots[dot_idx];
         d->cur_line = fb_add_line(c->x + PWUI_DOT_R, c->y + PWUI_DOT_R, ev->x, ev->y, PWUI_LINE_W, C_HIGHLIGHT_BG);
@@ -358,10 +357,6 @@ static void type_pattern_init(void)
         y += step;
     }
 
-    d->connected_dots_cap = 3;
-    d->connected_dots_len = 0;
-    d->connected_dots = malloc(sizeof(int)*d->connected_dots_cap);
-
     d->touch_id = -1;
     add_touch_handler(type_pattern_touch_handler, d);
 
@@ -375,7 +370,6 @@ static void type_pattern_destroy(void)
     list_clear(&d->active_dots, fb_remove_item);
     list_clear(&d->complete_lines, fb_remove_item);
     fb_rm_line(d->cur_line);
-    free(d->connected_dots);
     free(d);
 
     pwui_type_data = NULL;
