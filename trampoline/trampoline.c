@@ -189,14 +189,6 @@ static void mount_and_run(struct fstab *fstab)
     adb_init(path_multirom);
     run_multirom();
     adb_quit();
-
-    return;
-fail:
-    // REMOVE. DEBUGGING
-    while(1)
-    {
-        sleep(1);
-    }
 }
 
 static int is_charger_mode(void)
@@ -333,9 +325,6 @@ int main(int argc, char *argv[])
 #if 0
     fstab_dump(fstab); //debug
 #endif
-
-    // REMOVE, DEBUGGING!
-    //adb_init("/adb_sbin/");
 
     // mount and run multirom from sdcard
     mount_and_run(fstab);
