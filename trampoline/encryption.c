@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <stdio.h>
+#include <sys/mount.h>
 
 #include "../lib/fstab.h"
 #include "../lib/util.h"
@@ -42,13 +43,24 @@ int encryption_before_mount(struct fstab *fstab)
     chmod("/mrom_enc/linker", 0775);
     chmod("/mrom_enc/trampoline_encmnt", 0775);
 
-    INFO("Running trampoline_encmnt");
+    remove("/vendor");
+    symlink("/mrom_enc/vendor", "/vendor");
+
+    mkdir("/firmware", 0775);
+    struct fstab_part *fwpart = fstab_find_first_by_path(fstab, "/firmware");
+    if(fwpart && strcmp(fwpart->type, "emmc") != 0)
+    {
+        if(mount(fwpart->device, "/firmware", fwpart->type, fwpart->mountflags, NULL) < 0)
+            ERROR("Mounting /firmware for encryption failed with %s\n", strerror(errno));
+    }
+
+    INFO("Running trampoline_encmnt\n");
 
     strcpy(encmnt_cmd_arg, "decrypt");
     output = run_get_stdout_with_exit_with_env(encmnt_cmd, &exit_code, encmnt_envp);
     if(exit_code != 0 || !output)
     {
-        ERROR("Failed to run trampoline_encmnt, exit code %d: %s", exit_code, output);
+        ERROR("Failed to run trampoline_encmnt, exit code %d: %s\n", exit_code, output);
         goto exit;
     }
 
@@ -58,27 +70,26 @@ int encryption_before_mount(struct fstab *fstab)
 
     if(strcmp(output, ENCMNT_BOOT_INTERNAL_OUTPUT) == 0)
     {
-        INFO("trampoline_encmnt requested to boot internal ROM.");
+        INFO("trampoline_encmnt requested to boot internal ROM.\n");
         res = ENC_RES_BOOT_INTERNAL;
         goto exit;
     }
 
     if(!strstartswith(output, "/dev"))
     {
-        ERROR("Invalid trampoline_encmnt output: %s", output);
+        ERROR("Invalid trampoline_encmnt output: %s\n", output);
         goto exit;
     }
 
     struct fstab_part *datap = fstab_find_first_by_path(fstab, "/data");
     if(!datap)
     {
-        ERROR("Failed to find /data in fstab!");
+        ERROR("Failed to find /data in fstab!\n");
         goto exit;
     }
 
-    INFO("Updating device %s to %s in fstab due to encryption.", datap->device, output);
+    INFO("Updating device %s to %s in fstab due to encryption.\n", datap->device, output);
     fstab_update_device(fstab, datap->device, output);
-    fstab_dump(fstab);
 
     res = ENC_RES_OK;
 exit:
@@ -102,6 +113,10 @@ int encryption_destroy(void)
 
     res = 0;
 exit:
+    remove("/vendor");
+    remove("/system/bin/linker");
+    umount("/firmware");
+    rmdir("/firmware");
     free(output);
     return res;
 }
