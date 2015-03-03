@@ -244,11 +244,11 @@ int wait_for_file(const char *filename, int timeout)
 
 int copy_file(const char *from, const char *to)
 {
-    FILE *in = fopen(from, "r");
+    FILE *in = fopen(from, "re");
     if(!in)
         return -1;
 
-    FILE *out = fopen(to, "w");
+    FILE *out = fopen(to, "we");
     if(!out)
     {
         fclose(in);
@@ -509,7 +509,7 @@ static int remount_ro_done(void)
     int match;
     int found_rw_fs = 0;
 
-    f = fopen("/proc/mounts", "r");
+    f = fopen("/proc/mounts", "re");
     if (! f) {
         /* If we can't read /proc/mounts, just give up */
         return 1;

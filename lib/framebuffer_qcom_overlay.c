@@ -99,7 +99,7 @@ static void *fb_qcom_vsync_thread_work(void *data)
     struct timespec now;
     char buff[64];
 
-    fd = open("/sys/class/graphics/fb0/vsync_event", O_RDONLY);
+    fd = open("/sys/class/graphics/fb0/vsync_event", O_RDONLY | O_CLOEXEC);
     if(fd < 0)
     {
         ERROR("Unable to open vsync_event!\n");
@@ -216,7 +216,7 @@ static int map_mdp_pixel_format()
 static void setDisplaySplit(struct fb_qcom_overlay_data *data)
 {
     char split[64] = { 0 };
-    FILE* fp = fopen("/sys/class/graphics/fb0/msm_fb_split", "r");
+    FILE* fp = fopen("/sys/class/graphics/fb0/msm_fb_split", "re");
     if(fp)
     {
         //Format "left right" space as delimiter

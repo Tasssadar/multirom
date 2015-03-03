@@ -476,7 +476,7 @@ int multirom_load_status(struct multirom_status *s)
     char arg[256];
     sprintf(arg, "%s/multirom.ini", mrom_dir());
 
-    FILE *f = fopen(arg, "r");
+    FILE *f = fopen(arg, "re");
     if(!f)
     {
         ERROR("Failed to open config file, using defaults!\n");
@@ -494,7 +494,7 @@ int multirom_load_status(struct multirom_status *s)
         s->is_second_boot = 1;
     else
     {
-        FILE *cmdline = fopen("/proc/cmdline", "r");
+        FILE *cmdline = fopen("/proc/cmdline", "re");
         if(cmdline)
         {
             if(fgets(line, sizeof(line), cmdline) && strstr(line, "mrom_kexecd=1"))
@@ -612,7 +612,7 @@ int multirom_save_status(struct multirom_status *s)
 
     snprintf(path, sizeof(path), "%s/multirom.ini", mrom_dir());
 
-    FILE *f = fopen(path, "w");
+    FILE *f = fopen(path, "we");
     if(!f)
     {
         ERROR("Failed to open/create status file!\n");
@@ -904,7 +904,7 @@ void multirom_import_internal(void)
     snprintf(path, sizeof(path), "%s/roms/%s/.icon_data", mrom_dir(), INTERNAL_ROM_NAME);
     if(access(path, F_OK) < 0)
     {
-        FILE *f = fopen(path, "w");
+        FILE *f = fopen(path, "we");
         if(f)
         {
             fputs("predef_set\ncom.tassadar.multirommgr:drawable/romic_android\n", f);
@@ -1017,7 +1017,7 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
 
 char *multirom_find_fstab_in_rc(const char *rcfile)
 {
-    FILE *f = fopen(rcfile, "r");
+    FILE *f = fopen(rcfile, "re");
     if(!f)
     {
         ERROR("Failed to open rcfile %s\n", rcfile);
@@ -1079,7 +1079,7 @@ static int multirom_inject_fw_mounter(char *rc_with_mount_all, struct fstab_part
     char *rc_file, *p;
     size_t rc_len, alloc_size;
     char line[512];
-    FILE *f = fopen(rc_with_mount_all, "r+");
+    FILE *f = fopen(rc_with_mount_all, "r+e");
     if(!f)
     {
         ERROR("Failed to open file \"%s\" to inject fw_mounter!", rc_with_mount_all);
@@ -1386,7 +1386,7 @@ int multirom_create_media_link(void)
         char buf[16];
         buf[0] = 0;
 
-        FILE *f = fopen(LAYOUT_VERSION, "r");
+        FILE *f = fopen(LAYOUT_VERSION, "re");
         const int rewrite = (!f || !fgets(buf, sizeof(buf), f) || atoi(buf) < 2);
 
         if(f)
@@ -1394,7 +1394,7 @@ int multirom_create_media_link(void)
 
         if(rewrite)
         {
-            f = fopen(LAYOUT_VERSION, "w");
+            f = fopen(LAYOUT_VERSION, "we");
             if(!f)
             {
                 ERROR("Failed to create .layout_version!\n");
@@ -1412,7 +1412,7 @@ int multirom_create_media_link(void)
 
 int multirom_get_api_level(const char *path)
 {
-    FILE *f = fopen(path, "r");
+    FILE *f = fopen(path, "re");
     if(!f)
     {
         ERROR("Could not open %s to read api level!", path);
@@ -1535,7 +1535,7 @@ int multirom_get_bootloader_cmdline(struct multirom_status *s, char *str, size_t
     struct boot_img_hdr hdr;
     struct fstab_part *boot;
 
-    f = fopen("/proc/cmdline", "r");
+    f = fopen("/proc/cmdline", "re");
     if(!f)
         return -1;
 
@@ -1887,7 +1887,7 @@ struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multi
     sprintf(path, "%s/rom_info.txt", rom->base_path);
     ERROR("Parsing %s...\n", path);
 
-    FILE *f = fopen(path, "r");
+    FILE *f = fopen(path, "re");
     if(!f)
     {
         ERROR("Failed to open %s!\n", path);
@@ -2164,7 +2164,7 @@ int multirom_replace_aliases_root_path(char **s, struct multirom_rom *rom)
 
 int multirom_extract_bytes(const char *dst, FILE *src, size_t size)
 {
-    FILE *f = fopen(dst, "w");
+    FILE *f = fopen(dst, "we");
     if(!f)
     {
         ERROR("Failed to open dest file %s\n", dst);
@@ -2398,7 +2398,7 @@ int multirom_copy_log(char *klog, const char *dest_path_relative)
     {
         char path[256];
         snprintf(path, sizeof(path), "%s/%s", mrom_dir(), dest_path_relative);
-        FILE *f = fopen(path, "w");
+        FILE *f = fopen(path, "we");
 
         if(f)
         {
@@ -2434,7 +2434,7 @@ struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uu
 
 int multirom_search_last_kmsg(const char *expr)
 {
-    FILE *f = fopen("/proc/last_kmsg", "r");
+    FILE *f = fopen("/proc/last_kmsg", "re");
     if(!f)
         return -1;
 
@@ -2458,7 +2458,7 @@ int multirom_get_battery(void)
 {
     char buff[4];
 
-    FILE *f = fopen(BATTERY_CAP, "r");
+    FILE *f = fopen(BATTERY_CAP, "re");
     if(!f)
         return -1;
 
@@ -2507,7 +2507,7 @@ void multirom_find_rom_icon(struct multirom_rom *rom)
 
     snprintf(buff, sizeof(buff), "%s/.icon_data", rom->base_path);
 
-    f = fopen(buff, "r");
+    f = fopen(buff, "re");
     if(!f)
         goto fail;
 

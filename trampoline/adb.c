@@ -203,7 +203,7 @@ void adb_cleanup(void)
 
 int adb_get_serial(char *serial, int maxlen)
 {
-    FILE *f = fopen("/proc/cmdline", "r");
+    FILE *f = fopen("/proc/cmdline", "re");
     if(!f)
         return -1;
 

@@ -203,7 +203,7 @@ static int is_charger_mode(void)
 {
     char buff[2048] = { 0 };
 
-    FILE *f = fopen("/proc/cmdline", "r");
+    FILE *f = fopen("/proc/cmdline", "re");
     if(!f)
         return 0;
 

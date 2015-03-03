@@ -109,7 +109,7 @@ static px_type *load_png(const char *path, int destW, int destH)
     uint32_t src_pix;
     png_bytep *rows = NULL;
 
-    fp = fopen(path, "rb");
+    fp = fopen(path, "rbe");
     if(!fp)
         return NULL;
 
@@ -325,7 +325,7 @@ int fb_png_save_img(const char *path, int w, int h, int stride, px_type *data)
     const int w_png_bytes = w * 3;
     px_type * volatile itr = data;
 
-    fp = fopen(path, "w");
+    fp = fopen(path, "we");
     if(!fp)
     {
         ERROR("Failed to open %s for writing\n", path);

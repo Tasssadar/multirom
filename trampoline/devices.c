@@ -919,7 +919,7 @@ try_loading_again:
     if(fw_fd < 0) {
         fw_fd = open(file2, O_RDONLY | O_CLOEXEC);
         if (fw_fd < 0) {
-            fw_fd = open(file3, O_RDONLY);
+            fw_fd = open(file3, O_RDONLY | O_CLOEXEC);
             if (fw_fd < 0) {
                 if (booting) {
                         /* If we're not fully booted, we may be missing

@@ -63,7 +63,7 @@ struct fstab *fstab_create_empty(int version)
 
 struct fstab *fstab_load(const char *path, int resolve_symlinks)
 {
-    FILE *f = fopen(path, "r");
+    FILE *f = fopen(path, "re");
     if(!f)
     {
         ERROR("Failed to open fstab %s\n", path);
@@ -181,7 +181,7 @@ int fstab_save(struct fstab *f, const char *path)
     FILE *out;
     struct fstab_part *p;
 
-    out = fopen(path, "w");
+    out = fopen(path, "we");
     if(!f)
     {
         ERROR("fstab_save: failed to open %s!", path);

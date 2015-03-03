@@ -93,7 +93,7 @@ static int inject_rd(const char *path)
     int result = -1;
     uint32_t magic = 0;
 
-    FILE *f = fopen(path, "r");
+    FILE *f = fopen(path, "re");
     if(!f)
     {
         ERROR("Couldn't open %s!\n", path);
