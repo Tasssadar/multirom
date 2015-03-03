@@ -2468,20 +2468,6 @@ int multirom_get_battery(void)
     return atoi(buff);
 }
 
-void multirom_set_brightness(int val)
-{
-#ifdef TW_BRIGHTNESS_PATH
-    FILE *f = fopen(TW_BRIGHTNESS_PATH, "w");
-    if(!f)
-    {
-        ERROR("Failed to set brightness: %s!\n", strerror(errno));
-        return;
-    }
-    fprintf(f, "%d", val);
-    fclose(f);
-#endif
-}
-
 int multirom_run_scripts(const char *type, struct multirom_rom *rom)
 {
     char buff[512];

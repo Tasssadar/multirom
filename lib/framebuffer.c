@@ -202,6 +202,8 @@ int fb_open(int rotation)
     ioctl(fb.fd, FBIOBLANK, FB_BLANK_UNBLANK);
 #endif
 
+    fb_set_brightness(MULTIROM_DEFAULT_BRIGHTNESS);
+
     fb_update();
 
     fb_draw_run = 1;
@@ -260,6 +262,20 @@ void fb_dump_info(void)
     ERROR("vi.height: %u\n", fb.vi.height);
     ERROR("vi.width: %u\n", fb.vi.width);
     ERROR("vi.accel_flags: %u\n", fb.vi.accel_flags);
+}
+
+void fb_set_brightness(int val)
+{
+#ifdef TW_BRIGHTNESS_PATH
+    FILE *f = fopen(TW_BRIGHTNESS_PATH, "we");
+    if(!f)
+    {
+        ERROR("Failed to set brightness: %s!\n", strerror(errno));
+        return;
+    }
+    fprintf(f, "%d", val);
+    fclose(f);
+#endif
 }
 
 int fb_get_vi_xres(void)

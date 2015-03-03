@@ -161,7 +161,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     start_input_thread();
     keyaction_enable(1);
 
-    multirom_set_brightness(s->brightness);
+    fb_set_brightness(s->brightness);
 
     if(s->auto_boot_rom && s->auto_boot_seconds > 0 && (s->auto_boot_type & AUTOBOOT_CHECK_KEYS) == 0)
         multirom_ui_auto_boot();

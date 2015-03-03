@@ -302,6 +302,7 @@ void fb_clear(void);
 void fb_freeze(int freeze);
 int fb_clone(char **buff);
 int fb_save_screenshot(void);
+void fb_set_brightness(int val);
 
 void fb_push_context(void);
 void fb_pop_context(void);
