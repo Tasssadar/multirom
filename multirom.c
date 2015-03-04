@@ -1562,12 +1562,18 @@ int multirom_get_bootloader_cmdline(struct multirom_status *s, char *str, size_t
         l += 26;
 #endif
 
-        if(*l != 0 && (c = strstr(str, l)))
+#if MR_DEVICE_HOOKS >= 5
+        if(mrom_hook_cmdline_remove_bootimg_part(l, BOOT_ARGS_SIZE, str, size) != 1)
+#endif
         {
-            e = c + strlen(l);
-            if(*e == ' ')
-                ++e;
-            memmove(c, e, strlen(e)+1); // plus NULL
+            ERROR("bootimg cmdline %s\n", l);
+            if(*l != 0 && (c = strstr(str, l)))
+            {
+                e = c + strlen(l);
+                if(*e == ' ')
+                    ++e;
+                memmove(c, e, strlen(e)+1); // plus NULL
+            }
         }
     }
 

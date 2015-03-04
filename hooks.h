@@ -36,6 +36,10 @@ void tramp_hook_before_device_init(void);
 int mrom_hook_allow_incomplete_fstab(void);
 #endif
 
+#if MR_DEVICE_HOOKS >= 5
+int mrom_hook_cmdline_remove_bootimg_part(char *bootimg_cmdline, size_t bootimg_cmdline_cap, char *complete_cmdline, size_t complete_cmdline_cap);
+#endif
+
 #endif /* MR_DEVICE_HOOKS */
 
 #endif /* MR_DEVICE_HOOKS_H */
