@@ -135,7 +135,7 @@ int multirom(const char *rom_to_boot)
             // Two possible scenarios: this ROM has kexec-hardboot and target
             // ROM has boot image, so kexec it immediatelly or
             // reboot and then proceed as usuall
-            if(((M(rom->type) & MASK_KEXEC) || rom->has_bootimg) && rom->type != ROM_DEFAULT && multirom_has_kexec() == 0)
+            if(((M(rom->type) & MASK_KEXEC) || rom->has_bootimg) && rom->type != ROM_DEFAULT && multirom_has_kexec())
             {
                 to_boot = rom;
                 s.is_second_boot = 0;
@@ -1468,9 +1468,15 @@ int multirom_get_trampoline_ver(void)
 
 int multirom_has_kexec(void)
 {
-    static int has_kexec = -2;
-    if(has_kexec != -2)
+    static int has_kexec = -1;
+    if(has_kexec != -1)
         return has_kexec;
+
+#if MR_DEVICE_HOOKS >= 5
+    has_kexec = mrom_hook_has_kexec();
+    if(has_kexec != -1)
+        return has_kexec;
+#endif
 
     if(access("/proc/config.gz", F_OK) >= 0)
     {
@@ -1480,7 +1486,7 @@ int multirom_has_kexec(void)
         char *cmd_gzip[] = { busybox_path, "gzip", "-d", "/ikconfig.gz", NULL };
         run_cmd(cmd_gzip);
 
-        has_kexec = 0;
+        has_kexec = 1;
 
         uint32_t i;
         static const char *checks[] = {
@@ -1498,7 +1504,7 @@ int multirom_has_kexec(void)
             cmd_grep[2] = (char*)checks[i];
             if(run_cmd(cmd_grep) != 0)
             {
-                has_kexec = -1;
+                has_kexec = 0;
                 ERROR("%s not found in /proc/config.gz!\n", checks[i]);
             }
         }
@@ -1518,7 +1524,7 @@ int multirom_has_kexec(void)
         if(access(checkfile, R_OK) < 0)
         {
             ERROR("%s was not found!\n", checkfile);
-            has_kexec = -1;
+            has_kexec = 1;
         }
         else
             has_kexec = 0;
