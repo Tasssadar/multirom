@@ -18,6 +18,9 @@ case "$DEVICES" in
     "flo")
         DEVICES="${DEVICES} deb"
         ;;
+    "bacon")
+    	DEVICES="${DEVICES} A0001 One OnePlus"
+    	;;
 esac
 
 fail()
