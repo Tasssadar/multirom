@@ -25,9 +25,11 @@
 #ifdef MR_ENCRYPTION
 int encryption_before_mount(struct fstab *fstab);
 int encryption_destroy(void);
+int encryption_cleanup(void);
 #else
-int encryption_before_mount(struct fstab *) { return 0; }
+int encryption_before_mount(struct fstab *fstab) { return 0; }
 int encryption_destroy(void) { return 0; }
+int encryption_cleanup(void) { return 0; }
 #endif
 
 #endif

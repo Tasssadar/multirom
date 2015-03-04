@@ -349,6 +349,8 @@ run_main_init:
         encryption_destroy();
     }
 
+    encryption_cleanup();
+
     umount("/proc");
     umount("/sys");
     rmdir("/proc");

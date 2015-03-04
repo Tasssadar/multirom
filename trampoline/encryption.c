@@ -111,12 +111,21 @@ int encryption_destroy(void)
         goto exit;
     }
 
+    remove("/system/bin/linker");
+
     res = 0;
 exit:
-    remove("/vendor");
-    remove("/system/bin/linker");
-    umount("/firmware");
-    rmdir("/firmware");
     free(output);
     return res;
+}
+
+int encryption_cleanup(void)
+{
+    remove("/vendor");
+
+    if(umount("/firmware") < 0)
+        ERROR("encryption_cleanup: failed to unmount /firmware: %s", strerror(errno));
+
+    rmdir("/firmware");
+    return 0;
 }
