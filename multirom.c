@@ -60,7 +60,7 @@
 #define INTERNAL_ROM_NAME "Internal"
 #define MAX_ROM_NAME_LEN 26
 #define LAYOUT_VERSION "/data/.layout_version"
-#define SECOND_BOOT_KMESG "MultiromSaysNextBootShouldBeSecondMagic108"
+#define SECOND_BOOT_KMESG "MultiromSaysNextBootShouldBeSecondMagic108\n"
 
 #define BATTERY_CAP "/sys/class/power_supply/battery/capacity"
 
@@ -2434,7 +2434,20 @@ struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uu
 
 int multirom_search_last_kmsg(const char *expr)
 {
-    FILE *f = fopen("/proc/last_kmsg", "re");
+    int i;
+    int res = -1;
+    FILE *f = NULL;
+    char buff[2048];
+
+    static const char *kmsg_paths[] = {
+        "/proc/last_kmsg",
+        "/sys/fs/pstore/console-ramoops",
+        NULL,
+    };
+
+    for(i = 0; !f && kmsg_paths[i]; ++i)
+        f = fopen(kmsg_paths[i], "re");
+
     if(!f)
         return -1;
 
