@@ -1566,7 +1566,6 @@ int multirom_get_bootloader_cmdline(struct multirom_status *s, char *str, size_t
         if(mrom_hook_cmdline_remove_bootimg_part(l, BOOT_ARGS_SIZE, str, size) != 1)
 #endif
         {
-            ERROR("bootimg cmdline %s\n", l);
             if(*l != 0 && (c = strstr(str, l)))
             {
                 e = c + strlen(l);
