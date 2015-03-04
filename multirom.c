@@ -1555,24 +1555,16 @@ int multirom_get_bootloader_cmdline(struct multirom_status *s, char *str, size_t
         l = (char*)hdr.cmdline;
         hdr.cmdline[BOOT_ARGS_SIZE-1] = 0;
 
-#ifdef FLO_CMDLINE_HACK
-        // Flo's bootloader (at least 03.15) removes first 26 characters
-        // from boot.img's cmdline because of reasons. On stock
-        // boot.img, those 26 characters are "console=ttyHSL0,115200,n8 "
-        l += 26;
+#if MR_DEVICE_HOOKS >= 5
+        mrom_hook_fixup_bootimg_cmdline(l, BOOT_ARGS_SIZE);
 #endif
 
-#if MR_DEVICE_HOOKS >= 5
-        if(mrom_hook_cmdline_remove_bootimg_part(l, BOOT_ARGS_SIZE, str, size) != 1)
-#endif
+        if(*l != 0 && (c = strstr(str, l)))
         {
-            if(*l != 0 && (c = strstr(str, l)))
-            {
-                e = c + strlen(l);
-                if(*e == ' ')
-                    ++e;
-                memmove(c, e, strlen(e)+1); // plus NULL
-            }
+            e = c + strlen(l);
+            if(*e == ' ')
+                ++e;
+            memmove(c, e, strlen(e)+1); // plus NULL
         }
     }
 
@@ -1717,11 +1709,11 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
         img.hdr.cmdline[BOOT_ARGS_SIZE-1] = 0;
 
         // see multirom_get_bootloader_cmdline
-#ifdef FLO_CMDLINE_HACK
-        strcat(cmdline, (char*)img.hdr.cmdline+26);
-#else
-        strcat(cmdline, (char*)img.hdr.cmdline);
+#if MR_DEVICE_HOOKS >= 5
+        mrom_hook_fixup_bootimg_cmdline((char*)img.hdr.cmdline, BOOT_ARGS_SIZE);
 #endif
+
+        strcat(cmdline, (char*)img.hdr.cmdline);
         strcat(cmdline, " ");
     }
 
