@@ -636,6 +636,15 @@ int strstartswith(const char *haystack, const char *needle)
     return strncmp(haystack, needle, strlen(needle)) == 0;
 }
 
+int strendswith(const char *haystack, const char *needle)
+{
+    size_t h_len = strlen(haystack);
+    size_t n_len = strlen(needle);
+    if(n_len == 0 || n_len > h_len)
+        return 0;
+    return strncmp(haystack + h_len - n_len, needle, n_len) == 0;
+}
+
 int create_loop_device(const char *dev_path, const char *img_path, int loop_num, int loop_chmod)
 {
     int file_fd, device_fd, res = -1;

@@ -230,7 +230,7 @@ void rom_quirks_on_android_mounted_fs(struct multirom_rom *rom)
 
             // franco.Kernel includes script init.fk.sh which remounts /system as read only
             // comment out lines with mount and /system in all .sh scripts in /
-            if(strstr(dt->d_name, ".sh") && (M(rom->type) & MASK_ANDROID) && rom->type != ROM_ANDROID_USB_IMG)
+            if(strendswith(dt->d_name, ".sh") && (M(rom->type) & MASK_ANDROID) && rom->type != ROM_ANDROID_USB_IMG)
             {
                 snprintf(buff, sizeof(buff), "/%s", dt->d_name);
                 workaround_mount_in_sh(buff);

@@ -58,5 +58,6 @@ inline int in_rect(int x, int y, int rx, int ry, int rw, int rh);
 inline void *mzalloc(size_t size); // alloc and fill with 0s
 char *strtoupper(const char *str);
 int strstartswith(const char *haystack, const char *needle);
+int strendswith(const char *haystack, const char *needle);
 
 #endif
