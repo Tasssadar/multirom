@@ -585,9 +585,10 @@ void multirom_ui_tab_rom_boot(void)
         error = 1;
     }
     else if (((m & MASK_KEXEC) || ((m & MASK_ANDROID) && rom->has_bootimg)) &&
-        multirom_has_kexec() != 0)
+        !multirom_has_kexec())
     {
-        ncard_set_text(b, "Kexec-hardboot support is required to boot this ROM.\n\nInstall kernel with kexec-hardboot support to your Internal ROM!");
+        ncard_set_text(b, "Kexec-hardboot support is required to boot this ROM.\n\n"
+                "Install kernel with kexec-hardboot support to your Internal ROM!");
         error = 1;
     }
     else if((m & MASK_KEXEC) && strchr(rom->name, ' '))
