@@ -20,7 +20,7 @@ else
 endif
 
 MR_DEVICES := $(TARGET_DEVICE)
-ifneq ($(MR_DEVICE_VARIANTS))
+ifneq ($(MR_DEVICE_VARIANTS),)
 	MR_DEVICES += $(MR_DEVICE_VARIANTS)
 endif
 
