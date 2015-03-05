@@ -38,18 +38,18 @@ endif
 common_SRC_FILES += input_$(MR_INPUT_TYPE).c
 
 ifeq ($(MR_USE_QCOM_OVERLAY),true)
-    common_CFLAGS += -DMR_USE_QCOM_OVERLAY
+    common_C_FLAGS += -DMR_USE_QCOM_OVERLAY
     common_SRC_FILES += framebuffer_qcom_overlay.c
 ifneq ($(MR_QCOM_OVERLAY_HEADER),)
-    common_CFLAGS += -DMR_QCOM_OVERLAY_HEADER=\"../../../../$(MR_QCOM_OVERLAY_HEADER)\"
+    common_C_FLAGS += -DMR_QCOM_OVERLAY_HEADER=\"../../../../$(MR_QCOM_OVERLAY_HEADER)\"
 else
     $(error MR_USE_QCOM_OVERLAY is true but MR_QCOM_OVERLAY_HEADER was not specified!)
 endif
 ifneq ($(MR_QCOM_OVERLAY_CUSTOM_PIXEL_FORMAT),)
-    common_CFLAGS += -DMR_QCOM_OVERLAY_CUSTOM_PIXEL_FORMAT=$(MR_QCOM_OVERLAY_CUSTOM_PIXEL_FORMAT)
+    common_C_FLAGS += -DMR_QCOM_OVERLAY_CUSTOM_PIXEL_FORMAT=$(MR_QCOM_OVERLAY_CUSTOM_PIXEL_FORMAT)
 endif
 ifeq ($(MR_QCOM_OVERLAY_USE_VSYNC),true)
-    common_CFLAGS += -DMR_QCOM_OVERLAY_USE_VSYNC
+    common_C_FLAGS += -DMR_QCOM_OVERLAY_USE_VSYNC
 endif
 endif
 
