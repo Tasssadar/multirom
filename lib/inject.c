@@ -65,7 +65,7 @@ static int copy_rd_files(const char *path, const char *busybox_path)
     chmod(TMP_RD_UNPACKED_DIR"/init", 0750);
 
 #ifdef MR_USE_MROM_FSTAB
-    snprintf(buf, "%s/mrom.fstab", mrom_dir());
+    snprintf(buf, sizeof(buf), "%s/mrom.fstab", mrom_dir());
     copy_file(buf, TMP_RD_UNPACKED_DIR"/mrom.fstab");
 #else
     remove(TMP_RD_UNPACKED_DIR"/mrom.fstab");
