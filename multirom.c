@@ -2457,9 +2457,6 @@ int multirom_search_last_kmsg(const char *expr)
     if(!f)
         return -1;
 
-    int res = -1;
-    char buff[2048];
-
     while(fgets(buff, sizeof(buff), f))
     {
         if(strstr(buff, expr))
