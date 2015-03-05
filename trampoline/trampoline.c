@@ -108,31 +108,11 @@ static void run_multirom(void)
     while(restart);
 }
 
-static void mount_and_run(struct fstab *fstab)
+static int try_mount_all_entries(struct fstab *fstab, struct fstab_part *first_data_p)
 {
-    struct fstab_part *p = fstab_find_first_by_path(fstab, "/data");
-    if(!p)
-    {
-        ERROR("Failed to find /data partition in fstab\n");
-        return;
-    }
+    size_t i;
+    struct fstab_part *p_itr = first_data_p;
 
-    if(wait_for_file(p->device, 5) < 0)
-    {
-        ERROR("Waiting too long for dev %s\n", p->device);
-        return;
-    }
-
-    mkdir(REALDATA, 0755);
-
-    int enc_res = encryption_before_mount(fstab);
-    if(enc_res == ENC_RES_ERR)
-        ERROR("Decryption failed, trying to mount anyway - might be unencrypted device.");
-    else if(enc_res == ENC_RES_BOOT_INTERNAL)
-        return;
-
-    int mount_err = -1;
-    struct fstab_part *p_itr = p;
     do
     {
         // Remove nosuid flag, because secondary ROMs have
@@ -140,44 +120,75 @@ static void mount_and_run(struct fstab *fstab)
         p_itr->mountflags &= ~(MS_NOSUID);
 
         if(mount(p_itr->device, REALDATA, p_itr->type, p_itr->mountflags, p_itr->options) >= 0)
-            mount_err = 0;
-        else
-            mount_err = -errno;
+            return 0;
     }
-    while(mount_err < 0 && (p_itr = fstab_find_next_by_path(fstab, "/data", p_itr)));
+    while((p_itr = fstab_find_next_by_path(fstab, "/data", p_itr)));
 
-    if(mount_err < 0)
+    ERROR("Failed to mount /realdata with data from fstab, trying all filesystems\n");
+
+    const char *fs_types[] = { "ext4", "f2fs", "ext3", "ext2" };
+    const char *fs_opts [] = {
+        "barrier=1,data=ordered,nomblk_io_submit,noauto_da_alloc,errors=panic", // ext4
+        "inline_xattr,flush_merge,errors=recover", // f2fs
+        "", // ext3
+        "" // ext2
+    };
+
+    for(i = 0; i < ARRAY_SIZE(fs_types); ++i)
     {
-        ERROR("Failed to mount /realdata, err %d, trying all filesystems\n", mount_err);
-
-        fstab_dump(fstab);
-
-        const char *fs_types[] = { "ext4", "f2fs", "ext3", "ext2" };
-        const char *fs_opts [] = {
-            "barrier=1,data=ordered,nomblk_io_submit,noauto_da_alloc,errors=panic", // ext4
-            "inline_xattr,flush_merge,errors=recover", // f2fs
-            "", // ext3
-            "" // ext2
-        };
-
-        int mounted = 0;
-        size_t i;
-        for(i = 0; i < ARRAY_SIZE(fs_types); ++i)
+        if(mount(first_data_p->device, REALDATA, fs_types[i], first_data_p->mountflags, fs_opts[i]) >= 0)
         {
-            ERROR("Trying to mount %s with fs %s\n", p->device, fs_types[i]);
-            if(mount(p->device, REALDATA, fs_types[i], p->mountflags, fs_opts[i]) >= 0)
+            INFO("/realdata successfuly mounted with fs %s\n", fs_types[i]);
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
+static void mount_and_run(struct fstab *fstab)
+{
+    struct fstab_part *datap = fstab_find_first_by_path(fstab, "/data");
+    if(!datap)
+    {
+        ERROR("Failed to find /data partition in fstab\n");
+        return;
+    }
+
+    if(wait_for_file(datap->device, 5) < 0)
+    {
+        ERROR("Waiting too long for dev %s\n", datap->device);
+        return;
+    }
+
+    mkdir(REALDATA, 0755);
+
+    if(try_mount_all_entries(fstab, datap) < 0)
+    {
+#ifndef MR_ENCRYPTION
+        ERROR("Failed to mount /data with all possible filesystems!\n");
+        return;
+#else
+        INFO("Failed to mount /data, trying encryption...\n");
+        switch(encryption_before_mount(fstab))
+        {
+            case ENC_RES_ERR:
+                ERROR("/data decryption failed!\n");
+                return;
+            case ENC_RES_BOOT_INTERNAL:
+                return;
+            default:
+            case ENC_RES_OK:
             {
-                ERROR("/realdata successfuly mounted with fs %s\n", fs_types[i]);
-                mounted = 1;
+                if(try_mount_all_entries(fstab, datap) < 0)
+                {
+                    ERROR("Failed to mount decrypted /data with all possible filesystems!\n");
+                    return;
+                }
                 break;
             }
         }
-
-        if(!mounted)
-        {
-            ERROR("Failed to mount /realdata with all possible filesystems!\n");
-            return;
-        }
+#endif
     }
 
     if(find_multirom() == -1)
