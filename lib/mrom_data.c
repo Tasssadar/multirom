@@ -42,3 +42,48 @@ const char *mrom_dir(void)
 {
     return multirom_dir;
 }
+
+int mrom_is_second_boot(void)
+{
+    int i;
+    int res = 0;
+    FILE *f = NULL;
+    char buff[2048];
+
+    static const char *kmsg_paths[] = {
+        "/proc/last_kmsg",
+        "/sys/fs/pstore/console-ramoops",
+        NULL,
+    };
+
+    f = fopen("/proc/cmdline", "re");
+    if(f)
+    {
+        if(fgets(buff, sizeof(buff), f) && strstr(buff, "mrom_kexecd=1"))
+        {
+            res = 1;
+            goto exit;
+        }
+
+        fclose(f);
+    }
+
+    for(i = 0; !f && kmsg_paths[i]; ++i)
+        f = fopen(kmsg_paths[i], "re");
+
+    if(!f)
+        return 0;
+
+    while(fgets(buff, sizeof(buff), f))
+    {
+        if(strstr(buff, SECOND_BOOT_KMESG))
+        {
+            res = 1;
+            goto exit;
+        }
+    }
+
+exit:
+    fclose(f);
+    return res;
+}

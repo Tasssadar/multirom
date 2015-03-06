@@ -18,10 +18,13 @@
 #ifndef MROM_DATA_H
 #define MROM_DATA_H
 
+#define SECOND_BOOT_KMESG "MultiromSaysNextBootShouldBeSecondMagic108\n"
+
 void mrom_set_dir(const char *mrom_dir);
 void mrom_set_log_tag(const char *tag);
 
 const char *mrom_log_tag(void);
 const char *mrom_dir(void);
+int mrom_is_second_boot(void);
 
 #endif

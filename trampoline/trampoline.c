@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <cutils/android_reboot.h>
 
 #include "devices.h"
 #include "../lib/log.h"
@@ -146,19 +147,23 @@ static int try_mount_all_entries(struct fstab *fstab, struct fstab_part *first_d
     return -1;
 }
 
-static void mount_and_run(struct fstab *fstab)
+static int mount_and_run(struct fstab *fstab)
 {
     struct fstab_part *datap = fstab_find_first_by_path(fstab, "/data");
     if(!datap)
     {
         ERROR("Failed to find /data partition in fstab\n");
-        return;
+        return -1;
     }
 
-    if(wait_for_file(datap->device, 5) < 0)
+    if(access(datap->device, R_OK) < 0)
     {
-        ERROR("Waiting too long for dev %s\n", datap->device);
-        return;
+        INFO("Waiting for %s\n", datap->device);
+        if(wait_for_file(datap->device, 5) < 0)
+        {
+            ERROR("Waiting too long for dev %s\n", datap->device);
+            return -1;
+        }
     }
 
     mkdir(REALDATA, 0755);
@@ -167,23 +172,23 @@ static void mount_and_run(struct fstab *fstab)
     {
 #ifndef MR_ENCRYPTION
         ERROR("Failed to mount /data with all possible filesystems!\n");
-        return;
+        return -1;
 #else
         INFO("Failed to mount /data, trying encryption...\n");
         switch(encryption_before_mount(fstab))
         {
             case ENC_RES_ERR:
                 ERROR("/data decryption failed!\n");
-                return;
+                return -1;
             case ENC_RES_BOOT_INTERNAL:
-                return;
+                return 0;
             default:
             case ENC_RES_OK:
             {
                 if(try_mount_all_entries(fstab, datap) < 0)
                 {
                     ERROR("Failed to mount decrypted /data with all possible filesystems!\n");
-                    return;
+                    return -1;
                 }
                 break;
             }
@@ -194,12 +199,13 @@ static void mount_and_run(struct fstab *fstab)
     if(find_multirom() == -1)
     {
         ERROR("Could not find multirom folder!\n");
-        return;
+        return -1;
     }
 
     adb_init(path_multirom);
     run_multirom();
     adb_quit();
+    return 0;
 }
 
 static int is_charger_mode(void)
@@ -339,7 +345,14 @@ int main(int argc, char *argv[])
 #endif
 
     // mount and run multirom from sdcard
-    mount_and_run(fstab);
+    if(mount_and_run(fstab) < 0 && mrom_is_second_boot())
+    {
+        ERROR("This is second boot and we couldn't mount /data, reboot!\n");
+        sync();
+        android_reboot(ANDROID_RB_RESTART, 0, 0);
+        while(1)
+            sleep(1);
+    }
 
 exit:
     if(fstab)

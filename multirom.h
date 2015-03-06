@@ -155,7 +155,6 @@ int multirom_copy_log(char *klog, const char *dest_path_relative);
 int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_partition *p);
 struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uuid);
 int multirom_path_exists(char *base, char *filename);
-int multirom_search_last_kmsg(const char *expr);
 struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multirom_rom *rom);
 void multirom_destroy_rom_info(struct rom_info *info);
 char **multirom_get_rom_info_str(struct rom_info *info, char *key);

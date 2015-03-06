@@ -60,7 +60,6 @@
 #define INTERNAL_ROM_NAME "Internal"
 #define MAX_ROM_NAME_LEN 26
 #define LAYOUT_VERSION "/data/.layout_version"
-#define SECOND_BOOT_KMESG "MultiromSaysNextBootShouldBeSecondMagic108\n"
 
 #define BATTERY_CAP "/sys/class/power_supply/battery/capacity"
 
@@ -473,6 +472,9 @@ int multirom_load_status(struct multirom_status *s)
 
     multirom_default_status(s);
 
+    if(mrom_is_second_boot())
+        s->is_second_boot = 1;
+
     char arg[256];
     sprintf(arg, "%s/multirom.ini", mrom_dir());
 
@@ -489,19 +491,6 @@ int multirom_load_status(struct multirom_status *s)
 
     char name[64];
     char *pch;
-
-    if(multirom_search_last_kmsg(SECOND_BOOT_KMESG) == 0)
-        s->is_second_boot = 1;
-    else
-    {
-        FILE *cmdline = fopen("/proc/cmdline", "re");
-        if(cmdline)
-        {
-            if(fgets(line, sizeof(line), cmdline) && strstr(line, "mrom_kexecd=1"))
-                s->is_second_boot = 1;
-            fclose(cmdline);
-        }
-    }
 
     while((fgets(line, sizeof(line), f)))
     {
@@ -2436,38 +2425,6 @@ struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uu
         if(strcmp(s->partitions[i]->uuid, uuid) == 0)
             return s->partitions[i];
     return NULL;
-}
-
-int multirom_search_last_kmsg(const char *expr)
-{
-    int i;
-    int res = -1;
-    FILE *f = NULL;
-    char buff[2048];
-
-    static const char *kmsg_paths[] = {
-        "/proc/last_kmsg",
-        "/sys/fs/pstore/console-ramoops",
-        NULL,
-    };
-
-    for(i = 0; !f && kmsg_paths[i]; ++i)
-        f = fopen(kmsg_paths[i], "re");
-
-    if(!f)
-        return -1;
-
-    while(fgets(buff, sizeof(buff), f))
-    {
-        if(strstr(buff, expr))
-        {
-            res = 0;
-            break;
-        }
-    }
-
-    fclose(f);
-    return res;
 }
 
 int multirom_get_battery(void)
