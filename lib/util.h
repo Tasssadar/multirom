@@ -24,6 +24,11 @@
 
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 
+#define REBOOT_SYSTEM 0
+#define REBOOT_RECOVERY 1
+#define REBOOT_BOOTLOADER 2
+#define REBOOT_SHUTDOWN 3
+
 time_t gettime(void);
 unsigned int decode_uid(const char *s);
 int mkdir_recursive(const char *pathname, mode_t mode);
@@ -49,6 +54,7 @@ inline int64_t timeval_us_diff(struct timeval now, struct timeval prev);
 void emergency_remount_ro(void);
 int create_loop_device(const char *dev_path, const char *img_path, int loop_num, int loop_chmod);
 int mount_image(const char *src, const char *dst, const char *fs, int flags, const void *data);
+void do_reboot(int type);
 
 inline int imin(int a, int b);
 inline int imax(int a, int b);

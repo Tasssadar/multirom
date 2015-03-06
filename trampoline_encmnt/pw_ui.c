@@ -238,7 +238,7 @@ static inline void type_pattern_connect_dot(struct pwui_type_pattern_data *d,  i
 {
     if(d->connected_dots_len >= PWUI_DOTS_CNT)
     {
-        ERROR("d->connected_dots_len overflowed PWUI_DOTS_CNT!");
+        ERROR("d->connected_dots_len overflowed PWUI_DOTS_CNT!\n");
         return;
     }
 
@@ -379,6 +379,8 @@ static void init_ui(int pwtype)
 {
     fb_add_rect_lvl(100, 0, 0, fb_width, HEADER_HEIGHT, C_HIGHLIGHT_BG);
 
+    ncard_set_top_offset(HEADER_HEIGHT);
+
     fb_text_proto *p = fb_text_create(0, 0, C_HIGHLIGHT_TEXT, SIZE_EXTRA, "Encrypted device");
     p->level = 110;
     fb_text *t = fb_text_finalize(p);
@@ -436,11 +438,25 @@ static void destroy_ui(int pwtype)
         button_destroy(boot_primary_btn);
 }
 
+static int pw_ui_shutdown_counter_touch_handler(touch_event *ev, void *data)
+{
+    int *shutdown_counter = data;
+    if(*shutdown_counter == 0)
+        return -1;
+
+    ncard_hide();
+
+    *shutdown_counter = 0;
+    return -1;
+}
+
 int pw_ui_run(int pwtype)
 {
+    int shutdown_counter = 0;
+
     if(fb_open(0) < 0)
     {
-        ERROR("Failed to open framebuffer");
+        ERROR("Failed to open framebuffer\n");
         return -1;
     }
 
@@ -453,6 +469,7 @@ int pw_ui_run(int pwtype)
     init_ui(pwtype);
 
     start_input_thread();
+    add_touch_handler(pw_ui_shutdown_counter_touch_handler, &shutdown_counter);
 
     fb_freeze(0);
 
@@ -462,13 +479,33 @@ int pw_ui_run(int pwtype)
     a->on_finished_data = r;
     call_anim_add(a);
 
-    while(1) {
+    while(1)
+    {
         pthread_mutex_lock(&exit_code_mutex);
         const int c = exit_code;
         pthread_mutex_unlock(&exit_code_mutex);
 
         if(c != ENCMNT_UIRES_ERROR)
             break;
+
+        if(get_last_key() == KEY_POWER && (!ncard_is_visible() || shutdown_counter))
+        {
+            ++shutdown_counter;
+            if(shutdown_counter == 1)
+            {
+                ncard_builder *b = ncard_create_builder();
+                ncard_set_text(b, "Press power button again to shut down the device.");
+                ncard_show(b, 1);
+            }
+            else
+            {
+                ncard_builder *b = ncard_create_builder();
+                ncard_set_pos(b, NCARD_POS_CENTER);
+                ncard_set_text(b, "Shutting down...");
+                ncard_show(b, 1);
+                break;
+            }
+        }
 
         usleep(100000);
     }
@@ -477,10 +514,15 @@ int pw_ui_run(int pwtype)
     fb_freeze(1);
     fb_force_draw();
 
+    rm_touch_handler(pw_ui_shutdown_counter_touch_handler, &shutdown_counter);
+
     stop_input_thread();
     workers_stop();
 
     destroy_ui(pwtype);
+
+    if(shutdown_counter == 2)
+        do_reboot(REBOOT_SHUTDOWN);
 
     fb_clear();
     fb_close();

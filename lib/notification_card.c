@@ -561,3 +561,8 @@ int ncard_try_cancel(void)
     }
     return 0;
 }
+
+int ncard_is_visible(void)
+{
+    return ncard.bg != NULL;
+}

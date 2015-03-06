@@ -24,6 +24,7 @@
 #include <time.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <cutils/android_reboot.h>
 
 #ifdef HAVE_SELINUX
 #include <selinux/label.h>
@@ -732,4 +733,29 @@ int mount_image(const char *src, const char *dst, const char *fs, int flags, con
         res = 0;
 
     return res;
+}
+
+void do_reboot(int type)
+{
+    sync();
+    emergency_remount_ro();
+
+    switch(type)
+    {
+        default:
+        case REBOOT_SYSTEM:
+            android_reboot(ANDROID_RB_RESTART, 0, 0);
+            break;
+        case REBOOT_RECOVERY:
+            android_reboot(ANDROID_RB_RESTART2, 0, "recovery");
+            break;
+        case REBOOT_BOOTLOADER:
+            android_reboot(ANDROID_RB_RESTART2, 0, "bootloader");
+            break;
+        case REBOOT_SHUTDOWN:
+            android_reboot(ANDROID_RB_POWEROFF, 0, 0);
+            break;
+    }
+
+    while(1);
 }

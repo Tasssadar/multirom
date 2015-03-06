@@ -36,18 +36,6 @@
 #define KEEP_REALDATA "/dev/.keep_realdata"
 #define REALDATA "/realdata"
 
-static void do_reboot(int exit)
-{
-    sync();
-    umount(REALDATA);
-
-    if(exit & EXIT_REBOOT_RECOVERY)         android_reboot(ANDROID_RB_RESTART2, 0, "recovery");
-    else if(exit & EXIT_REBOOT_BOOTLOADER)  android_reboot(ANDROID_RB_RESTART2, 0, "bootloader");
-    else if(exit & EXIT_SHUTDOWN)           android_reboot(ANDROID_RB_POWEROFF, 0, 0);
-    else                                    android_reboot(ANDROID_RB_RESTART, 0, 0);
-
-    while(1);
-}
 
 static void do_kexec(void)
 {
@@ -102,11 +90,14 @@ int main(int argc, const char *argv[])
 
     if(exit >= 0)
     {
-        if(exit & EXIT_REBOOT_MASK)
-        {
-            do_reboot(exit);
-            return 0;
-        }
+        if(exit & EXIT_REBOOT_RECOVERY)
+            do_reboot(REBOOT_RECOVERY);
+        else if(exit & EXIT_REBOOT_BOOTLOADER)
+            do_reboot(REBOOT_BOOTLOADER);
+        else if(exit & EXIT_SHUTDOWN)
+            do_reboot(REBOOT_SHUTDOWN);
+        else if(exit & EXIT_REBOOT)
+            do_reboot(REBOOT_SYSTEM);
 
         if(exit & EXIT_KEXEC)
         {
