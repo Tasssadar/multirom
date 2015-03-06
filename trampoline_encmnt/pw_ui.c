@@ -391,14 +391,17 @@ static void init_ui(int pwtype)
     invalid_pass_text = fb_add_text(0, 0, 0xFFFF0000, SIZE_BIG, "");
     center_text(invalid_pass_text, -1, HEADER_HEIGHT, -1, 200*DPI_MUL);
 
-    boot_primary_btn = mzalloc(sizeof(button));
-    boot_primary_btn->w = fb_width*0.30;
-    boot_primary_btn->h = HEADER_HEIGHT;
-    boot_primary_btn->x = fb_width - boot_primary_btn->w;
-    boot_primary_btn->y = 0;
-    boot_primary_btn->level_off = 101;
-    boot_primary_btn->clicked = &boot_internal_clicked;
-    button_init_ui(boot_primary_btn, "BOOT PRIMARY ROM", SIZE_SMALL);
+    if(!mrom_is_second_boot())
+    {
+        boot_primary_btn = mzalloc(sizeof(button));
+        boot_primary_btn->w = fb_width*0.30;
+        boot_primary_btn->h = HEADER_HEIGHT;
+        boot_primary_btn->x = fb_width - boot_primary_btn->w;
+        boot_primary_btn->y = 0;
+        boot_primary_btn->level_off = 101;
+        boot_primary_btn->clicked = &boot_internal_clicked;
+        button_init_ui(boot_primary_btn, "BOOT PRIMARY ROM", SIZE_SMALL);
+    }
 
     switch(pwtype)
     {
@@ -428,7 +431,9 @@ static void destroy_ui(int pwtype)
             type_pattern_destroy();
             break;
     }
-    button_destroy(boot_primary_btn);
+
+    if(boot_primary_btn)
+        button_destroy(boot_primary_btn);
 }
 
 int pw_ui_run(int pwtype)
