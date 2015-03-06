@@ -1524,10 +1524,10 @@ int multirom_has_kexec(void)
         if(access(checkfile, R_OK) < 0)
         {
             ERROR("%s was not found!\n", checkfile);
-            has_kexec = 1;
+            has_kexec = 0;
         }
         else
-            has_kexec = 0;
+            has_kexec = 1;
     }
 
     return has_kexec;
