@@ -102,11 +102,11 @@ static void init_single_path(const char *path)
     int fd, dfd;
     DIR *d;
 
-    DEBUG("Initializing device %s", path);
+    DEBUG("Initializing device %s\n", path);
     d = opendir(path);
     if(!d)
     {
-        UEVENT_ERR("Failed to open folder %s", path);
+        UEVENT_ERR("Failed to open folder %s\n", path);
         return;
     }
 
@@ -121,7 +121,7 @@ static void init_single_path(const char *path)
     }
     else
     {
-        UEVENT_ERR("Failed to open uevent at %s", path);
+        UEVENT_ERR("Failed to open uevent at %s\n", path);
     }
 
     closedir(d);

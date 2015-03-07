@@ -113,7 +113,7 @@ int multirom(const char *rom_to_boot)
 {
     if(multirom_find_base_dir() == -1)
     {
-        ERROR("Could not find multirom dir");
+        ERROR("Could not find multirom dir\n");
         return -1;
     }
 
@@ -238,7 +238,7 @@ int multirom_init_fb(int rotation)
 
     if(fb_open(rotation) < 0)
     {
-        ERROR("Failed to open framebuffer!");
+        ERROR("Failed to open framebuffer!\n");
         return -1;
     }
 
@@ -256,7 +256,7 @@ void multirom_emergency_reboot(void)
     int cur_y;
     if(multirom_init_fb(0) < 0)
     {
-        ERROR("Failed to init framebuffer in emergency reboot");
+        ERROR("Failed to init framebuffer in emergency reboot\n");
         return;
     }
     fb_set_background(BLACK);
@@ -416,7 +416,7 @@ int multirom_default_status(struct multirom_status *s)
 
         if(strlen(dr->d_name) > MAX_ROM_NAME_LEN)
         {
-            ERROR("Skipping ROM %s, name is too long (max %d chars allowed)", dr->d_name, MAX_ROM_NAME_LEN);
+            ERROR("Skipping ROM %s, name is too long (max %d chars allowed)\n", dr->d_name, MAX_ROM_NAME_LEN);
             continue;
         }
 
@@ -573,7 +573,7 @@ int multirom_load_status(struct multirom_status *s)
     {
         s->auto_boot_rom = multirom_get_rom(s, auto_boot_rom, NULL);
         if(!s->auto_boot_rom)
-            ERROR("Could not find rom %s to auto-boot", auto_boot_rom);
+            ERROR("Could not find rom %s to auto-boot\n", auto_boot_rom);
     }
 
     if(s->int_display_name)
@@ -1071,7 +1071,7 @@ static int multirom_inject_fw_mounter(char *rc_with_mount_all, struct fstab_part
     FILE *f = fopen(rc_with_mount_all, "r+e");
     if(!f)
     {
-        ERROR("Failed to open file \"%s\" to inject fw_mounter!", rc_with_mount_all);
+        ERROR("Failed to open file \"%s\" to inject fw_mounter!\n", rc_with_mount_all);
         fstab_destroy_part(fw_part);
         return -1;
     }
@@ -1133,7 +1133,7 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
     DIR *d = opendir(path);
     if(!d)
     {
-        ERROR("Failed to open rom path %s", path);
+        ERROR("Failed to open rom path %s\n", path);
         return -1;
     }
 
@@ -1197,7 +1197,7 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
         {
             if(mount(from, to, "ext4", flags[img][i], "discard,nomblk_io_submit") < 0)
             {
-                ERROR("Failed to mount %s to %s (%d: %s)", from, to, errno, strerror(errno));
+                ERROR("Failed to mount %s to %s (%d: %s)\n", from, to, errno, strerror(errno));
                 goto exit;
             }
         }
@@ -1357,16 +1357,16 @@ int multirom_create_media_link(void)
         else           to = 2;
     }
 
-    ERROR("Making media dir: api %d, media_new %d, %s to %s", api_level, media_new, paths[from], paths[to]);
+    ERROR("Making media dir: api %d, media_new %d, %s to %s\n", api_level, media_new, paths[from], paths[to]);
     if(mkdir_recursive(paths[to], 0775) == -1)
     {
-        ERROR("Failed to make media dir");
+        ERROR("Failed to make media dir\n");
         return -1;
     }
 
     if(mount(paths[from], paths[to], "ext4", MS_BIND, "") < 0)
     {
-        ERROR("Failed to bind media folder %d (%s)", errno, strerror(errno));
+        ERROR("Failed to bind media folder %d (%s)\n", errno, strerror(errno));
         return -1;
     }
 
@@ -1404,7 +1404,7 @@ int multirom_get_api_level(const char *path)
     FILE *f = fopen(path, "re");
     if(!f)
     {
-        ERROR("Could not open %s to read api level!", path);
+        ERROR("Could not open %s to read api level!\n", path);
         return -1;
     }
 
@@ -1418,7 +1418,7 @@ int multirom_get_api_level(const char *path)
     fclose(f);
 
     if(res == 0)
-        ERROR("Invalid ro.build.version.sdk line in build.prop");
+        ERROR("Invalid ro.build.version.sdk line in build.prop\n");
 
     return res;
 }
@@ -1669,14 +1669,14 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
     // update if needed. I can't do that during ZIP installation because of USB drives.
     if(inject_bootimg(img_path, 0) < 0)
     {
-        ERROR("Failed to inject bootimg!");
+        ERROR("Failed to inject bootimg!\n");
         return -1;
     }
 
     struct bootimg img;
     if(libbootimg_init_load(&img, img_path, LIBBOOTIMG_LOAD_ALL) < 0)
     {
-        ERROR("fill_kexec could not open boot image (%s)!", img_path);
+        ERROR("fill_kexec could not open boot image (%s)!\n", img_path);
         return -1;
     }
 
@@ -1951,7 +1951,7 @@ struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multi
         char *val = map_get_val(i->str_vals, "type");
         if(strcmp(val, "kexec") != 0)
         {
-            ERROR("Only supported rom_info type is \"kexec\", this rom_info has type \"%s\"!", val);
+            ERROR("Only supported rom_info type is \"kexec\", this rom_info has type \"%s\"!\n", val);
             failed = 1;
         }
     }
