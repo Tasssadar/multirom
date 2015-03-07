@@ -113,6 +113,11 @@ static int impl_open(struct framebuffer *fb)
 
     fb->impl_data = data;
 
+#ifdef TW_SCREEN_BLANK_ON_BOOT
+    ioctl(fb->fd, FBIOBLANK, FB_BLANK_POWERDOWN);
+    ioctl(fb->fd, FBIOBLANK, FB_BLANK_UNBLANK);
+#endif
+
     return 0;
 }
 

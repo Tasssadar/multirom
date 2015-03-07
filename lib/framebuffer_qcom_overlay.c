@@ -515,6 +515,11 @@ static int impl_open(struct framebuffer *fb)
 
     setDisplaySplit(data);
 
+#ifdef TW_SCREEN_BLANK_ON_BOOT
+    ioctl(fb->fd, FBIOBLANK, FB_BLANK_POWERDOWN);
+    ioctl(fb->fd, FBIOBLANK, FB_BLANK_UNBLANK);
+#endif
+
     if(alloc_ion_mem(data, fb->fi.line_length * fb->vi.yres) < 0)
         goto fail;
 
