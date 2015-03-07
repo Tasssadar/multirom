@@ -20,6 +20,8 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <sys/mount.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "../lib/fstab.h"
 #include "../lib/util.h"
@@ -30,6 +32,7 @@
 static char encmnt_cmd_arg[64] = { 0 };
 static char *const encmnt_cmd[] = { "/mrom_enc/trampoline_encmnt", encmnt_cmd_arg, NULL };
 static char *const encmnt_envp[] = { "LD_LIBRARY_PATH=/mrom_enc/", NULL };
+static int g_decrypted = 0;
 
 int encryption_before_mount(struct fstab *fstab)
 {
@@ -81,6 +84,8 @@ int encryption_before_mount(struct fstab *fstab)
         goto exit;
     }
 
+    g_decrypted = 1;
+
     struct fstab_part *datap = fstab_find_first_by_path(fstab, "/data");
     if(!datap)
     {
@@ -97,34 +102,34 @@ exit:
     return res;
 }
 
-int encryption_destroy(void)
+void encryption_destroy(void)
 {
     int res = -1;
     int exit_code = -1;
     char *output = NULL;
+    struct stat info;
 
-    strcpy(encmnt_cmd_arg, "remove");
-    output = run_get_stdout_with_exit_with_env(encmnt_cmd, &exit_code, encmnt_envp);
-    if(exit_code != 0)
+    if(g_decrypted)
     {
-        ERROR("Failed to run trampoline_encmnt: %s", output);
-        goto exit;
+        strcpy(encmnt_cmd_arg, "remove");
+        output = run_get_stdout_with_exit_with_env(encmnt_cmd, &exit_code, encmnt_envp);
+        if(exit_code != 0)
+            ERROR("Failed to run trampoline_encmnt: %s\n", output);
+        g_decrypted = 0;
+        free(output);
     }
 
-    remove("/system/bin/linker");
-
-    res = 0;
-exit:
-    free(output);
-    return res;
+    // Make sure we're removing our symlink and not ROM's linker
+    if(lstat("/system/bin/linker", &info) >= 0 && S_ISLNK(info.st_mode))
+        remove("/system/bin/linker");
 }
 
 int encryption_cleanup(void)
 {
     remove("/vendor");
 
-    if(umount("/firmware") < 0)
-        ERROR("encryption_cleanup: failed to unmount /firmware: %s", strerror(errno));
+    if(access("/firmware", R_OK) >= 0 && umount("/firmware") < 0)
+        ERROR("encryption_cleanup: failed to unmount /firmware: %s\n", strerror(errno));
 
     rmdir("/firmware");
     return 0;
