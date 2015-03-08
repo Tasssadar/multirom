@@ -66,6 +66,7 @@ int mrom_is_second_boot(void)
         }
 
         fclose(f);
+        f = NULL;
     }
 
     for(i = 0; !f && kmsg_paths[i]; ++i)
