@@ -475,6 +475,10 @@ int multirom_load_status(struct multirom_status *s)
     if(mrom_is_second_boot())
         s->is_second_boot = 1;
 
+    // is_second_boot might be reset later, but we need to know if this
+    // is second boot when filling in kexec info
+    s->is_running_in_primary_rom = !s->is_second_boot;
+
     char arg[256];
     sprintf(arg, "%s/multirom.ini", mrom_dir());
 
@@ -648,6 +652,7 @@ void multirom_dump_status(struct multirom_status *s)
 {
     INFO("Dumping multirom status:\n");
     INFO("  is_second_boot=%d\n", s->is_second_boot);
+    INFO("  is_running_in_primary_rom=%d\n", s->is_running_in_primary_rom);
     INFO("  current_rom=%s\n", s->current_rom ? s->current_rom->name : "NULL");
     INFO("  colors_v2=%d\n", s->colors);
     INFO("  brightness=%d\n", s->brightness);
@@ -1527,6 +1532,7 @@ int multirom_get_bootloader_cmdline(struct multirom_status *s, char *str, size_t
     FILE *f;
     char *c, *e, *l;
     int res = -1;
+    int bootimg_loaded = 0;
     struct boot_img_hdr hdr;
     struct fstab_part *boot;
 
@@ -1544,8 +1550,21 @@ int multirom_get_bootloader_cmdline(struct multirom_status *s, char *str, size_t
             *c = ' ';
 
     // Remove the part from boot.img
-    boot = fstab_find_first_by_path(s->fstab, "/boot");
-    if(boot && libbootimg_load_header(&hdr, boot->device) >= 0)
+    if(s->is_running_in_primary_rom || !s->current_rom || !s->current_rom->has_bootimg)
+    {
+        boot = fstab_find_first_by_path(s->fstab, "/boot");
+        if(boot && libbootimg_load_header(&hdr, boot->device) >= 0)
+            bootimg_loaded = 1;
+    }
+    else
+    {
+        char buf[256];
+        snprintf(buf, sizeof(buf), "%s/boot.img", s->current_rom->base_path);
+        if(libbootimg_load_header(&hdr, buf) >= 0)
+            bootimg_loaded = 1;
+    }
+
+    if(bootimg_loaded)
     {
         l = (char*)hdr.cmdline;
         hdr.cmdline[BOOT_ARGS_SIZE-1] = 0;
@@ -1663,7 +1682,7 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
 {
     int res = -1;
     char img_path[256];
-    sprintf(img_path, "%s/boot.img", rom->base_path);
+    snprintf(img_path, sizeof(img_path), "%s/boot.img", rom->base_path);
 
     // Trampolines in ROM boot images may get out of sync, so we need to check it and
     // update if needed. I can't do that during ZIP installation because of USB drives.
@@ -1718,7 +1737,7 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
         goto exit;
     }
 
-    if(sizeof(cmdline)-strlen(cmdline)-1 >= sizeof("mrom_kexecd=1"))
+    if(!strstr(cmdline, " mrom_kexecd=1") && sizeof(cmdline)-strlen(cmdline)-1 >= sizeof("mrom_kexecd=1"))
         strcat(cmdline, "mrom_kexecd=1");
 
     kexec_add_arg(kexec, cmdline);
@@ -2444,7 +2463,7 @@ int multirom_get_battery(void)
 int multirom_run_scripts(const char *type, struct multirom_rom *rom)
 {
     char buff[512];
-    sprintf(buff, "%s/%s", rom->base_path, type);
+    snprintf(buff, sizeof(buff), "%s/%s", rom->base_path, type);
     if(access(buff, (R_OK | X_OK)) < 0)
     {
         ERROR("No %s scripts for ROM %s\n", type, rom->name);

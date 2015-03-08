@@ -97,6 +97,7 @@ struct multirom_rom
 struct multirom_status
 {
     int is_second_boot;
+    int is_running_in_primary_rom;
     int auto_boot_seconds;
     int auto_boot_type;
     int colors;
