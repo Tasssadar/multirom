@@ -52,14 +52,14 @@ static int copy_rd_files(const char *path, const char *busybox_path)
     if (access(TMP_RD_UNPACKED_DIR"/main_init", F_OK) < 0 &&
         rename(TMP_RD_UNPACKED_DIR"/init", TMP_RD_UNPACKED_DIR"/main_init") < 0)
     {
-        ERROR("Failed to move /init to /main_init!");
+        ERROR("Failed to move /init to /main_init!\n");
         return -1;
     }
 
     snprintf(buf, sizeof(buf), "%s/trampoline", mrom_dir());
     if(copy_file(buf, TMP_RD_UNPACKED_DIR"/init") < 0)
     {
-        ERROR("Failed to copy trampoline to /init!");
+        ERROR("Failed to copy trampoline to /init!\n");
         return -1;
     }
     chmod(TMP_RD_UNPACKED_DIR"/init", 0750);
@@ -79,7 +79,7 @@ static int copy_rd_files(const char *path, const char *busybox_path)
 
     if(run_cmd(cmd) != 0)
     {
-        ERROR("Failed to copy encryption files!");
+        ERROR("Failed to copy encryption files!\n");
         return -1;
     }
 #endif
@@ -175,23 +175,23 @@ int inject_bootimg(const char *img_path, int force)
 
     if(libbootimg_init_load(&img, img_path, LIBBOOTIMG_LOAD_ALL) < 0)
     {
-        ERROR("Could not open boot image (%s)!", img_path);
+        ERROR("Could not open boot image (%s)!\n", img_path);
         return -1;
     }
 
     img_ver = get_img_trampoline_ver(&img);
     if(!force && img_ver >= VERSION_TRAMPOLINE)
     {
-        INFO("No need to update trampoline.");
+        INFO("No need to update trampoline.\n");
         res = 0;
         goto exit;
     }
 
-    INFO("Updating trampoline from ver %d to %d", img_ver, VERSION_TRAMPOLINE);
+    INFO("Updating trampoline from ver %d to %d\n", img_ver, VERSION_TRAMPOLINE);
 
     if(libbootimg_dump_ramdisk(&img, initrd_tmp_name) < 0)
     {
-        ERROR("Failed to dump ramdisk to %s!", initrd_path);
+        ERROR("Failed to dump ramdisk to %s!\n", initrd_path);
         goto exit;
     }
 
@@ -205,7 +205,7 @@ int inject_bootimg(const char *img_path, int force)
 
         if(libbootimg_load_ramdisk(&img, initrd_tmp_name) < 0)
         {
-            ERROR("Failed to load ramdisk from %s!", initrd_tmp_name);
+            ERROR("Failed to load ramdisk from %s!\n", initrd_tmp_name);
             goto exit;
         }
 
@@ -216,13 +216,13 @@ int inject_bootimg(const char *img_path, int force)
         {
             INFO("Writing boot.img updated with trampoline v%d\n", VERSION_TRAMPOLINE);
             if(copy_file(tmp, img_path) < 0)
-                ERROR("Failed to copy %s to %s!", tmp, img_path);
+                ERROR("Failed to copy %s to %s!\n", tmp, img_path);
             else
                 res = 0;
             remove(tmp);
         }
         else
-            ERROR("Failed to libbootimg_write_img!");
+            ERROR("Failed to libbootimg_write_img!\n");
     }
 
 exit:
