@@ -38,7 +38,7 @@
 
 #define ALIGN(x, align) (((x) + ((align)-1)) & ~((align)-1))
 #define MAX_DISPLAY_DIM  2048
-#define NUM_BUFFERS 2
+#define NUM_BUFFERS 3
 
 struct fb_qcom_overlay_mem_info {
     uint8_t *mem_buf;
@@ -75,7 +75,7 @@ struct fb_qcom_overlay_data {
 #ifdef MR_QCOM_OVERLAY_USE_VSYNC
 static int fb_qcom_vsync_enable(struct fb_qcom_vsync *vs, int enable)
 {
-    clock_gettime(CLOCK_REALTIME, &vs->time);
+    clock_gettime(CLOCK_MONOTONIC, &vs->time);
 
     if(vs->enabled != enable)
     {
@@ -97,6 +97,8 @@ static void *fb_qcom_vsync_thread_work(void *data)
     int fd, err, len;
     struct pollfd pfd;
     struct timespec now;
+    uint64_t vsync_timestamp;
+    uint64_t now_timestamp;
     char buff[64];
 
     fd = open("/sys/class/graphics/fb0/vsync_event", O_RDONLY | O_CLOEXEC);
@@ -113,20 +115,31 @@ static void *fb_qcom_vsync_thread_work(void *data)
     while(vs->_run_thread)
     {
         err = poll(&pfd, 1, 10);
+        if(err <= 0)
+            continue;
 
         if(pfd.revents & POLLPRI)
         {
-            len = pread(pfd.fd, buff, sizeof(buff), 0);
+            len = pread(pfd.fd, buff, sizeof(buff)-1, 0);
             if(len > 0)
             {
+                buff[len] = 0;
                 if(strncmp(buff, VSYNC_PREFIX, strlen(VSYNC_PREFIX)) == 0)
+                {
+                    vsync_timestamp = strtoull(buff + strlen(VSYNC_PREFIX), NULL, 10);
+                    clock_gettime(CLOCK_MONOTONIC, &now);
+                    now_timestamp = ((uint64_t)now.tv_sec) * 1000000000ULL + now.tv_nsec;
+                    if(vsync_timestamp > now_timestamp)
+                        usleep((vsync_timestamp - now_timestamp)/1000);
+
                     pthread_cond_signal(&vs->cond);
+                }
             }
             else
                 ERROR("Unable to read from vsync_event!");
         }
 
-        clock_gettime(CLOCK_REALTIME, &now);
+        clock_gettime(CLOCK_MONOTONIC, &now);
         if(timespec_diff(&vs->time, &now) >= 60)
             fb_qcom_vsync_enable(vs, 0);
     }
@@ -557,8 +570,6 @@ static int impl_update(struct framebuffer *fb)
     struct fb_qcom_overlay_data *data = fb->impl_data;
     struct fb_qcom_overlay_mem_info *info = &data->mem_info[data->active_mem];
 
-    fb_qcom_vsync_wait(data->vsync);
-
     if(!isDisplaySplit(data))
     {
         if(data->overlayL_id == MSMFB_NEW_REQUEST)
@@ -623,6 +634,9 @@ static int impl_update(struct framebuffer *fb)
 
     memset(&ext_commit, 0, sizeof(struct mdp_display_commit));
     ext_commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+
+    fb_qcom_vsync_wait(data->vsync);
+
     ret = ioctl(fb->fd, MSMFB_DISPLAY_COMMIT, &ext_commit);
     if(ret < 0)
     {
@@ -630,7 +644,8 @@ static int impl_update(struct framebuffer *fb)
         return -1;
     }
 
-    data->active_mem ^= 1;
+    if(++data->active_mem >= NUM_BUFFERS)
+        data->active_mem = 0;
 
     return ret;
 }
