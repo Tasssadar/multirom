@@ -401,7 +401,7 @@ char *run_get_stdout_with_exit_with_env(char **cmd, int *exit_code, char *const 
         dup2(fd[1], 2);  // send stderr to the pipe
         close(fd[1]);
 
-        execvpe(cmd[0], cmd, envp);
+        execve(cmd[0], cmd, envp);
         _exit(127);
     }
     else
