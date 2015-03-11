@@ -45,8 +45,8 @@
 #include <cutils/uevent.h>
 
 #include "devices.h"
-#include "../util.h"
-#include "../log.h"
+#include "../lib/util.h"
+#include "../lib/log.h"
 
 //#define DEBUG_MISSING_UEVENTS 1
 
@@ -56,9 +56,16 @@
 #define UEVENT_ERR(x...)
 #endif
 
+#if 0
+#define DEBUG(x...) INFO(x)
+#else
+#define DEBUG(x...)
+#endif
+
 #define SYSFS_PREFIX    "/sys"
 #define FIRMWARE_DIR1   "/etc/firmware"
 #define FIRMWARE_DIR2   "/vendor/firmware"
+#define FIRMWARE_DIR3   "/firmware/image"
 
 #ifdef HAVE_SELINUX
 static struct selabel_handle *sehandle;
@@ -95,11 +102,11 @@ static void init_single_path(const char *path)
     int fd, dfd;
     DIR *d;
 
-    INFO("Initializing device %s", path);
+    DEBUG("Initializing device %s\n", path);
     d = opendir(path);
     if(!d)
     {
-        UEVENT_ERR("Failed to open folder %s", path);
+        UEVENT_ERR("Failed to open folder %s\n", path);
         return;
     }
 
@@ -114,7 +121,7 @@ static void init_single_path(const char *path)
     }
     else
     {
-        UEVENT_ERR("Failed to open uevent at %s", path);
+        UEVENT_ERR("Failed to open uevent at %s\n", path);
     }
 
     closedir(d);
@@ -283,7 +290,7 @@ void fixup_sys_perms(const char *upath)
             return;
 
         sprintf(buf,"/sys%s/%s", upath, dp->attr);
-        INFO("fixup %s %d %d 0%o\n", buf, dp->uid, dp->gid, dp->perm);
+        DEBUG("fixup %s %d %d 0%o\n", buf, dp->uid, dp->gid, dp->perm);
         chown(buf, dp->uid, dp->gid);
         chmod(buf, dp->perm);
     }
@@ -405,7 +412,7 @@ static void add_platform_device(const char *path)
             return;
     }
 
-    INFO("adding platform device %s (%s)\n", name, path);
+    DEBUG("adding platform device %s (%s)\n", name, path);
 
     bus = calloc(1, sizeof(struct platform_node));
     bus->path = strdup(path);
@@ -444,7 +451,7 @@ static void remove_platform_device(const char *path)
     list_for_each_reverse(node, &platform_names) {
         bus = node_to_item(node, struct platform_node, list);
         if (!strcmp(path, bus->path)) {
-            INFO("removing platform device %s\n", bus->name);
+            DEBUG("removing platform device %s\n", bus->name);
             free(bus->path);
             list_remove(node);
             free(bus);
@@ -602,7 +609,7 @@ static char **parse_platform_block_device(struct uevent *uevent)
         return NULL;
     memset(links, 0, sizeof(char *) * 4);
 
-    INFO("found platform device %s\n", device);
+    DEBUG("found platform device %s\n", device);
 
     snprintf(link_path, sizeof(link_path), "/dev/block/platform/%s", device);
 
@@ -610,7 +617,7 @@ static char **parse_platform_block_device(struct uevent *uevent)
         p = strdup(uevent->partition_name);
         sanitize(p);
         if (strcmp(uevent->partition_name, p))
-            NOTICE("Linking partition '%s' as '%s'\n", uevent->partition_name, p);
+            INFO("Linking partition '%s' as '%s'\n", uevent->partition_name, p);
         if (asprintf(&links[link_num], "%s/by-name/%s", link_path, p) > 0)
             link_num++;
         else
@@ -868,11 +875,11 @@ static int is_booting(void)
 
 static void process_firmware_event(struct uevent *uevent)
 {
-    char *root, *loading, *data, *file1 = NULL, *file2 = NULL;
+    char *root, *loading, *data, *file1 = NULL, *file2 = NULL, *file3 = NULL;
     int l, loading_fd, data_fd, fw_fd;
     int booting = is_booting();
 
-    INFO("firmware: loading '%s' for '%s'\n",
+    DEBUG("firmware: loading '%s' for '%s'\n",
          uevent->firmware, uevent->path);
 
     l = asprintf(&root, SYSFS_PREFIX"%s/", uevent->path);
@@ -895,6 +902,10 @@ static void process_firmware_event(struct uevent *uevent)
     if (l == -1)
         goto data_free_out;
 
+    l = asprintf(&file3, FIRMWARE_DIR3"/%s", uevent->firmware);
+    if (l == -1)
+        goto data_free_out;
+
     loading_fd = open(loading, O_WRONLY | O_CLOEXEC);
     if(loading_fd < 0)
         goto file_free_out;
@@ -908,24 +919,27 @@ try_loading_again:
     if(fw_fd < 0) {
         fw_fd = open(file2, O_RDONLY | O_CLOEXEC);
         if (fw_fd < 0) {
-            if (booting) {
-                    /* If we're not fully booted, we may be missing
-                     * filesystems needed for firmware, wait and retry.
-                     */
-                usleep(100000);
-                booting = is_booting();
-                goto try_loading_again;
+            fw_fd = open(file3, O_RDONLY | O_CLOEXEC);
+            if (fw_fd < 0) {
+                if (booting) {
+                        /* If we're not fully booted, we may be missing
+                         * filesystems needed for firmware, wait and retry.
+                         */
+                    usleep(100000);
+                    booting = is_booting();
+                    goto try_loading_again;
+                }
+                INFO("firmware: could not open '%s' %d\n", uevent->firmware, errno);
+                write(loading_fd, "-1", 2);
+                goto data_close_out;
             }
-            INFO("firmware: could not open '%s' %d\n", uevent->firmware, errno);
-            write(loading_fd, "-1", 2);
-            goto data_close_out;
         }
     }
 
     if(!load_firmware(fw_fd, loading_fd, data_fd))
-        INFO("firmware: copy success { '%s', '%s' }\n", root, uevent->firmware);
+        DEBUG("firmware: copy success { '%s', '%s' }\n", root, uevent->firmware);
     else
-        INFO("firmware: copy failure { '%s', '%s' }\n", root, uevent->firmware);
+        ERROR("firmware: copy failure { '%s', '%s' }\n", root, uevent->firmware);
 
     close(fw_fd);
 data_close_out:
@@ -962,7 +976,7 @@ static void handle_firmware_event(struct uevent *uevent)
     }
 }
 
-#define UEVENT_MSG_LEN  1024
+#define UEVENT_MSG_LEN  2048
 void handle_device_fd(void)
 {
     char msg[UEVENT_MSG_LEN+2];

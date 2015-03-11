@@ -37,15 +37,17 @@
 #error "libbootimg version 0.2.0 or higher is required. Please update libbootimg."
 #endif
 
+#include "lib/containers.h"
+#include "lib/framebuffer.h"
+#include "lib/inject.h"
+#include "lib/input.h"
+#include "lib/log.h"
+#include "lib/util.h"
+#include "lib/mrom_data.h"
 #include "multirom.h"
 #include "multirom_ui.h"
-#include "framebuffer.h"
-#include "input.h"
-#include "log.h"
-#include "util.h"
 #include "version.h"
 #include "hooks.h"
-#include "containers.h"
 #include "rom_quirks.h"
 #include "kexec.h"
 #include "fw_mounter/fw_mounter_defines.h"
@@ -58,11 +60,9 @@
 #define INTERNAL_ROM_NAME "Internal"
 #define MAX_ROM_NAME_LEN 26
 #define LAYOUT_VERSION "/data/.layout_version"
-#define SECOND_BOOT_KMESG "MultiromSaysNextBootShouldBeSecondMagic108"
 
 #define BATTERY_CAP "/sys/class/power_supply/battery/capacity"
 
-char multirom_dir[64] = { 0 };
 static char busybox_path[64] = { 0 };
 static char kexec_path[64] = { 0 };
 static char ntfs_path[64] = { 0 };
@@ -92,7 +92,7 @@ int multirom_find_base_dir(void)
         if(stat(paths[i], &info) < 0)
             continue;
 
-        strcpy(multirom_dir, paths[i]);
+        mrom_set_dir(paths[i]);
 
         strncpy(partition_dir, paths[i], strchr(paths[i]+1, '/') - paths[i]);
 
@@ -113,7 +113,7 @@ int multirom(const char *rom_to_boot)
 {
     if(multirom_find_base_dir() == -1)
     {
-        ERROR("Could not find multirom dir");
+        ERROR("Could not find multirom dir\n");
         return -1;
     }
 
@@ -134,7 +134,7 @@ int multirom(const char *rom_to_boot)
             // Two possible scenarios: this ROM has kexec-hardboot and target
             // ROM has boot image, so kexec it immediatelly or
             // reboot and then proceed as usuall
-            if(((M(rom->type) & MASK_KEXEC) || rom->has_bootimg) && rom->type != ROM_DEFAULT && multirom_has_kexec() == 0)
+            if(((M(rom->type) & MASK_KEXEC) || rom->has_bootimg) && rom->type != ROM_DEFAULT && multirom_has_kexec())
             {
                 to_boot = rom;
                 s.is_second_boot = 0;
@@ -238,7 +238,7 @@ int multirom_init_fb(int rotation)
 
     if(fb_open(rotation) < 0)
     {
-        ERROR("Failed to open framebuffer!");
+        ERROR("Failed to open framebuffer!\n");
         return -1;
     }
 
@@ -256,7 +256,7 @@ void multirom_emergency_reboot(void)
     int cur_y;
     if(multirom_init_fb(0) < 0)
     {
-        ERROR("Failed to init framebuffer in emergency reboot");
+        ERROR("Failed to init framebuffer in emergency reboot\n");
         return;
     }
     fb_set_background(BLACK);
@@ -385,7 +385,7 @@ int multirom_default_status(struct multirom_status *s)
         return -1;
 
     char roms_path[256];
-    sprintf(roms_path, "%s/roms/"INTERNAL_ROM_NAME, multirom_dir);
+    sprintf(roms_path, "%s/roms/"INTERNAL_ROM_NAME, mrom_dir());
     DIR *d = opendir(roms_path);
     if(!d)
     {
@@ -395,7 +395,7 @@ int multirom_default_status(struct multirom_status *s)
     else
         closedir(d);
 
-    sprintf(roms_path, "%s/roms", multirom_dir);
+    sprintf(roms_path, "%s/roms", mrom_dir());
     d = opendir(roms_path);
     if(!d)
     {
@@ -416,7 +416,7 @@ int multirom_default_status(struct multirom_status *s)
 
         if(strlen(dr->d_name) > MAX_ROM_NAME_LEN)
         {
-            ERROR("Skipping ROM %s, name is too long (max %d chars allowed)", dr->d_name, MAX_ROM_NAME_LEN);
+            ERROR("Skipping ROM %s, name is too long (max %d chars allowed)\n", dr->d_name, MAX_ROM_NAME_LEN);
             continue;
         }
 
@@ -472,10 +472,17 @@ int multirom_load_status(struct multirom_status *s)
 
     multirom_default_status(s);
 
-    char arg[256];
-    sprintf(arg, "%s/multirom.ini", multirom_dir);
+    if(mrom_is_second_boot())
+        s->is_second_boot = 1;
 
-    FILE *f = fopen(arg, "r");
+    // is_second_boot might be reset later, but we need to know if this
+    // is second boot when filling in kexec info
+    s->is_running_in_primary_rom = !s->is_second_boot;
+
+    char arg[256];
+    sprintf(arg, "%s/multirom.ini", mrom_dir());
+
+    FILE *f = fopen(arg, "re");
     if(!f)
     {
         ERROR("Failed to open config file, using defaults!\n");
@@ -488,19 +495,6 @@ int multirom_load_status(struct multirom_status *s)
 
     char name[64];
     char *pch;
-
-    if(multirom_search_last_kmsg(SECOND_BOOT_KMESG) == 0)
-        s->is_second_boot = 1;
-    else
-    {
-        FILE *cmdline = fopen("/proc/cmdline", "r");
-        if(cmdline)
-        {
-            if(fgets(line, sizeof(line), cmdline) && strstr(line, "mrom_kexecd=1"))
-                s->is_second_boot = 1;
-            fclose(cmdline);
-        }
-    }
 
     while((fgets(line, sizeof(line), f)))
     {
@@ -583,7 +577,7 @@ int multirom_load_status(struct multirom_status *s)
     {
         s->auto_boot_rom = multirom_get_rom(s, auto_boot_rom, NULL);
         if(!s->auto_boot_rom)
-            ERROR("Could not find rom %s to auto-boot", auto_boot_rom);
+            ERROR("Could not find rom %s to auto-boot\n", auto_boot_rom);
     }
 
     if(s->int_display_name)
@@ -609,9 +603,9 @@ int multirom_save_status(struct multirom_status *s)
     char auto_boot_name[MAX_ROM_NAME_LEN+1];
     char current_name[MAX_ROM_NAME_LEN+1];
 
-    snprintf(path, sizeof(path), "%s/multirom.ini", multirom_dir);
+    snprintf(path, sizeof(path), "%s/multirom.ini", mrom_dir());
 
-    FILE *f = fopen(path, "w");
+    FILE *f = fopen(path, "we");
     if(!f)
     {
         ERROR("Failed to open/create status file!\n");
@@ -658,6 +652,7 @@ void multirom_dump_status(struct multirom_status *s)
 {
     INFO("Dumping multirom status:\n");
     INFO("  is_second_boot=%d\n", s->is_second_boot);
+    INFO("  is_running_in_primary_rom=%d\n", s->is_running_in_primary_rom);
     INFO("  current_rom=%s\n", s->current_rom ? s->current_rom->name : "NULL");
     INFO("  colors_v2=%d\n", s->colors);
     INFO("  brightness=%d\n", s->brightness);
@@ -853,7 +848,7 @@ int multirom_get_rom_type(struct multirom_rom *rom)
         // try to copy rom_info.txt in there, ubuntu is deprecated
         ERROR("Found deprecated Ubuntu 13.04, trying to copy rom_info.txt...\n");
         char *cmd[] = { busybox_path, "cp", malloc(256), malloc(256), NULL };
-        sprintf(cmd[2], "%s/infos/ubuntu.txt", multirom_dir);
+        sprintf(cmd[2], "%s/infos/ubuntu.txt", mrom_dir());
         sprintf(cmd[3], "%s/rom_info.txt", b);
 
         int res = run_cmd(cmd);
@@ -889,21 +884,21 @@ void multirom_import_internal(void)
     char path[256];
 
     // multirom
-    mkdir(multirom_dir, 0777);
+    mkdir(mrom_dir(), 0777);
 
     // roms
-    snprintf(path, sizeof(path), "%s/roms", multirom_dir);
+    snprintf(path, sizeof(path), "%s/roms", mrom_dir());
     mkdir(path, 0777);
 
     // internal rom
-    snprintf(path, sizeof(path), "%s/roms/%s", multirom_dir, INTERNAL_ROM_NAME);
+    snprintf(path, sizeof(path), "%s/roms/%s", mrom_dir(), INTERNAL_ROM_NAME);
     mkdir(path, 0777);
 
     // set default icon if it doesn't exist yet
-    snprintf(path, sizeof(path), "%s/roms/%s/.icon_data", multirom_dir, INTERNAL_ROM_NAME);
+    snprintf(path, sizeof(path), "%s/roms/%s/.icon_data", mrom_dir(), INTERNAL_ROM_NAME);
     if(access(path, F_OK) < 0)
     {
-        FILE *f = fopen(path, "w");
+        FILE *f = fopen(path, "we");
         if(f)
         {
             fputs("predef_set\ncom.tassadar.multirommgr:drawable/romic_android\n", f);
@@ -1016,7 +1011,7 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
 
 char *multirom_find_fstab_in_rc(const char *rcfile)
 {
-    FILE *f = fopen(rcfile, "r");
+    FILE *f = fopen(rcfile, "re");
     if(!f)
     {
         ERROR("Failed to open rcfile %s\n", rcfile);
@@ -1078,10 +1073,10 @@ static int multirom_inject_fw_mounter(char *rc_with_mount_all, struct fstab_part
     char *rc_file, *p;
     size_t rc_len, alloc_size;
     char line[512];
-    FILE *f = fopen(rc_with_mount_all, "r+");
+    FILE *f = fopen(rc_with_mount_all, "r+e");
     if(!f)
     {
-        ERROR("Failed to open file \"%s\" to inject fw_mounter!", rc_with_mount_all);
+        ERROR("Failed to open file \"%s\" to inject fw_mounter!\n", rc_with_mount_all);
         fstab_destroy_part(fw_part);
         return -1;
     }
@@ -1111,7 +1106,7 @@ static int multirom_inject_fw_mounter(char *rc_with_mount_all, struct fstab_part
     fclose(f);
 
     // copy fw_mounter to /sbin
-    snprintf(line, sizeof(line), "%s/%s", multirom_dir, FW_MOUNTER_BIN);
+    snprintf(line, sizeof(line), "%s/%s", mrom_dir(), FW_MOUNTER_BIN);
     copy_file(line, FW_MOUNTER_PATH);
     chmod(FW_MOUNTER_PATH, 0755);
 
@@ -1143,7 +1138,7 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
     DIR *d = opendir(path);
     if(!d)
     {
-        ERROR("Failed to open rom path %s", path);
+        ERROR("Failed to open rom path %s\n", path);
         return -1;
     }
 
@@ -1207,7 +1202,7 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
         {
             if(mount(from, to, "ext4", flags[img][i], "discard,nomblk_io_submit") < 0)
             {
-                ERROR("Failed to mount %s to %s (%d: %s)", from, to, errno, strerror(errno));
+                ERROR("Failed to mount %s to %s (%d: %s)\n", from, to, errno, strerror(errno));
                 goto exit;
             }
         }
@@ -1367,16 +1362,16 @@ int multirom_create_media_link(void)
         else           to = 2;
     }
 
-    ERROR("Making media dir: api %d, media_new %d, %s to %s", api_level, media_new, paths[from], paths[to]);
+    ERROR("Making media dir: api %d, media_new %d, %s to %s\n", api_level, media_new, paths[from], paths[to]);
     if(mkdir_recursive(paths[to], 0775) == -1)
     {
-        ERROR("Failed to make media dir");
+        ERROR("Failed to make media dir\n");
         return -1;
     }
 
     if(mount(paths[from], paths[to], "ext4", MS_BIND, "") < 0)
     {
-        ERROR("Failed to bind media folder %d (%s)", errno, strerror(errno));
+        ERROR("Failed to bind media folder %d (%s)\n", errno, strerror(errno));
         return -1;
     }
 
@@ -1385,7 +1380,7 @@ int multirom_create_media_link(void)
         char buf[16];
         buf[0] = 0;
 
-        FILE *f = fopen(LAYOUT_VERSION, "r");
+        FILE *f = fopen(LAYOUT_VERSION, "re");
         const int rewrite = (!f || !fgets(buf, sizeof(buf), f) || atoi(buf) < 2);
 
         if(f)
@@ -1393,7 +1388,7 @@ int multirom_create_media_link(void)
 
         if(rewrite)
         {
-            f = fopen(LAYOUT_VERSION, "w");
+            f = fopen(LAYOUT_VERSION, "we");
             if(!f)
             {
                 ERROR("Failed to create .layout_version!\n");
@@ -1411,10 +1406,10 @@ int multirom_create_media_link(void)
 
 int multirom_get_api_level(const char *path)
 {
-    FILE *f = fopen(path, "r");
+    FILE *f = fopen(path, "re");
     if(!f)
     {
-        ERROR("Could not open %s to read api level!", path);
+        ERROR("Could not open %s to read api level!\n", path);
         return -1;
     }
 
@@ -1428,7 +1423,7 @@ int multirom_get_api_level(const char *path)
     fclose(f);
 
     if(res == 0)
-        ERROR("Invalid ro.build.version.sdk line in build.prop");
+        ERROR("Invalid ro.build.version.sdk line in build.prop\n");
 
     return res;
 }
@@ -1440,7 +1435,7 @@ int multirom_get_trampoline_ver(void)
     {
         ver = -1;
 
-        char buff[sizeof(multirom_dir) + 16];
+        char buff[128];
         char *cmd[] = { buff, "-v", NULL };
 
         // If we are booting into another ROM from already running system,
@@ -1449,7 +1444,7 @@ int multirom_get_trampoline_ver(void)
         if(access("/main_init", F_OK) >= 0)
             snprintf(buff, sizeof(buff), "/init");
         else
-            snprintf(buff, sizeof(buff), "%s/trampoline", multirom_dir);
+            snprintf(buff, sizeof(buff), "%s/trampoline", mrom_dir());
 
         char *res = run_get_stdout(cmd);
         if(res)
@@ -1467,9 +1462,15 @@ int multirom_get_trampoline_ver(void)
 
 int multirom_has_kexec(void)
 {
-    static int has_kexec = -2;
-    if(has_kexec != -2)
+    static int has_kexec = -1;
+    if(has_kexec != -1)
         return has_kexec;
+
+#if MR_DEVICE_HOOKS >= 5
+    has_kexec = mrom_hook_has_kexec();
+    if(has_kexec != -1)
+        return has_kexec;
+#endif
 
     if(access("/proc/config.gz", F_OK) >= 0)
     {
@@ -1479,7 +1480,7 @@ int multirom_has_kexec(void)
         char *cmd_gzip[] = { busybox_path, "gzip", "-d", "/ikconfig.gz", NULL };
         run_cmd(cmd_gzip);
 
-        has_kexec = 0;
+        has_kexec = 1;
 
         uint32_t i;
         static const char *checks[] = {
@@ -1497,7 +1498,7 @@ int multirom_has_kexec(void)
             cmd_grep[2] = (char*)checks[i];
             if(run_cmd(cmd_grep) != 0)
             {
-                has_kexec = -1;
+                has_kexec = 0;
                 ERROR("%s not found in /proc/config.gz!\n", checks[i]);
             }
         }
@@ -1517,10 +1518,10 @@ int multirom_has_kexec(void)
         if(access(checkfile, R_OK) < 0)
         {
             ERROR("%s was not found!\n", checkfile);
-            has_kexec = -1;
+            has_kexec = 0;
         }
         else
-            has_kexec = 0;
+            has_kexec = 1;
     }
 
     return has_kexec;
@@ -1531,10 +1532,11 @@ int multirom_get_bootloader_cmdline(struct multirom_status *s, char *str, size_t
     FILE *f;
     char *c, *e, *l;
     int res = -1;
+    int bootimg_loaded = 0;
     struct boot_img_hdr hdr;
     struct fstab_part *boot;
 
-    f = fopen("/proc/cmdline", "r");
+    f = fopen("/proc/cmdline", "re");
     if(!f)
         return -1;
 
@@ -1548,17 +1550,27 @@ int multirom_get_bootloader_cmdline(struct multirom_status *s, char *str, size_t
             *c = ' ';
 
     // Remove the part from boot.img
-    boot = fstab_find_first_by_path(s->fstab, "/boot");
-    if(boot && libbootimg_load_header(&hdr, boot->device) >= 0)
+    if(s->is_running_in_primary_rom || !s->current_rom || !s->current_rom->has_bootimg)
+    {
+        boot = fstab_find_first_by_path(s->fstab, "/boot");
+        if(boot && libbootimg_load_header(&hdr, boot->device) >= 0)
+            bootimg_loaded = 1;
+    }
+    else
+    {
+        char buf[256];
+        snprintf(buf, sizeof(buf), "%s/boot.img", s->current_rom->base_path);
+        if(libbootimg_load_header(&hdr, buf) >= 0)
+            bootimg_loaded = 1;
+    }
+
+    if(bootimg_loaded)
     {
         l = (char*)hdr.cmdline;
         hdr.cmdline[BOOT_ARGS_SIZE-1] = 0;
 
-#ifdef FLO_CMDLINE_HACK
-        // Flo's bootloader (at least 03.15) removes first 26 characters
-        // from boot.img's cmdline because of reasons. On stock
-        // boot.img, those 26 characters are "console=ttyHSL0,115200,n8 "
-        l += 26;
+#if MR_DEVICE_HOOKS >= 5
+        mrom_hook_fixup_bootimg_cmdline(l, BOOT_ARGS_SIZE);
 #endif
 
         if(*l != 0 && (c = strstr(str, l)))
@@ -1627,6 +1639,9 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
 
     kexec_init(&kexec, kexec_path);
     kexec_add_arg(&kexec, "--mem-min="MR_KEXEC_MEM_MIN);
+#ifdef MR_KEXEC_DTB
+    kexec_add_arg_prefix(&kexec, "--boardname=", TARGET_DEVICE);
+#endif
 
     switch(rom->type)
     {
@@ -1667,12 +1682,20 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
 {
     int res = -1;
     char img_path[256];
-    sprintf(img_path, "%s/boot.img", rom->base_path);
+    snprintf(img_path, sizeof(img_path), "%s/boot.img", rom->base_path);
+
+    // Trampolines in ROM boot images may get out of sync, so we need to check it and
+    // update if needed. I can't do that during ZIP installation because of USB drives.
+    if(inject_bootimg(img_path, 0) < 0)
+    {
+        ERROR("Failed to inject bootimg!\n");
+        return -1;
+    }
 
     struct bootimg img;
     if(libbootimg_init_load(&img, img_path, LIBBOOTIMG_LOAD_ALL) < 0)
     {
-        ERROR("fill_kexec could not open boot image (%s)!", img_path);
+        ERROR("fill_kexec could not open boot image (%s)!\n", img_path);
         return -1;
     }
 
@@ -1692,36 +1715,6 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
         kexec_add_arg(kexec, "--dtb");
 #endif
 
-    // Trampolines in ROM boot images may get out of sync, so we need to check it and
-    // update if needed. I can't do that during ZIP installation because of USB drives.
-    // That header.name is added by recovery.
-    int ver = 0;
-    if(strncmp((char*)img.hdr.name, "tr_ver", 6) == 0)
-        ver = atoi((char*)img.hdr.name + 6);
-
-    if(ver < multirom_get_trampoline_ver())
-    {
-        if(multirom_update_rd_trampoline("/initrd.img") != 0)
-            goto exit;
-        else
-        {
-            // Update the boot.img
-            snprintf((char*)img.hdr.name, BOOT_NAME_SIZE, "tr_ver%d", multirom_get_trampoline_ver());
-
-            if(libbootimg_load_ramdisk(&img, "/initrd.img") >= 0)
-            {
-                char tmp[256];
-                strcpy(tmp, img_path);
-                strcat(tmp, ".new");
-                if(libbootimg_write_img(&img, tmp) >= 0)
-                {
-                    INFO("Writing boot.img updated with trampoline v%d\n", multirom_get_trampoline_ver());
-                    rename(tmp, img_path);
-                }
-            }
-        }
-    }
-
     char cmdline[1536];
     strcpy(cmdline, "--command-line=");
 
@@ -1730,11 +1723,11 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
         img.hdr.cmdline[BOOT_ARGS_SIZE-1] = 0;
 
         // see multirom_get_bootloader_cmdline
-#ifdef FLO_CMDLINE_HACK
-        strcat(cmdline, (char*)img.hdr.cmdline+26);
-#else
-        strcat(cmdline, (char*)img.hdr.cmdline);
+#if MR_DEVICE_HOOKS >= 5
+        mrom_hook_fixup_bootimg_cmdline((char*)img.hdr.cmdline, BOOT_ARGS_SIZE);
 #endif
+
+        strcat(cmdline, (char*)img.hdr.cmdline);
         strcat(cmdline, " ");
     }
 
@@ -1744,7 +1737,7 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
         goto exit;
     }
 
-    if(sizeof(cmdline)-strlen(cmdline)-1 >= sizeof("mrom_kexecd=1"))
+    if(!strstr(cmdline, " mrom_kexecd=1") && sizeof(cmdline)-strlen(cmdline)-1 >= sizeof("mrom_kexecd=1"))
         strcat(cmdline, "mrom_kexecd=1");
 
     kexec_add_arg(kexec, cmdline);
@@ -1908,7 +1901,7 @@ struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multi
     sprintf(path, "%s/rom_info.txt", rom->base_path);
     ERROR("Parsing %s...\n", path);
 
-    FILE *f = fopen(path, "r");
+    FILE *f = fopen(path, "re");
     if(!f)
     {
         ERROR("Failed to open %s!\n", path);
@@ -1977,7 +1970,7 @@ struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multi
         char *val = map_get_val(i->str_vals, "type");
         if(strcmp(val, "kexec") != 0)
         {
-            ERROR("Only supported rom_info type is \"kexec\", this rom_info has type \"%s\"!", val);
+            ERROR("Only supported rom_info type is \"kexec\", this rom_info has type \"%s\"!\n", val);
             failed = 1;
         }
     }
@@ -2185,7 +2178,7 @@ int multirom_replace_aliases_root_path(char **s, struct multirom_rom *rom)
 
 int multirom_extract_bytes(const char *dst, FILE *src, size_t size)
 {
-    FILE *f = fopen(dst, "w");
+    FILE *f = fopen(dst, "we");
     if(!f)
     {
         ERROR("Failed to open dest file %s\n", dst);
@@ -2345,20 +2338,23 @@ void *multirom_usb_refresh_thread_work(void *status)
 
     // stat.st_ctime is defined as unsigned long instead
     // of time_t in android
-    unsigned long last_change = 0;
+    unsigned long last_ctime = 0;
+    unsigned long last_ctime_nsec = 0;
 
     while(run_usb_refresh)
     {
         if(timer <= 50)
         {
-            if(stat("/dev/block", &info) >= 0 && info.st_ctime > last_change)
+            if (stat("/dev/block", &info) >= 0 &&
+                (info.st_ctime != last_ctime || info.st_ctime_nsec != last_ctime_nsec))
             {
                 multirom_update_partitions((struct multirom_status*)status);
 
                 if(usb_refresh_handler)
                     (*usb_refresh_handler)();
 
-                last_change = info.st_ctime;
+                last_ctime = info.st_ctime;
+                last_ctime_nsec = info.st_ctime_nsec;
             }
             timer = 500;
         }
@@ -2415,8 +2411,8 @@ int multirom_copy_log(char *klog, const char *dest_path_relative)
     if(klog)
     {
         char path[256];
-        snprintf(path, sizeof(path), "%s/%s", multirom_dir, dest_path_relative);
-        FILE *f = fopen(path, "w");
+        snprintf(path, sizeof(path), "%s/%s", mrom_dir(), dest_path_relative);
+        FILE *f = fopen(path, "we");
 
         if(f)
         {
@@ -2450,33 +2446,11 @@ struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uu
     return NULL;
 }
 
-int multirom_search_last_kmsg(const char *expr)
-{
-    FILE *f = fopen("/proc/last_kmsg", "r");
-    if(!f)
-        return -1;
-
-    int res = -1;
-    char buff[2048];
-
-    while(fgets(buff, sizeof(buff), f))
-    {
-        if(strstr(buff, expr))
-        {
-            res = 0;
-            break;
-        }
-    }
-
-    fclose(f);
-    return res;
-}
-
 int multirom_get_battery(void)
 {
     char buff[4];
 
-    FILE *f = fopen(BATTERY_CAP, "r");
+    FILE *f = fopen(BATTERY_CAP, "re");
     if(!f)
         return -1;
 
@@ -2486,24 +2460,10 @@ int multirom_get_battery(void)
     return atoi(buff);
 }
 
-void multirom_set_brightness(int val)
-{
-#ifdef TW_BRIGHTNESS_PATH
-    FILE *f = fopen(TW_BRIGHTNESS_PATH, "w");
-    if(!f)
-    {
-        ERROR("Failed to set brightness: %s!\n", strerror(errno));
-        return;
-    }
-    fprintf(f, "%d", val);
-    fclose(f);
-#endif
-}
-
 int multirom_run_scripts(const char *type, struct multirom_rom *rom)
 {
     char buff[512];
-    sprintf(buff, "%s/%s", rom->base_path, type);
+    snprintf(buff, sizeof(buff), "%s/%s", rom->base_path, type);
     if(access(buff, (R_OK | X_OK)) < 0)
     {
         ERROR("No %s scripts for ROM %s\n", type, rom->name);
@@ -2524,114 +2484,6 @@ int multirom_run_scripts(const char *type, struct multirom_rom *rom)
     return 0;
 }
 
-#define RD_GZIP 1
-#define RD_LZ4  2
-int multirom_update_rd_trampoline(const char *path)
-{
-    int result = -1;
-    uint32_t magic = 0;
-
-    FILE *f = fopen(path, "r");
-    if(!f)
-    {
-        ERROR("Couldn't open %s!\n", path);
-        return -1;
-    }
-    fread(&magic, sizeof(magic), 1, f);
-    fclose(f);
-
-    remove_dir("/mrom_rd");
-    mkdir("/mrom_rd", 0755);
-
-    // Decompress initrd
-    int type;
-    char buff[256];
-    char *cmd[] = { busybox_path, "sh", "-c", buff, NULL };
-
-    if((magic & 0xFFFF) == 0x8B1F)
-    {
-        type = RD_GZIP;
-        snprintf(buff, sizeof(buff), "B=\"%s\"; cd /mrom_rd; \"$B\" gzip -d -c \"%s\" | \"$B\" cpio -i", busybox_path, path);
-    }
-    else if(magic == 0x184C2102)
-    {
-        type = RD_LZ4;
-        snprintf(buff, sizeof(buff), "cd /mrom_rd; \"%s/lz4\" -d \"%s\" stdout | \"%s\" cpio -i", multirom_dir, path, busybox_path);
-    }
-    else
-    {
-        ERROR("Unknown ramdisk magic 0x%08X, can't update trampoline\n", magic);
-        goto success;
-    }
-
-    int r = run_cmd(cmd);
-    if(r != 0)
-    {
-        ERROR("Failed to unpack ramdisk!\n");
-        goto fail;
-    }
-
-    if(access("/mrom_rd/init", F_OK) < 0 || access("/mrom_rd/main_init", F_OK) < 0)
-    {
-        ERROR("This ramdisk is not injected, skipping\n");
-        goto success;
-    }
-
-    // Check version
-    char *cmd_t[] = { "/mrom_rd/init", "-v", NULL };
-    char *res = run_get_stdout(cmd_t);
-    int ver = 0;
-    if(res)
-    {
-        ver = atoi(res);
-        free(res);
-    }
-    else
-    {
-        ERROR("Failed to run trampoline!\n");
-        goto fail;
-    }
-
-    if(ver >= multirom_get_trampoline_ver())
-    {
-        INFO("No need to update trampoline for this rd\n");
-        goto success;
-    }
-
-    INFO("Updating trampoline in %s from ver %d to %d\n", path, ver, multirom_get_trampoline_ver());
-
-    if(copy_file("/init", "/mrom_rd/init") < 0)
-    {
-        ERROR("Failed to update trampoline\n");
-        goto fail;
-    }
-    chmod("/mrom_rd/init", 0755);
-
-    // Pack initrd again
-    switch(type)
-    {
-        case RD_GZIP:
-            snprintf(buff, sizeof(buff), "B=\"%s\"; cd /mrom_rd; \"$B\" find . | \"$B\" cpio -o -H newc | \"$B\" gzip > \"%s\"", busybox_path, path);
-            break;
-        case RD_LZ4:
-            snprintf(buff, sizeof(buff), "B=\"%s\"; cd /mrom_rd; \"$B\" find . | \"$B\" cpio -o -H newc | \"%s/lz4\" stdin \"%s\"", busybox_path, multirom_dir, path);
-            break;
-    }
-
-    r = run_cmd(cmd);
-    if(r != 0)
-    {
-        ERROR("Failed to pack ramdisk!\n");
-        goto fail;
-    }
-
-success:
-    result = 0;
-fail:
-    remove_dir("/mrom_rd");
-    return result;
-}
-
 #define IC_TYPE_PREDEF 0
 #define IC_TYPE_USER   1
 #define USER_IC_PATH "../Android/data/com.tassadar.multirommgr/files"
@@ -2647,7 +2499,7 @@ void multirom_find_rom_icon(struct multirom_rom *rom)
 
     snprintf(buff, sizeof(buff), "%s/.icon_data", rom->base_path);
 
-    f = fopen(buff, "r");
+    f = fopen(buff, "re");
     if(!f)
         goto fail;
 
@@ -2680,16 +2532,16 @@ void multirom_find_rom_icon(struct multirom_rom *rom)
             if(!ic_name)
                 goto fail;
 
-            len = strlen(multirom_dir) + 6 + strlen(ic_name)+4+1; // + /icons + .png + \0
+            len = strlen(mrom_dir()) + 6 + strlen(ic_name)+4+1; // + /icons + .png + \0
             rom->icon_path = malloc(len);
-            snprintf(rom->icon_path, len, "%s/icons%s.png", multirom_dir, ic_name);
+            snprintf(rom->icon_path, len, "%s/icons%s.png", mrom_dir(), ic_name);
             break;
         }
         case IC_TYPE_USER:
         {
-            len = strlen(multirom_dir) + 1 + USER_IC_PATH_LEN + 1 + len + 4 + 1; // + / + / + .png + \0
+            len = strlen(mrom_dir()) + 1 + USER_IC_PATH_LEN + 1 + len + 4 + 1; // + / + / + .png + \0
             rom->icon_path = malloc(len);
-            snprintf(rom->icon_path, len, "%s/%s/%s.png", multirom_dir, USER_IC_PATH, buff);
+            snprintf(rom->icon_path, len, "%s/%s/%s.png", mrom_dir(), USER_IC_PATH, buff);
             break;
         }
     }
@@ -2702,7 +2554,7 @@ fail:
     if(f)
         fclose(f);
 
-    len = strlen(multirom_dir) + DEFAULT_ICON_LEN + 1;
+    len = strlen(mrom_dir()) + DEFAULT_ICON_LEN + 1;
     rom->icon_path = realloc(rom->icon_path, len);
-    snprintf(rom->icon_path, len, "%s%s", multirom_dir, DEFAULT_ICON);
+    snprintf(rom->icon_path, len, "%s%s", mrom_dir(), DEFAULT_ICON);
 }

@@ -18,7 +18,7 @@
 #ifndef PONG_H
 #define PONG_H
 
-#include "input.h"
+#include "lib/input.h"
 
 void pong(void);
 int pong_touch_handler(touch_event *ev, void *data);

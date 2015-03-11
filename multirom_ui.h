@@ -19,8 +19,8 @@
 #define MULTIROM_UI_H
 
 #include "multirom.h"
-#include "input.h"
-#include "listview.h"
+#include "lib/input.h"
+#include "lib/listview.h"
 
 enum
 {
@@ -46,16 +46,17 @@ void multirom_ui_change_header_selector_pos(float pos);
 void multirom_ui_destroy_tab(int tab);
 int multirom_ui_destroy_msgbox(void);
 void multirom_ui_switch(int tab);
+void multirom_ui_switch_btn(void *data);
 void multirom_ui_fill_rom_list(listview *view, int mask);
 void multirom_ui_auto_boot(void);
 void multirom_ui_refresh_usb_handler(void);
-void multirom_ui_start_pong(int action);
+void multirom_ui_start_pong(void *data);
 void multirom_ui_init_theme(int tab);
 void multirom_ui_destroy_theme(void);
 
 void *multirom_ui_tab_rom_init(int tab_type);
 void multirom_ui_tab_rom_destroy(void *data);
-void multirom_ui_tab_rom_boot_btn(int action);
+void multirom_ui_tab_rom_boot(void);
 void multirom_ui_tab_rom_confirmed(listview_item *it);
 void multirom_ui_tab_rom_refresh_usb(int action);
 void multirom_ui_tab_rom_update_usb(void);
@@ -63,9 +64,9 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty);
 
 void *multirom_ui_tab_misc_init(void);
 void multirom_ui_tab_misc_destroy(void *data);
-void multirom_ui_tab_misc_copy_log(int action);
-void multirom_ui_tab_misc_change_clr(int clr);
+void multirom_ui_tab_misc_copy_log(void *data);
+void multirom_ui_tab_misc_change_clr(void *data);
 
-void multirom_ui_reboot_btn(int action);
+void multirom_ui_reboot_btn(void *data);
 
 #endif

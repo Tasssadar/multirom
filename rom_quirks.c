@@ -26,8 +26,8 @@
 
 #include "multirom.h"
 #include "rom_quirks.h"
-#include "log.h"
-#include "util.h"
+#include "lib/log.h"
+#include "lib/util.h"
 
 #define MULTIROM_DIR_ANDROID "/data/media/0/multirom"
 #define MULTIROM_DIR_ANDROID_LEN 22
@@ -101,7 +101,7 @@ static void workaround_rc_restorecon(const char *rc_file_name)
     char *r;
     int changed = 0;
 
-    f_in = fopen(rc_file_name, "r");
+    f_in = fopen(rc_file_name, "re");
     if(!f_in)
     {
         ERROR("Failed to open input file %s\n", rc_file_name);
@@ -111,7 +111,7 @@ static void workaround_rc_restorecon(const char *rc_file_name)
     name_out = malloc(strlen(rc_file_name)+5);
     snprintf(name_out, strlen(rc_file_name)+5, "%s.new", rc_file_name);
 
-    f_out = fopen(name_out, "w");
+    f_out = fopen(name_out, "we");
     if(!f_out)
     {
         ERROR("Failed to open output file %s\n", name_out);
@@ -163,14 +163,14 @@ static void workaround_mount_in_sh(const char *path)
     char *tmp_name = NULL;
     FILE *f_in, *f_out;
 
-    f_in = fopen(path, "r");
+    f_in = fopen(path, "re");
     if(!f_in)
         return;
 
     const int size = strlen(path) + 5;
     tmp_name = malloc(size);
     snprintf(tmp_name, size, "%s-new", path);
-    f_out = fopen(tmp_name, "w");
+    f_out = fopen(tmp_name, "we");
     if(!f_out)
     {
         fclose(f_in);
@@ -230,7 +230,7 @@ void rom_quirks_on_android_mounted_fs(struct multirom_rom *rom)
 
             // franco.Kernel includes script init.fk.sh which remounts /system as read only
             // comment out lines with mount and /system in all .sh scripts in /
-            if(strstr(dt->d_name, ".sh") && (M(rom->type) & MASK_ANDROID) && rom->type != ROM_ANDROID_USB_IMG)
+            if(strendswith(dt->d_name, ".sh") && (M(rom->type) & MASK_ANDROID) && rom->type != ROM_ANDROID_USB_IMG)
             {
                 snprintf(buff, sizeof(buff), "/%s", dt->d_name);
                 workaround_mount_in_sh(buff);
