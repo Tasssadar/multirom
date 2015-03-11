@@ -64,6 +64,11 @@ static int copy_rd_files(const char *path, const char *busybox_path)
     }
     chmod(TMP_RD_UNPACKED_DIR"/init", 0750);
 
+    remove(TMP_RD_UNPACKED_DIR"/sbin/ueventd");
+    remove(TMP_RD_UNPACKED_DIR"/sbin/watchdogd");
+    symlink("../main_init", TMP_RD_UNPACKED_DIR"/sbin/ueventd");
+    symlink("../main_init", TMP_RD_UNPACKED_DIR"/sbin/watchdogd");
+
 #ifdef MR_USE_MROM_FSTAB
     snprintf(buf, sizeof(buf), "%s/mrom.fstab", mrom_dir());
     copy_file(buf, TMP_RD_UNPACKED_DIR"/mrom.fstab");
