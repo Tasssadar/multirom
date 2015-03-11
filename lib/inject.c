@@ -185,7 +185,7 @@ int inject_bootimg(const char *img_path, int force)
     }
 
     img_ver = get_img_trampoline_ver(&img);
-    if(!force && img_ver >= VERSION_TRAMPOLINE)
+    if(!force && img_ver == VERSION_TRAMPOLINE)
     {
         INFO("No need to update trampoline.\n");
         res = 0;
