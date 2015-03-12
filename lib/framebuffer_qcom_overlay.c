@@ -205,7 +205,6 @@ static int fb_qcom_vsync_wait(struct fb_qcom_vsync *vs)
 
     return res;
 #else
-    usleep(10000);
     return 0;
 #endif
 }
