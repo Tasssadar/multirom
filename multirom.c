@@ -254,6 +254,8 @@ void multirom_emergency_reboot(void)
     char *tail;
     char *last_end;
     int cur_y;
+    uid_t media_rw_id;
+
     if(multirom_init_fb(0) < 0)
     {
         ERROR("Failed to init framebuffer in emergency reboot\n");
@@ -303,6 +305,11 @@ void multirom_emergency_reboot(void)
 
     multirom_copy_log(klog, "../multirom_log.txt");
     free(klog);
+
+    media_rw_id = decode_uid("media_rw");
+    if(media_rw_id != -1)
+        chown("../multirom_log.txt", (uid_t)media_rw_id, (gid_t)media_rw_id);
+    chmod("../multirom_log.txt", 0666);
 
     // Wait for power key
     start_input_thread();
