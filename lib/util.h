@@ -43,6 +43,7 @@ int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const cha
 int write_file(const char *path, const char *value);
 int remove_dir(const char *dir);
 int run_cmd(char **cmd);
+int run_cmd_with_env(char **cmd, char *const *envp);
 char *run_get_stdout(char **cmd);
 char *run_get_stdout_with_exit(char **cmd, int *exit_code);
 char *run_get_stdout_with_exit_with_env(char **cmd, int *exit_code, char *const *envp);

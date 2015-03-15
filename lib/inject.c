@@ -79,7 +79,8 @@ static int copy_rd_files(const char *path, const char *busybox_path)
 #ifdef MR_ENCRYPTION
     remove_dir(TMP_RD_UNPACKED_DIR"/mrom_enc");
 
-    if(mr_system("\"%s\" cp -a \"%s/enc\" \"%s/mrom_enc\"", busybox_path, mrom_dir(), TMP_RD_UNPACKED_DIR) != 0)
+    INFO("Running mr_system\n");
+    if(mr_system("busybox cp -a \"%s/enc\" \"%s/mrom_enc\"", mrom_dir(), TMP_RD_UNPACKED_DIR) != 0)
     {
         ERROR("Failed to copy encryption files!\n");
         return -1;
