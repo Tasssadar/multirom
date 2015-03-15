@@ -42,6 +42,7 @@
 
 #include "log.h"
 #include "util.h"
+#include "mrom_data.h"
 
 /*
  * gettime() - returns the time in seconds of the system's monotonic clock or
@@ -435,6 +436,37 @@ char *run_get_stdout_with_exit_with_env(char **cmd, int *exit_code, char *const 
         return res;
     }
     return NULL;
+}
+
+int mr_system(const char *shell_fmt, ...)
+{
+    int ret;
+    char busybox_path[256];
+    char shell[256];
+    char *real_shell = NULL;
+    //               0            1     2     3
+    char *cmd[] = { busybox_path, "sh", "-c", NULL, NULL };
+
+    snprintf(busybox_path, sizeof(busybox_path), "%s/busybox", mrom_dir());
+
+    va_list ap;
+    va_start(ap, shell_fmt);
+    ret = vsnprintf(shell, sizeof(shell), shell_fmt, ap);
+    if(ret < (int)sizeof(shell))
+        real_shell = shell;
+    else
+    {
+        real_shell = malloc(ret+1);
+        vsnprintf(real_shell, ret+1, shell_fmt, ap);
+    }
+    va_end(ap);
+
+    cmd[3] = real_shell;
+    ret = run_cmd(cmd);
+
+    if(real_shell != shell)
+        free(real_shell);
+    return ret;
 }
 
 uint32_t timespec_diff(struct timespec *f, struct timespec *s)

@@ -2479,10 +2479,7 @@ int multirom_run_scripts(const char *type, struct multirom_rom *rom)
 
     ERROR("Running %s scripts for ROM %s...\n", type, rom->name);
 
-    char *cmd[] = { busybox_path, "sh", "-c", buff, NULL };
-    sprintf(buff, "B=\"%s\"; P=\"%s\"; for x in $(\"$B\" ls \"$P/%s/\"*.sh); do echo Running script $x; \"$B\" sh $x \"$B\" \"$P\" || exit 1; done", busybox_path, rom->base_path, type);
-
-    int res = run_cmd(cmd);
+    int res = mr_system("B=\"%s\"; P=\"%s\"; for x in $(\"$B\" ls \"$P/%s/\"*.sh); do echo Running script $x; \"$B\" sh $x \"$B\" \"$P\" || exit 1; done", busybox_path, rom->base_path, type);
     if(res != 0)
     {
         ERROR("Error running scripts (%d)!\n", res);
