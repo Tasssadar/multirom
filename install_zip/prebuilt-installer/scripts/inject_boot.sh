@@ -1,11 +1,5 @@
 #!/sbin/sh
-BUSYBOX="/tmp/multirom/busybox"
-LZ4="/tmp/multirom/lz4"
 BOOT_DEV="$(cat /tmp/bootdev)"
-RD_ADDR="$(cat /tmp/rd_addr)"
-USE_MROM_FSTAB="$(cat /tmp/use_mrom_fstab)"
-CMPR_GZIP=0
-CMPR_LZ4=1
 
 if [ ! -e "$BOOT_DEV" ]; then
     echo "BOOT_DEV \"$BOOT_DEV\" does not exist!"
@@ -116,4 +110,8 @@ echo "Writing new boot.img..."
 
 dd if=/tmp/newboot_signed.img of=$BOOT_DEV
 
+chmod 755 /tmp/multirom/trampoline
+chmod 755 /tmp/multirom/busybox
+chmod 755 /tmp/multirom/lz4
+/tmp/multirom/trampoline --inject="$BOOT_DEV" --mrom_dir="/tmp/multirom" -f
 return $?

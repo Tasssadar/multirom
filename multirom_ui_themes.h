@@ -18,19 +18,19 @@
 #ifndef MULTIROM_UI_P_H
 #define MULTIROM_UI_P_H
 
-#include "framebuffer.h"
-#include "button.h"
-#include "progressdots.h"
-#include "listview.h"
+#include "lib/framebuffer.h"
+#include "lib/button.h"
+#include "lib/progressdots.h"
+#include "lib/listview.h"
+#include "lib/tabview.h"
 #include "multirom_ui.h"
-#include "tabview.h"
 
 // universal themes has these as width and height,
 // instead of real resolution
 #define TH_PORTRAIT  (-1)
 #define TH_LANDSCAPE (-2)
 
-typedef struct 
+typedef struct
 {
     listview *list;
     button **buttons;
@@ -41,7 +41,7 @@ typedef struct
     progdots *usb_prog;
 } tab_data_roms;
 
-typedef struct 
+typedef struct
 {
     button **buttons;
     void **ui_elements;
@@ -81,41 +81,5 @@ typedef struct
 multirom_themes_info *multirom_ui_init_themes(void);
 void multirom_ui_free_themes(multirom_themes_info *info);
 multirom_theme *multirom_ui_select_theme(multirom_themes_info *i, int w, int h);
-
-struct multirom_color_theme
-{
-    uint32_t background;
-    uint32_t highlight_bg;
-    uint32_t highlight_hover;
-    uint32_t highlight_text;
-    uint32_t text;
-    uint32_t text_secondary;
-    uint32_t ncard_bg;
-    uint32_t ncard_text;
-    uint32_t ncard_text_secondary;
-    uint32_t ncard_shadow;
-    uint32_t rom_highlight;
-    uint32_t rom_highlight_shadow;
-    uint32_t keyaction_frame;
-};
-
-extern const struct multirom_color_theme *color_theme;
-#define C_BACKGROUND (color_theme->background)
-#define C_HIGHLIGHT_BG (color_theme->highlight_bg)
-#define C_HIGHLIGHT_HOVER (color_theme->highlight_hover)
-#define C_HIGHLIGHT_TEXT (color_theme->highlight_text)
-#define C_TEXT (color_theme->text)
-#define C_TEXT_SECONDARY (color_theme->text_secondary)
-#define C_NCARD_BG (color_theme->ncard_bg)
-#define C_NCARD_TEXT (color_theme->ncard_text)
-#define C_NCARD_TEXT_SECONDARY (color_theme->ncard_text_secondary)
-#define C_NCARD_SHADOW (color_theme->ncard_shadow)
-#define C_ROM_HIGHLIGHT (color_theme->rom_highlight)
-#define C_ROM_HIGHLIGHT_SHADOW (color_theme->rom_highlight_shadow)
-#define C_KEYACT_FRAME (color_theme->keyaction_frame)
-
-void multirom_ui_select_color(size_t color_theme_idx);
-const struct multirom_color_theme *multirom_ui_get_color_theme(size_t color_theme_idx);
-int multirom_ui_get_color_theme_count(void);
 
 #endif

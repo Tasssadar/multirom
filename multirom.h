@@ -21,8 +21,8 @@
 #include <pthread.h>
 #include <stdio.h>
 
-#include "fstab.h"
-#include "containers.h"
+#include "lib/fstab.h"
+#include "lib/containers.h"
 #include "kexec.h"
 
 enum
@@ -49,7 +49,7 @@ enum
 #define MASK_LINUX (M(ROM_LINUX_INTERNAL) | M(ROM_LINUX_USB))
 #define MASK_KEXEC (MASK_LINUX)
 
-enum 
+enum
 {
     EXIT_REBOOT              = 0x01,
     EXIT_UMOUNT              = 0x02,
@@ -97,6 +97,7 @@ struct multirom_rom
 struct multirom_status
 {
     int is_second_boot;
+    int is_running_in_primary_rom;
     int auto_boot_seconds;
     int auto_boot_type;
     int colors;
@@ -114,8 +115,6 @@ struct multirom_status
     char *curr_rom_part;
     struct fstab *fstab;
 };
-
-extern char multirom_dir[64];
 
 int multirom(const char *rom_to_boot);
 int multirom_find_base_dir(void);
@@ -157,7 +156,6 @@ int multirom_copy_log(char *klog, const char *dest_path_relative);
 int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_partition *p);
 struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uuid);
 int multirom_path_exists(char *base, char *filename);
-int multirom_search_last_kmsg(const char *expr);
 struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multirom_rom *rom);
 void multirom_destroy_rom_info(struct rom_info *info);
 char **multirom_get_rom_info_str(struct rom_info *info, char *key);
@@ -165,7 +163,6 @@ int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multir
 int multirom_replace_aliases_root_path(char **s, struct multirom_rom *rom);
 char *multirom_get_klog(void);
 int multirom_get_battery(void);
-void multirom_set_brightness(int val);
 int multirom_run_scripts(const char *type, struct multirom_rom *rom);
 int multirom_update_rd_trampoline(const char *path);
 char *multirom_find_fstab_in_rc(const char *rcfile);
