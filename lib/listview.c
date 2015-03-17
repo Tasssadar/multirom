@@ -594,7 +594,7 @@ static void rom_item_select(int x, int y, int w, int item_h, listview_item *it, 
 
     d->deselect_anim_started = 0;
 
-    d->sel_rect_sh = fb_add_rect(baseX+ROM_ITEM_SHADOW, baseY+ROM_ITEM_SHADOW, 1, 1, C_ROM_HIGHLIGHT_SHADOW);
+    d->sel_rect_sh = fb_add_rect(baseX+ROM_ITEM_SHADOW, baseY+ROM_ITEM_SHADOW, 1, 1, C_BTN_FAKE_SHADOW);
     d->sel_rect_sh->parent = it->parent_rect;
     d->sel_rect = fb_add_rect(baseX, baseY, 1, 1, C_ROM_HIGHLIGHT);
     d->sel_rect->parent = it->parent_rect;
