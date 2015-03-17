@@ -368,7 +368,7 @@ void fb_rotate_180deg(px_type *dst, px_type *src)
     {
         src -= padding;
         for(x = 0; x < fb_width; ++x)
-            *dst++ = *src--;
+            *dst++ = *(--src);
         dst += padding;
     }
 }
