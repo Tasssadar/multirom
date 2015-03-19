@@ -182,7 +182,7 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
     b->h = MISCBTN_H;
     b->clicked = &multirom_ui_tab_misc_copy_log;
     shadow = fb_add_rect_lvl(LEVEL_RECT, b->x + BTN_SHADOW_OFF, b->y + BTN_SHADOW_OFF, b->w, b->h, C_BTN_FAKE_SHADOW);
-    button_init_ui(b, "Copy log to /sdcard", SIZE_NORMAL);
+    button_init_ui(b, "COPY LOG TO /SDCARD", SIZE_NORMAL);
     list_add(&d->buttons, b);
     list_add(&d->ui_elements, shadow);
     tabview_add_item(t->tabs, TAB_MISC, b->text);
@@ -193,10 +193,10 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
 
     static const char *texts[] =
     {
-        "Reboot",               // 0
-        "Reboot to recovery",   // 1
-        "Reboot to bootloader", // 2
-        "Shutdown",             // 3
+        "REBOOT",               // 0
+        "REBOOT TO RECOVERY",   // 1
+        "REBOOT TO BOOTLOADER", // 2
+        "SHUTDOWN",             // 3
         NULL
     };
 
