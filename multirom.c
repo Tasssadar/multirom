@@ -1764,9 +1764,9 @@ static char *find_boot_file(char *path, char *root_path, char *base_path)
     char cmd[256];
     char *root = strstr(path, "%r");
     if(root)
-        sprintf(cmd, "%s/%s", root_path, root+2);
+        snprintf(cmd, sizeof(cmd), "%s/%s", root_path, root+2);
     else
-        sprintf(cmd, "%s/%s", base_path, path);
+        snprintf(cmd, sizeof(cmd), "%s/%s", base_path, path);
 
     char *last = strrchr(cmd, '/');
     if(!last)
@@ -1861,6 +1861,32 @@ int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *ro
         goto exit;
     }
 
+#ifdef MR_KEXEC_DTB
+    str = NULL;
+
+    if (map_find(info->str_vals, "dtb_path") != -1)
+    {
+        str = find_boot_file(map_get_val(info->str_vals, "dtb_path"), root_path, rom->base_path);
+        if(!str)
+        {
+            ERROR("failed to find dtb_path!\n");
+            goto exit;
+        }
+    }
+    else
+    {
+        str = find_boot_file("%r/dtb.img", root_path, rom->base_path);
+    }
+
+    if(!str)
+        kexec_add_arg(kexec, "--dtb");
+    else
+    {
+        kexec_add_arg_prefix(kexec, "--dtb=", str);
+        free(str);
+    }
+#endif
+
     str = find_boot_file(map_get_val(info->str_vals, "initrd_path"), root_path, rom->base_path);
     if(str)
     {
@@ -1890,10 +1916,6 @@ int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *ro
 
     kexec_add_arg(kexec, cmdline);
 
-#ifdef MR_KEXEC_DTB
-    kexec_add_arg(kexec, "--dtb");
-#endif
-
     res = loop_mounted;
 exit:
     multirom_destroy_rom_info(info);
@@ -1905,7 +1927,7 @@ struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multi
 {
     char path[256];
 
-    sprintf(path, "%s/rom_info.txt", rom->base_path);
+    snprintf(path, sizeof(path), "%s/rom_info.txt", rom->base_path);
     ERROR("Parsing %s...\n", path);
 
     FILE *f = fopen(path, "re");
