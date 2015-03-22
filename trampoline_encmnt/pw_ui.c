@@ -65,7 +65,7 @@ static int exit_code = ENCMNT_UIRES_ERROR;
 static void *pwui_type_data = NULL;
 static fb_text *invalid_pass_text = NULL;
 
-static void boot_internal_clicked(void *data)
+static void boot_internal_clicked(__attribute__((unused)) void *data)
 {
     ncard_builder *b = ncard_create_builder();
     ncard_set_pos(b, NCARD_POS_CENTER);
@@ -422,7 +422,7 @@ static void destroy_ui(int pwtype)
     }
 }
 
-static int pw_ui_shutdown_counter_touch_handler(touch_event *ev, void *data)
+static int pw_ui_shutdown_counter_touch_handler(__attribute__((unused)) touch_event *ev, void *data)
 {
     int *shutdown_counter = data;
     if(*shutdown_counter == 0)

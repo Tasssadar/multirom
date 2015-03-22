@@ -37,7 +37,7 @@
 #define OVERSCROLL_MARK_H (4*DPI_MUL)
 #define OVERSCROLL_RETURN_SPD (10*DPI_MUL)
 
-static int listview_bounceback(uint32_t diff, void *data)
+static int listview_bounceback(__attribute__((unused)) uint32_t diff, void *data)
 {
     listview *v = (listview*)data;
     const int max = v->fullH - v->h;
@@ -570,7 +570,7 @@ static void rom_item_deselect_finished(void *data)
     d->sel_rect_sh = NULL;
 }
 
-static void rom_item_sel_step(void *data, float interpolated)
+static void rom_item_sel_step(void *data, __attribute__((unused)) float interpolated)
 {
     rom_item_data *d = data;
     if(!d->sel_rect || !d->sel_rect_sh)
@@ -744,7 +744,7 @@ void rom_item_hide(void *data)
     d->icon = NULL;
 }
 
-int rom_item_height(listview_item *it)
+int rom_item_height(__attribute__((unused)) listview_item *it)
 {
     return ROM_ITEM_H;
 }

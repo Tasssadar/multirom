@@ -176,7 +176,7 @@ static void fb_qcom_vsync_destroy(struct fb_qcom_vsync *vs)
     free(vs);
 }
 
-static int fb_qcom_vsync_wait(struct fb_qcom_vsync *vs)
+static int fb_qcom_vsync_wait(__attribute__((unused)) struct fb_qcom_vsync *vs)
 {
 #ifdef MR_QCOM_OVERLAY_USE_VSYNC
     int res;

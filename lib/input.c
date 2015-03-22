@@ -294,7 +294,7 @@ void touch_commit_events(struct timeval ev_time)
     }
 }
 
-static void *input_thread_work(void *cookie)
+static void *input_thread_work(__attribute__((unused)) void *cookie)
 {
     ev_init();
     struct input_event ev;

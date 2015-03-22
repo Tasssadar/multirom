@@ -410,7 +410,7 @@ static void multirom_ui_destroy_auto_boot_data(void)
     auto_boot_data.destroy = 1;
 }
 
-static void multirom_ui_auto_boot_hidden(void *data)
+static void multirom_ui_auto_boot_hidden(__attribute__((unused)) void *data)
 {
     pthread_mutex_lock(&auto_boot_data.mutex);
     multirom_ui_destroy_auto_boot_data();
@@ -427,7 +427,7 @@ static void multirom_ui_auto_boot_now(void *data)
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-static void multirom_ui_auto_boot_tick(void *data)
+static void multirom_ui_auto_boot_tick(__attribute__((unused)) void *data)
 {
     char buff[128];
 
@@ -490,7 +490,7 @@ void multirom_ui_refresh_usb_handler(void)
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-void multirom_ui_start_pong(void *data)
+void multirom_ui_start_pong(__attribute__((unused)) void *data)
 {
     pthread_mutex_lock(&exit_code_mutex);
     loop_act |= LOOP_START_PONG;
@@ -552,7 +552,7 @@ void multirom_ui_tab_rom_destroy(void *data)
     free(t);
 }
 
-void multirom_ui_tab_rom_confirmed(listview_item *it)
+void multirom_ui_tab_rom_confirmed(__attribute__((unused)) listview_item *it)
 {
     multirom_ui_tab_rom_boot();
 }
@@ -623,7 +623,7 @@ void multirom_ui_tab_rom_update_usb(void)
     fb_request_draw();
 }
 
-void multirom_ui_tab_rom_refresh_usb(int action)
+void multirom_ui_tab_rom_refresh_usb(__attribute__((unused)) int action)
 {
     multirom_update_partitions(mrom_status);
 }
@@ -705,7 +705,7 @@ void multirom_ui_reboot_btn(void *data)
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-void multirom_ui_tab_misc_copy_log(void *data)
+void multirom_ui_tab_misc_copy_log(__attribute__((unused)) void *data)
 {
     multirom_dump_status(mrom_status);
 

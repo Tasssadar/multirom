@@ -108,7 +108,7 @@ struct keyboard_btn_data {
 static int keyboard_init_map(struct keyboard *k, const uint32_t *map, const uint32_t *dimen);
 
 
-static int keyboard_charset_switch_worker(uint32_t diff, void *data)
+static int keyboard_charset_switch_worker(__attribute__((unused)) uint32_t diff, void *data)
 {
     void **keyboard_bnt_data_old = NULL;
     struct keyboard_btn_data *d = data;

@@ -278,7 +278,7 @@ static void ncard_move_step(void *data, float interpolated)
     fb_request_draw();
 }
 
-static void ncard_reveal_finished(void *data)
+static void ncard_reveal_finished(__attribute__((unused)) void *data)
 {
     pthread_mutex_lock(&ncard.mutex);
     ncard.bg->h = ncard.targetH;
@@ -529,7 +529,7 @@ void ncard_hide(void)
         ncard.on_hidden_call(ncard.on_hidden_data);
 }
 
-void ncard_hide_callback(void *data)
+void ncard_hide_callback(__attribute__((unused)) void *data)
 {
     ncard_hide();
 }
