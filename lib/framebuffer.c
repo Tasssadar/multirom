@@ -1089,7 +1089,7 @@ void fb_pop_context(void)
 }
 
 #define SLEEP_CONST 16
-void *fb_draw_thread_work(__attribute__((unused)) void *cookie)
+void *fb_draw_thread_work(UNUSED void *cookie)
 {
     struct timespec last, curr;
     uint32_t diff = 0, prevSleepTime = 0;

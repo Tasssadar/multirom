@@ -45,7 +45,7 @@ static int get_img_trampoline_ver(struct bootimg *img)
     return ver;
 }
 
-static int copy_rd_files(__attribute__((unused)) const char *path, __attribute__((unused)) const char *busybox_path)
+static int copy_rd_files(UNUSED const char *path, UNUSED const char *busybox_path)
 {
     char buf[256];
 

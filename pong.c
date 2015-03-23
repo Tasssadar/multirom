@@ -198,7 +198,7 @@ int pong_do_movement(int step)
     return 0;
 }
 
-int pong_touch_handler(touch_event *ev, __attribute__((unused)) void *data)
+int pong_touch_handler(touch_event *ev, UNUSED void *data)
 {
     int i = 0;
     for(; i < 2; ++i)

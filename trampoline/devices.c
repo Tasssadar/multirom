@@ -77,7 +77,7 @@ static int device_fd = -1;
 static volatile int run_event_thread = 1;
 static pthread_t uevent_thread;
 
-static void *uevent_thread_work(__attribute__((unused)) void *cookie)
+static void *uevent_thread_work(UNUSED void *cookie)
 {
     struct pollfd ufd;
     int nr;
@@ -328,7 +328,7 @@ static mode_t get_device_perm(const char *path, unsigned *uid, unsigned *gid)
 }
 
 static void make_device(const char *path,
-                        __attribute__((unused)) const char *upath,
+                        UNUSED const char *upath,
                         int block, int major, int minor)
 {
     unsigned uid;

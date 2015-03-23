@@ -22,6 +22,8 @@
 #include <sys/time.h>
 #include <time.h>
 
+#define UNUSED __attribute__((unused))
+
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 
 #define REBOOT_SYSTEM 0

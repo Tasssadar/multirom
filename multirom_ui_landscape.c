@@ -50,7 +50,7 @@
 #define SELECTED_RECT_H (6*DPI_MUL)
 #define BTN_SHADOW_OFF (5*DPI_MUL)
 
-static void destroy(__attribute__((unused)) multirom_theme_data *t)
+static void destroy(UNUSED multirom_theme_data *t)
 {
 
 }
@@ -146,9 +146,7 @@ static void init_header(multirom_theme_data *t)
     header_set_tab_selector_pos(t, 0.f);
 }
 
-static void tab_rom_init(__attribute__((unused)) multirom_theme_data *t,
-                    tab_data_roms *d,
-                    __attribute__((unused)) int tab_type)
+static void tab_rom_init(UNUSED multirom_theme_data *t, tab_data_roms *d, UNUSED int tab_type)
 {
     d->list->x = fb_width/2 - fb_height/2;
     d->list->y = HEADER_HEIGHT + LISTVIEW_MARGIN;
@@ -262,12 +260,12 @@ static void tab_misc_init(multirom_theme_data *t, tab_data_misc *d, int color_sc
     tabview_add_items(t->tabs, TAB_MISC, d->ui_elements);
 }
 
-static int get_tab_width(__attribute__((unused)) multirom_theme_data *t)
+static int get_tab_width(UNUSED multirom_theme_data *t)
 {
     return fb_width;
 }
 
-static int get_tab_height(__attribute__((unused)) multirom_theme_data *t)
+static int get_tab_height(UNUSED multirom_theme_data *t)
 {
     return fb_height - HEADER_HEIGHT;
 }
