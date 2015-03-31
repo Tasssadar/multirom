@@ -1202,8 +1202,8 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
     int img = (int)(rom->type == ROM_ANDROID_USB_IMG);
     for(i = 0; i < ARRAY_SIZE(folders[0]); ++i)
     {
-        sprintf(from, "%s/%s", rom->base_path, folders[img][i]);
-        sprintf(to, "/%s", folders[0][i]);
+        snprintf(from, sizeof(from), "%s/%s", rom->base_path, folders[img][i]);
+        snprintf(to, sizeof(to), "/%s", folders[0][i]);
 
         if(img == 0)
         {
@@ -1222,18 +1222,14 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
 
     if(has_fw && fw_part)
     {
-        INFO("Mounting ROM's FW image instead of FW partition\n");
-        sprintf(from, "%s/firmware.img", rom->base_path);
-        if(strstr(fw_part->options, "context="))
-        {
-            INFO("Firmware's mount options contain 'context=...', injecting fw_mounter hack instead!\n");
-            fw_part->device = realloc(fw_part->device, strlen(from)+1);
-            strcpy(fw_part->device, from);
-            multirom_inject_fw_mounter(rc_with_mount_all, fw_part);
-            fw_part = NULL;
-        }
-        else if(mount_image(from, "/firmware", fw_part->type, fw_part->mountflags, fw_part->options) < 0)
-            goto exit;
+        // Can't mount the image here because it might clash with /firmware mounted
+        // for encryption
+        INFO("Mounting ROM's FW image instead of FW partition, using fw_mounter\n");
+        snprintf(from, sizeof(from), "%s/firmware.img", rom->base_path);
+        fw_part->device = realloc(fw_part->device, strlen(from)+1);
+        strcpy(fw_part->device, from);
+        multirom_inject_fw_mounter(rc_with_mount_all, fw_part);
+        fw_part = NULL;
     }
 
 #if MR_DEVICE_HOOKS >= 1
