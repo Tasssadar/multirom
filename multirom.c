@@ -234,8 +234,6 @@ finish:
 
 int multirom_init_fb(int rotation)
 {
-    vt_set_mode(1);
-
     if(fb_open(rotation) < 0)
     {
         ERROR("Failed to open framebuffer!\n");

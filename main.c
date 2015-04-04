@@ -110,7 +110,5 @@ int main(int argc, const char *argv[])
             close(open(KEEP_REALDATA, O_WRONLY | O_CREAT, 0000));
     }
 
-    vt_set_mode(0);
-
     return 0;
 }

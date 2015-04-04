@@ -86,19 +86,6 @@ static inline void fb_rotate_90deg(px_type *dst, px_type *src);
 static inline void fb_rotate_270deg(px_type *dst, px_type *src);
 static inline void fb_rotate_180deg(px_type *dst, px_type *src);
 
-int vt_set_mode(int graphics)
-{
-    int fd, r;
-    mknod("/dev/tty0", (0600 | S_IFCHR), makedev(4, 0));
-    fd = open("/dev/tty0", O_RDWR | O_SYNC | O_CLOEXEC);
-    if (fd < 0)
-        return -1;
-    r = ioctl(fd, KDSETMODE, (void*) (graphics ? KD_GRAPHICS : KD_TEXT));
-    close(fd);
-    unlink("/dev/tty0");
-    return r;
-}
-
 int fb_open_impl(void)
 {
     struct fb_impl **itr;
