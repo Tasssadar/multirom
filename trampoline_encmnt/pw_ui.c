@@ -284,19 +284,22 @@ static int type_pattern_touch_handler(touch_event *ev, void *data)
             d->cur_line = fb_add_line(c->x + PWUI_DOT_R, c->y + PWUI_DOT_R, ev->x, ev->y, PWUI_LINE_W, C_HIGHLIGHT_BG);
 
             const int last_dot = d->connected_dots[d->connected_dots_len-1];
+            int dot_mid = -1;
             // The line is vertical and has crossed a point in the middle
             if(dot_idx%3 == last_dot%3 && iabs(dot_idx - last_dot) > 3)
-                type_pattern_connect_dot(d, 3 + dot_idx%3);
+                dot_mid = 3 + dot_idx%3;
             // the line is horizontal and has crossed a point in the middle
             else if(dot_idx/3 == last_dot/3 && iabs(dot_idx - last_dot) > 1)
-                type_pattern_connect_dot(d, (dot_idx/3)*3 + 1);
+                dot_mid = (dot_idx/3)*3 + 1;
             // the line is diagonal and has crossed the middle point
             else if((dot_idx == 0 && last_dot == 8) || (dot_idx == 8 && last_dot == 0) ||
                     (dot_idx == 2 && last_dot == 6) || (dot_idx == 6 && last_dot == 2))
             {
-                type_pattern_connect_dot(d, 4);
+                dot_mid = 4;
             }
 
+            if(dot_mid != -1 && !type_pattern_dot_used(d, dot_mid))
+                type_pattern_connect_dot(d, dot_mid);
             type_pattern_connect_dot(d, dot_idx);
         }
         else
