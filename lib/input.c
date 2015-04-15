@@ -221,7 +221,11 @@ int calc_mt_pos(int val, int *range, int d_max)
 
 static void mt_recalc_pos_rotation(touch_event *ev)
 {
+#ifdef BOARD_HAS_FLIPPED_SCREEN
+    switch((fb_rotation + 180) % 360)
+#else
     switch(fb_rotation)
+#endif
     {
         case 0:
             ev->x = ev->orig_x;
