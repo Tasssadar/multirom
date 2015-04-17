@@ -34,6 +34,7 @@ static const struct mrom_color_theme color_themes[] = {
         .rom_highlight = 0xFFFFFFFF,
         .rom_highlight_shadow = 0x54000000,
         .keyaction_frame = 0xFF0000FF,
+        .btn_fake_shadow = 0xFFA1A1A1,
     },
     // 1 - orange/white
     {
@@ -50,6 +51,7 @@ static const struct mrom_color_theme color_themes[] = {
         .rom_highlight = 0xFFFFFFFF,
         .rom_highlight_shadow = 0x54000000,
         .keyaction_frame = 0xFFFF0000,
+        .btn_fake_shadow = 0xFFA1A1A1,
     },
     // 2 - blue/white
     {
@@ -66,6 +68,7 @@ static const struct mrom_color_theme color_themes[] = {
         .rom_highlight = 0xFFFFFFFF,
         .rom_highlight_shadow = 0x54000000,
         .keyaction_frame = 0xFFFF0000,
+        .btn_fake_shadow = 0xFFA1A1A1,
     },
     // 3 - purple/white
     {
@@ -82,6 +85,7 @@ static const struct mrom_color_theme color_themes[] = {
         .rom_highlight = 0xFFFFFFFF,
         .rom_highlight_shadow = 0x54000000,
         .keyaction_frame = 0xFFFF0000,
+        .btn_fake_shadow = 0xFFA1A1A1,
     },
     // 4 - green/white
     {
@@ -98,6 +102,7 @@ static const struct mrom_color_theme color_themes[] = {
         .rom_highlight = 0xFFFFFFFF,
         .rom_highlight_shadow = 0x54000000,
         .keyaction_frame = 0xFFFF0000,
+        .btn_fake_shadow = 0xFFA1A1A1,
     },
     // 5 - dark blue
     {
@@ -114,6 +119,7 @@ static const struct mrom_color_theme color_themes[] = {
         .rom_highlight = 0xFF607D8B,
         .rom_highlight_shadow = 0x54000000,
         .keyaction_frame = 0xFFFF0000,
+        .btn_fake_shadow = 0xFF1C2529,
     },
     // 6 - dark blue/black
     {
@@ -130,6 +136,7 @@ static const struct mrom_color_theme color_themes[] = {
         .rom_highlight = 0xFF263238,
         .rom_highlight_shadow = 0x54424242,
         .keyaction_frame = 0xFFFF0000,
+        .btn_fake_shadow = 0x00000000,
     },
 };
 

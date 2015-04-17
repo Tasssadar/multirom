@@ -43,6 +43,7 @@ void button_init_ui(button *b, const char *text, int size)
 
         fb_text_proto *p = fb_text_create(0, 0, b->c[CLR_NORMAL][1], size, text);
         p->level = b->level_off + LEVEL_TEXT;
+        p->style = STYLE_MEDIUM;
         b->text = fb_text_finalize(p);
         center_text(b->text, b->x, b->y, b->w, b->h);
     }

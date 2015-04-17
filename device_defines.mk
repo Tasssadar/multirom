@@ -9,22 +9,6 @@ ifeq ($(TARGET_DEVICE),grouper)
     LOCAL_CFLAGS += -DMR_MOVE_USB_DIR
 endif
 
-ifeq ($(DEVICE_RESOLUTION),)
-    $(info DEVICE_RESOLUTION was not specified)
-# FIXME
-#else ifneq ($(wildcard $(multirom_local_path)/themes/multirom_ui_$(DEVICE_RESOLUTION).c),)
-#    LOCAL_SRC_FILES += themes/multirom_ui_$(DEVICE_RESOLUTION).c
-#    LOCAL_CFLAGS += -DMULTIROM_THEME_$(DEVICE_RESOLUTION)
-endif
-
-ifneq ($(LANDSCAPE_RESOLUTION),)
-# FIXME
-#ifneq ($(wildcard $(multirom_local_path)/themes/multirom_ui_$(LANDSCAPE_RESOLUTION).c),)
-#    LOCAL_SRC_FILES += themes/multirom_ui_$(LANDSCAPE_RESOLUTION).c
-#    LOCAL_CFLAGS += -DMULTIROM_THEME_$(LANDSCAPE_RESOLUTION)
-#endif
-endif
-
 ifneq ($(TW_DEFAULT_ROTATION),)
     MULTIROM_DEFAULT_ROTATION := $(TW_DEFAULT_ROTATION)
 endif

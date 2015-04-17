@@ -37,7 +37,7 @@
 #define OVERSCROLL_MARK_H (4*DPI_MUL)
 #define OVERSCROLL_RETURN_SPD (10*DPI_MUL)
 
-static int listview_bounceback(uint32_t diff, void *data)
+static int listview_bounceback(UNUSED uint32_t diff, void *data)
 {
     listview *v = (listview*)data;
     const int max = v->fullH - v->h;
@@ -570,7 +570,7 @@ static void rom_item_deselect_finished(void *data)
     d->sel_rect_sh = NULL;
 }
 
-static void rom_item_sel_step(void *data, float interpolated)
+static void rom_item_sel_step(void *data, UNUSED float interpolated)
 {
     rom_item_data *d = data;
     if(!d->sel_rect || !d->sel_rect_sh)
@@ -594,7 +594,7 @@ static void rom_item_select(int x, int y, int w, int item_h, listview_item *it, 
 
     d->deselect_anim_started = 0;
 
-    d->sel_rect_sh = fb_add_rect(baseX+ROM_ITEM_SHADOW, baseY+ROM_ITEM_SHADOW, 1, 1, C_ROM_HIGHLIGHT_SHADOW);
+    d->sel_rect_sh = fb_add_rect(baseX+ROM_ITEM_SHADOW, baseY+ROM_ITEM_SHADOW, 1, 1, C_BTN_FAKE_SHADOW);
     d->sel_rect_sh->parent = it->parent_rect;
     d->sel_rect = fb_add_rect(baseX, baseY, 1, 1, C_ROM_HIGHLIGHT);
     d->sel_rect->parent = it->parent_rect;
@@ -744,7 +744,7 @@ void rom_item_hide(void *data)
     d->icon = NULL;
 }
 
-int rom_item_height(listview_item *it)
+int rom_item_height(UNUSED listview_item *it)
 {
     return ROM_ITEM_H;
 }
