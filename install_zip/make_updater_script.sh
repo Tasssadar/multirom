@@ -9,17 +9,6 @@ if [ "$#" -ne "3" ]; then
     exit 1
 fi
 
-# Some devices have multiple variants, which are almost the same,
-# Example: grouper and tilapia (WiFi and 3G versions of Nexus 7)
-case "$DEVICES" in
-    "grouper")
-        DEVICES="${DEVICES} tilapia"
-        ;;
-    "flo")
-        DEVICES="${DEVICES} deb"
-        ;;
-esac
-
 fail()
 {
     echo make_updater_script.sh has failed: $1

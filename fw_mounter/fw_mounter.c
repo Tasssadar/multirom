@@ -19,13 +19,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "../log.h"
-#include "../util.h"
-#include "../fstab.h"
+#include "../lib/log.h"
+#include "../lib/util.h"
+#include "../lib/fstab.h"
 #include "fw_mounter_defines.h"
 
 int main(int argc, char *argv[])
 {
+    mrom_set_log_tag("fw_mounter");
+
     struct fstab *f = fstab_load(FW_MOUNTER_FSTAB, 0);
     if(!f)
     {

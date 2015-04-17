@@ -64,6 +64,9 @@ if [ -e /tmp/boot/mrom.fstab ] ; then
     rm /tmp/boot/mrom.fstab
 fi
 
+# Remove encryption files
+rm -rf /tmp/boot/mrom_enc
+
 # pack the image again
 cd /tmp/boot
 

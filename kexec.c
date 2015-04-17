@@ -20,9 +20,9 @@
 #include <stdio.h>
 
 #include "kexec.h"
-#include "containers.h"
-#include "log.h"
-#include "util.h"
+#include "lib/containers.h"
+#include "lib/log.h"
+#include "lib/util.h"
 
 // kexec --load-hardboot ./zImage --command-line="$(cat /proc/cmdline)" --mem-min=0xA0000000 --initrd=./rd.img
 // --mem-min should be somewhere in System RAM (see /proc/iomem). Location just above kernel seems to work fine.

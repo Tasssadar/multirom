@@ -23,23 +23,25 @@
 #include <errno.h>
 #include <string.h>
 
+#include "lib/framebuffer.h"
+#include "lib/input.h"
+#include "lib/log.h"
+#include "lib/listview.h"
+#include "lib/util.h"
+#include "lib/button.h"
+#include "lib/progressdots.h"
+#include "lib/workers.h"
+#include "lib/containers.h"
+#include "lib/animation.h"
+#include "lib/notification_card.h"
+#include "lib/tabview.h"
+#include "lib/colors.h"
+
 #include "multirom_ui.h"
-#include "framebuffer.h"
-#include "input.h"
-#include "log.h"
-#include "listview.h"
-#include "util.h"
-#include "button.h"
+#include "multirom_ui_themes.h"
+#include "hooks.h"
 #include "version.h"
 #include "pong.h"
-#include "progressdots.h"
-#include "multirom_ui_themes.h"
-#include "workers.h"
-#include "hooks.h"
-#include "containers.h"
-#include "animation.h"
-#include "notification_card.h"
-#include "tabview.h"
 
 static struct multirom_status *mrom_status = NULL;
 static struct multirom_rom *selected_rom = NULL;
@@ -132,7 +134,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     exit_ui_code = -1;
     selected_rom = NULL;
 
-    multirom_ui_select_color(s->colors);
+    colors_select(s->colors);
     themes_info = multirom_ui_init_themes();
     if((cur_theme = multirom_ui_select_theme(themes_info, fb_width, fb_height)) == NULL)
     {
@@ -159,7 +161,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     start_input_thread();
     keyaction_enable(1);
 
-    multirom_set_brightness(s->brightness);
+    fb_set_brightness(s->brightness);
 
     if(s->auto_boot_rom && s->auto_boot_seconds > 0 && (s->auto_boot_type & AUTOBOOT_CHECK_KEYS) == 0)
         multirom_ui_auto_boot();
@@ -214,7 +216,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
             fb_freeze(1);
 
             multirom_ui_destroy_theme();
-            multirom_ui_select_color(s->colors);
+            colors_select(s->colors);
             multirom_ui_init_theme(TAB_MISC);
 
             fb_freeze(0);
@@ -272,7 +274,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     stop_input_thread();
     workers_stop();
-    
+
 #if MR_DEVICE_HOOKS >= 2
     mrom_hook_before_fb_close();
 #endif
@@ -359,6 +361,11 @@ void multirom_ui_destroy_tab(int tab)
     themes_info->data->tab_data[tab] = NULL;
 }
 
+void multirom_ui_switch_btn(void *data)
+{
+    multirom_ui_switch(*((int*)data));
+}
+
 void multirom_ui_switch(int tab)
 {
     if(tab == themes_info->data->selected_tab)
@@ -403,7 +410,7 @@ static void multirom_ui_destroy_auto_boot_data(void)
     auto_boot_data.destroy = 1;
 }
 
-static void multirom_ui_auto_boot_hidden(void *data)
+static void multirom_ui_auto_boot_hidden(UNUSED void *data)
 {
     pthread_mutex_lock(&auto_boot_data.mutex);
     multirom_ui_destroy_auto_boot_data();
@@ -420,7 +427,7 @@ static void multirom_ui_auto_boot_now(void *data)
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-static void multirom_ui_auto_boot_tick(void *data)
+static void multirom_ui_auto_boot_tick(UNUSED void *data)
 {
     char buff[128];
 
@@ -483,7 +490,7 @@ void multirom_ui_refresh_usb_handler(void)
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-void multirom_ui_start_pong(int action)
+void multirom_ui_start_pong(UNUSED void *data)
 {
     pthread_mutex_lock(&exit_code_mutex);
     loop_act |= LOOP_START_PONG;
@@ -509,6 +516,8 @@ void *multirom_ui_tab_rom_init(int tab_type)
 
     if(tab_type == TAB_INTERNAL)
         multirom_ui_fill_rom_list(t->list, MASK_INTERNAL);
+    else
+        multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
 
     listview_update_ui(t->list);
 
@@ -543,12 +552,12 @@ void multirom_ui_tab_rom_destroy(void *data)
     free(t);
 }
 
-void multirom_ui_tab_rom_confirmed(listview_item *it)
+void multirom_ui_tab_rom_confirmed(UNUSED listview_item *it)
 {
-    multirom_ui_tab_rom_boot_btn(0);
+    multirom_ui_tab_rom_boot();
 }
 
-void multirom_ui_tab_rom_boot_btn(int action)
+void multirom_ui_tab_rom_boot(void)
 {
     int cur_tab = themes_info->data->selected_tab;
     if(!themes_info->data->tab_data[cur_tab])
@@ -576,9 +585,10 @@ void multirom_ui_tab_rom_boot_btn(int action)
         error = 1;
     }
     else if (((m & MASK_KEXEC) || ((m & MASK_ANDROID) && rom->has_bootimg)) &&
-        multirom_has_kexec() != 0)
+        !multirom_has_kexec())
     {
-        ncard_set_text(b, "Kexec-hardboot support is required to boot this ROM.\n\nInstall kernel with kexec-hardboot support to your Internal ROM!");
+        ncard_set_text(b, "Kexec-hardboot support is required to boot this ROM.\n\n"
+                "Install kernel with kexec-hardboot support to your Internal ROM!");
         error = 1;
     }
     else if((m & MASK_KEXEC) && strchr(rom->name, ' '))
@@ -613,7 +623,7 @@ void multirom_ui_tab_rom_update_usb(void)
     fb_request_draw();
 }
 
-void multirom_ui_tab_rom_refresh_usb(int action)
+void multirom_ui_tab_rom_refresh_usb(UNUSED int action)
 {
     multirom_update_partitions(mrom_status);
 }
@@ -674,8 +684,10 @@ void multirom_ui_tab_misc_destroy(void *data)
     free(t);
 }
 
-void multirom_ui_tab_misc_change_clr(int clr)
+void multirom_ui_tab_misc_change_clr(void *data)
 {
+    int clr = *((int*)data);
+
     if((loop_act & LOOP_CHANGE_CLR) || mrom_status->colors == clr)
         return;
 
@@ -685,14 +697,15 @@ void multirom_ui_tab_misc_change_clr(int clr)
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-void multirom_ui_reboot_btn(int action)
+void multirom_ui_reboot_btn(void *data)
 {
+    int action = *((int*)data);
     pthread_mutex_lock(&exit_code_mutex);
     exit_ui_code = action;
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-void multirom_ui_tab_misc_copy_log(int action)
+void multirom_ui_tab_misc_copy_log(UNUSED void *data)
 {
     multirom_dump_status(mrom_status);
 

@@ -22,11 +22,11 @@
 #include <math.h>
 #include <stdio.h>
 
-#include "framebuffer.h"
-#include "input.h"
+#include "lib/framebuffer.h"
+#include "lib/input.h"
 #include "pong.h"
-#include "util.h"
-#include "containers.h"
+#include "lib/util.h"
+#include "lib/containers.h"
 
 #define SCORE_SPACE (75*DPI_MUL)
 #define L 0
@@ -198,7 +198,7 @@ int pong_do_movement(int step)
     return 0;
 }
 
-int pong_touch_handler(touch_event *ev, void *data)
+int pong_touch_handler(touch_event *ev, UNUSED void *data)
 {
     int i = 0;
     for(; i < 2; ++i)
