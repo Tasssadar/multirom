@@ -42,6 +42,7 @@
 
 #include "log.h"
 #include "util.h"
+#include "mrom_data.h"
 
 /*
  * gettime() - returns the time in seconds of the system's monotonic clock or
@@ -353,11 +354,16 @@ void stdio_to_null(void)
 
 int run_cmd(char **cmd)
 {
+    return run_cmd_with_env(cmd, NULL);
+}
+
+int run_cmd_with_env(char **cmd, char *const *envp)
+{
     pid_t pID = vfork();
     if(pID == 0)
     {
         stdio_to_null();
-        execve(cmd[0], cmd, NULL);
+        execve(cmd[0], cmd, envp);
         _exit(127);
     }
     else
@@ -435,6 +441,40 @@ char *run_get_stdout_with_exit_with_env(char **cmd, int *exit_code, char *const 
         return res;
     }
     return NULL;
+}
+
+int mr_system(const char *shell_fmt, ...)
+{
+    int ret;
+    char busybox_path[256];
+    char path[256];
+    char shell[256];
+    char *real_shell = NULL;
+    char *const cmd_envp[] = { path, NULL };
+    //               0            1     2     3
+    char *cmd[] = { busybox_path, "sh", "-c", NULL, NULL };
+
+    snprintf(path, sizeof(path), "PATH=%s:/sbin:/system/bin", mrom_dir());
+    snprintf(busybox_path, sizeof(busybox_path), "%s/busybox", mrom_dir());
+
+    va_list ap;
+    va_start(ap, shell_fmt);
+    ret = vsnprintf(shell, sizeof(shell), shell_fmt, ap);
+    if(ret < (int)sizeof(shell))
+        real_shell = shell;
+    else
+    {
+        real_shell = malloc(ret+1);
+        vsnprintf(real_shell, ret+1, shell_fmt, ap);
+    }
+    va_end(ap);
+
+    cmd[3] = real_shell;
+    ret = run_cmd_with_env(cmd, cmd_envp);
+
+    if(real_shell != shell)
+        free(real_shell);
+    return ret;
 }
 
 uint32_t timespec_diff(struct timespec *f, struct timespec *s)

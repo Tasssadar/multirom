@@ -51,6 +51,7 @@ typedef struct
 {
     fb_text *tab_texts[TAB_COUNT];
     fb_rect *selected_tab_rect;
+    fb_rect *selected_rect[TAB_COUNT-1];
     button *tab_btns[TAB_COUNT];
     tabview *tabs;
     int selected_tab;

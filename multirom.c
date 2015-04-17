@@ -234,8 +234,6 @@ finish:
 
 int multirom_init_fb(int rotation)
 {
-    vt_set_mode(1);
-
     if(fb_open(rotation) < 0)
     {
         ERROR("Failed to open framebuffer!\n");
@@ -1202,8 +1200,8 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
     int img = (int)(rom->type == ROM_ANDROID_USB_IMG);
     for(i = 0; i < ARRAY_SIZE(folders[0]); ++i)
     {
-        sprintf(from, "%s/%s", rom->base_path, folders[img][i]);
-        sprintf(to, "/%s", folders[0][i]);
+        snprintf(from, sizeof(from), "%s/%s", rom->base_path, folders[img][i]);
+        snprintf(to, sizeof(to), "/%s", folders[0][i]);
 
         if(img == 0)
         {
@@ -1222,18 +1220,14 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
 
     if(has_fw && fw_part)
     {
-        INFO("Mounting ROM's FW image instead of FW partition\n");
-        sprintf(from, "%s/firmware.img", rom->base_path);
-        if(strstr(fw_part->options, "context="))
-        {
-            INFO("Firmware's mount options contain 'context=...', injecting fw_mounter hack instead!\n");
-            fw_part->device = realloc(fw_part->device, strlen(from)+1);
-            strcpy(fw_part->device, from);
-            multirom_inject_fw_mounter(rc_with_mount_all, fw_part);
-            fw_part = NULL;
-        }
-        else if(mount_image(from, "/firmware", fw_part->type, fw_part->mountflags, fw_part->options) < 0)
-            goto exit;
+        // Can't mount the image here because it might clash with /firmware mounted
+        // for encryption
+        INFO("Mounting ROM's FW image instead of FW partition, using fw_mounter\n");
+        snprintf(from, sizeof(from), "%s/firmware.img", rom->base_path);
+        fw_part->device = realloc(fw_part->device, strlen(from)+1);
+        strcpy(fw_part->device, from);
+        multirom_inject_fw_mounter(rc_with_mount_all, fw_part);
+        fw_part = NULL;
     }
 
 #if MR_DEVICE_HOOKS >= 1
@@ -1764,9 +1758,9 @@ static char *find_boot_file(char *path, char *root_path, char *base_path)
     char cmd[256];
     char *root = strstr(path, "%r");
     if(root)
-        sprintf(cmd, "%s/%s", root_path, root+2);
+        snprintf(cmd, sizeof(cmd), "%s/%s", root_path, root+2);
     else
-        sprintf(cmd, "%s/%s", base_path, path);
+        snprintf(cmd, sizeof(cmd), "%s/%s", base_path, path);
 
     char *last = strrchr(cmd, '/');
     if(!last)
@@ -1861,6 +1855,32 @@ int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *ro
         goto exit;
     }
 
+#ifdef MR_KEXEC_DTB
+    str = NULL;
+
+    if (map_find(info->str_vals, "dtb_path") != -1)
+    {
+        str = find_boot_file(map_get_val(info->str_vals, "dtb_path"), root_path, rom->base_path);
+        if(!str)
+        {
+            ERROR("failed to find dtb_path!\n");
+            goto exit;
+        }
+    }
+    else
+    {
+        str = find_boot_file("%r/dtb.img", root_path, rom->base_path);
+    }
+
+    if(!str)
+        kexec_add_arg(kexec, "--dtb");
+    else
+    {
+        kexec_add_arg_prefix(kexec, "--dtb=", str);
+        free(str);
+    }
+#endif
+
     str = find_boot_file(map_get_val(info->str_vals, "initrd_path"), root_path, rom->base_path);
     if(str)
     {
@@ -1890,10 +1910,6 @@ int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *ro
 
     kexec_add_arg(kexec, cmdline);
 
-#ifdef MR_KEXEC_DTB
-    kexec_add_arg(kexec, "--dtb");
-#endif
-
     res = loop_mounted;
 exit:
     multirom_destroy_rom_info(info);
@@ -1905,7 +1921,7 @@ struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multi
 {
     char path[256];
 
-    sprintf(path, "%s/rom_info.txt", rom->base_path);
+    snprintf(path, sizeof(path), "%s/rom_info.txt", rom->base_path);
     ERROR("Parsing %s...\n", path);
 
     FILE *f = fopen(path, "re");
@@ -2479,10 +2495,7 @@ int multirom_run_scripts(const char *type, struct multirom_rom *rom)
 
     ERROR("Running %s scripts for ROM %s...\n", type, rom->name);
 
-    char *cmd[] = { busybox_path, "sh", "-c", buff, NULL };
-    sprintf(buff, "B=\"%s\"; P=\"%s\"; for x in $(\"$B\" ls \"$P/%s/\"*.sh); do echo Running script $x; \"$B\" sh $x \"$B\" \"$P\" || exit 1; done", busybox_path, rom->base_path, type);
-
-    int res = run_cmd(cmd);
+    int res = mr_system("B=\"%s\"; P=\"%s\"; for x in $(\"$B\" ls \"$P/%s/\"*.sh); do echo Running script $x; \"$B\" sh $x \"$B\" \"$P\" || exit 1; done", busybox_path, rom->base_path, type);
     if(res != 0)
     {
         ERROR("Error running scripts (%d)!\n", res);

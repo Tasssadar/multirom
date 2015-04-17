@@ -24,6 +24,7 @@
 #include "../lib/log.h"
 #include "../lib/fstab.h"
 #include "../lib/framebuffer.h"
+#include "../lib/util.h"
 
 #include "crypto/lollipop/cryptfs.h"
 

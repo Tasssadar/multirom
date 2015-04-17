@@ -35,6 +35,7 @@ struct mrom_color_theme
     uint32_t rom_highlight;
     uint32_t rom_highlight_shadow;
     uint32_t keyaction_frame;
+    uint32_t btn_fake_shadow;
 };
 
 extern const struct mrom_color_theme *color_theme;
@@ -51,6 +52,7 @@ extern const struct mrom_color_theme *color_theme;
 #define C_ROM_HIGHLIGHT (color_theme->rom_highlight)
 #define C_ROM_HIGHLIGHT_SHADOW (color_theme->rom_highlight_shadow)
 #define C_KEYACT_FRAME (color_theme->keyaction_frame)
+#define C_BTN_FAKE_SHADOW (color_theme->btn_fake_shadow)
 
 void colors_select(size_t color_theme_idx);
 const struct mrom_color_theme *colors_get(size_t color_theme_idx);
