@@ -26,12 +26,24 @@
 #include MR_QCOM_OVERLAY_HEADER
 #endif
 
+#define MSMFB_DISPLAY_COMMIT_N      _IOW(MSMFB_IOCTL_MAGIC, 164, \
+                                    struct mdp_display_commit_n)
 #define MSMFB_DISPLAY_COMMIT_S      _IOW(MSMFB_IOCTL_MAGIC, 164, \
                                     struct mdp_display_commit_s)
 #define MSMFB_DISPLAY_COMMIT_LR   _IOW(MSMFB_IOCTL_MAGIC, 164, \
                                     struct mdp_display_commit_lr)
 
-#define MDP_DISPLAY_COMMIT_OVERLAY 1
+enum {
+    FILE_FOUND = 0x01,
+    ROI_MERGE = 0x02,
+    PARTIAL_UPDATE = 0x04
+};
+
+struct mdp_display_commit_n {
+    uint32_t flags;
+    uint32_t wait_for_finish;
+    struct fb_var_screeninfo var;
+};
 
 struct mdp_display_commit_s {
     uint32_t flags;
