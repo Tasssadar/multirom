@@ -26,7 +26,7 @@
 #include MR_QCOM_OVERLAY_HEADER
 #endif
 
-#define MSMFB_DISPLAY_COMMIT      _IOW(MSMFB_IOCTL_MAGIC, 164, \
+#define MSMFB_DISPLAY_COMMIT_S      _IOW(MSMFB_IOCTL_MAGIC, 164, \
                                     struct mdp_display_commit_s)
 #define MSMFB_DISPLAY_COMMIT_LR   _IOW(MSMFB_IOCTL_MAGIC, 164, \
                                     struct mdp_display_commit_lr)

@@ -488,7 +488,7 @@ static int free_overlay(struct fb_qcom_overlay_data *data, int fd)
 {
     int ret = 0;
     struct mdp_display_commit_lr ext_commit_lr;
-    struct mdp_display_commit_s ext_commit;
+    struct mdp_display_commit_s ext_commit_s;
 
     if(!isDisplaySplit(data))
     {
@@ -531,7 +531,7 @@ static int free_overlay(struct fb_qcom_overlay_data *data, int fd)
     if(has_roi_merge())
     {
         memset(&ext_commit_lr, 0, sizeof(struct mdp_display_commit_lr));
-        ext_commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+        ext_commit_lr.flags = MDP_DISPLAY_COMMIT_OVERLAY;
         
         data->overlayL_id = MSMFB_NEW_REQUEST;
         data->overlayR_id = MSMFB_NEW_REQUEST;
@@ -540,13 +540,13 @@ static int free_overlay(struct fb_qcom_overlay_data *data, int fd)
     }
     else
     {
-        memset(&ext_commit, 0, sizeof(struct mdp_display_commit));
-        ext_commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+        memset(&ext_commit_s, 0, sizeof(struct mdp_display_commit_s));
+        ext_commit_s.flags = MDP_DISPLAY_COMMIT_OVERLAY;
         
         data->overlayL_id = MSMFB_NEW_REQUEST;
         data->overlayR_id = MSMFB_NEW_REQUEST;
         
-        ret = ioctl(fd, MSMFB_DISPLAY_COMMIT, &ext_commit);
+        ret = ioctl(fd, MSMFB_DISPLAY_COMMIT_S, &ext_commit_s);
     }
 
     if(ret < 0)
@@ -607,7 +607,7 @@ static int impl_update(struct framebuffer *fb)
     int ret = 0;
     struct msmfb_overlay_data ovdataL, ovdataR;
     struct mdp_display_commit_lr ext_commit_lr;
-    struct mdp_display_commit_s ext_commit;
+    struct mdp_display_commit_s ext_commit_s;
     struct fb_qcom_overlay_data *data = fb->impl_data;
     struct fb_qcom_overlay_mem_info *info = &data->mem_info[data->active_mem];
 
@@ -676,7 +676,7 @@ static int impl_update(struct framebuffer *fb)
     if(has_roi_merge())
     {
         memset(&ext_commit_lr, 0, sizeof(struct mdp_display_commit_lr));
-        ext_commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+        ext_commit_lr.flags = MDP_DISPLAY_COMMIT_OVERLAY;
         
         fb_qcom_vsync_wait(data->vsync);
         
@@ -684,12 +684,12 @@ static int impl_update(struct framebuffer *fb)
     }
     else
     {
-        memset(&ext_commit, 0, sizeof(struct mdp_display_commit));
-        ext_commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+        memset(&ext_commit_s, 0, sizeof(struct mdp_display_commit_s));
+        ext_commit_s.flags = MDP_DISPLAY_COMMIT_OVERLAY;
 
         fb_qcom_vsync_wait(data->vsync);
 
-        ret = ioctl(fb->fd, MSMFB_DISPLAY_COMMIT, &ext_commit);
+        ret = ioctl(fb->fd, MSMFB_DISPLAY_COMMIT_S, &ext_commit_s);
     }
     
     if(ret < 0)
