@@ -275,12 +275,8 @@ static int has_roi_merge()
             if((strstr(temp, "pu_en")) != NULL)
                 found |= PARTIAL_UPDATE;
         }
-    }
-	else
-	    found = -1;
-    
-    if(fp != NULL)
         fclose(fp);
+    }
     
     return found;
 }
@@ -488,7 +484,7 @@ static int allocate_overlay(struct fb_qcom_overlay_data *data, int fd, int width
 
 static int free_overlay(struct fb_qcom_overlay_data *data, int fd)
 {
-    int ret = 0;
+    int ret = 0, roi_merge;
 
     if(!isDisplaySplit(data))
     {
@@ -528,7 +524,8 @@ static int free_overlay(struct fb_qcom_overlay_data *data, int fd)
         }
     }
 
-    if((has_roi_merge() & 0xF8) || (has_roi_merge() & 0xFC))
+    roi_merge = has_roi_merge();
+    if(roi_merge > 1)
     {
         struct mdp_display_commit_lr ext_commit_lr;
         
@@ -540,7 +537,7 @@ static int free_overlay(struct fb_qcom_overlay_data *data, int fd)
         
         ret = ioctl(fd, MSMFB_DISPLAY_COMMIT_LR, &ext_commit_lr);
     }
-    else if(has_roi_merge() & 0xFE)
+    else if(roi_merge == 1)
     {
         struct mdp_display_commit_s ext_commit_s;
         
@@ -619,7 +616,7 @@ static void impl_close(struct framebuffer *fb)
 
 static int impl_update(struct framebuffer *fb)
 {
-    int ret = 0;
+    int ret = 0, roi_merge;
     struct msmfb_overlay_data ovdataL, ovdataR;
     struct fb_qcom_overlay_data *data = fb->impl_data;
     struct fb_qcom_overlay_mem_info *info = &data->mem_info[data->active_mem];
@@ -686,7 +683,8 @@ static int impl_update(struct framebuffer *fb)
         }
     }
 
-    if((has_roi_merge() & 0xF8) || (has_roi_merge() & 0xFC))
+    roi_merge = has_roi_merge();
+    if(roi_merge > 1)
     {
         struct mdp_display_commit_lr ext_commit_lr;
         memset(&ext_commit_lr, 0, sizeof(struct mdp_display_commit_lr));
@@ -696,7 +694,7 @@ static int impl_update(struct framebuffer *fb)
         
         ret = ioctl(fb->fd, MSMFB_DISPLAY_COMMIT_LR, &ext_commit_lr);
     }
-    else if(has_roi_merge() & 0xFE)
+    else if(roi_merge == 1)
     {
         struct mdp_display_commit_s ext_commit_s;
         memset(&ext_commit_s, 0, sizeof(struct mdp_display_commit_s));
