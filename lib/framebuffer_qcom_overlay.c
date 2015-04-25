@@ -39,37 +39,6 @@
 
 #define ALIGN(x, align) (((x) + ((align)-1)) & ~((align)-1))
 #define MAX_DISPLAY_DIM  2048
-#define NUM_BUFFERS 3
-
-struct fb_qcom_overlay_mem_info {
-    uint8_t *mem_buf;
-    int size;
-    int ion_fd;
-    int mem_fd;
-    int offset;
-    struct ion_handle_data handle_data;
-};
-
-struct fb_qcom_vsync {
-    int fb_fd;
-    int enabled;
-    volatile int _run_thread;
-    pthread_t thread;
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
-    struct timespec time;
-};
-
-struct fb_qcom_overlay_data {
-    struct fb_qcom_overlay_mem_info mem_info[NUM_BUFFERS];
-    struct fb_qcom_vsync *vsync;
-    int active_mem;
-    int overlayL_id;
-    int overlayR_id;
-    int leftSplit;
-    int rightSplit;
-    int width;
-};
 
 #define VSYNC_PREFIX "VSYNC="
 
@@ -258,7 +227,7 @@ static int isDisplaySplit(struct fb_qcom_overlay_data *data)
     return 0;
 }
 
-static int has_roi_merge()
+static void has_roi_merge(struct fb_qcom_overlay_data *data)
 {
     char temp[128];
     FILE* fp;
@@ -278,7 +247,7 @@ static int has_roi_merge()
         fclose(fp);
     }
     
-    return found;
+    data->roi_merge = found;
 }
 
 static int free_ion_mem(struct fb_qcom_overlay_data *data)
@@ -484,7 +453,7 @@ static int allocate_overlay(struct fb_qcom_overlay_data *data, int fd, int width
 
 static int free_overlay(struct fb_qcom_overlay_data *data, int fd)
 {
-    int ret = 0, roi_merge;
+    int ret = 0;
 
     if(!isDisplaySplit(data))
     {
@@ -524,8 +493,7 @@ static int free_overlay(struct fb_qcom_overlay_data *data, int fd)
         }
     }
 
-    roi_merge = has_roi_merge();
-    if(roi_merge > 1)
+    if(data->roi_merge > 1)
     {
         struct mdp_display_commit_lr ext_commit_lr;
         
@@ -537,7 +505,7 @@ static int free_overlay(struct fb_qcom_overlay_data *data, int fd)
         
         ret = ioctl(fd, MSMFB_DISPLAY_COMMIT_LR, &ext_commit_lr);
     }
-    else if(roi_merge == 1)
+    else if(data->roi_merge == 1)
     {
         struct mdp_display_commit_s ext_commit_s;
         
@@ -579,6 +547,7 @@ static int impl_open(struct framebuffer *fb)
     data->leftSplit = data->width / 2;
 
     setDisplaySplit(data);
+    has_roi_merge(data);
 
 #ifdef TW_SCREEN_BLANK_ON_BOOT
     ioctl(fb->fd, FBIOBLANK, FB_BLANK_POWERDOWN);
@@ -616,7 +585,7 @@ static void impl_close(struct framebuffer *fb)
 
 static int impl_update(struct framebuffer *fb)
 {
-    int ret = 0, roi_merge;
+    int ret = 0;
     struct msmfb_overlay_data ovdataL, ovdataR;
     struct fb_qcom_overlay_data *data = fb->impl_data;
     struct fb_qcom_overlay_mem_info *info = &data->mem_info[data->active_mem];
@@ -683,8 +652,7 @@ static int impl_update(struct framebuffer *fb)
         }
     }
 
-    roi_merge = has_roi_merge();
-    if(roi_merge > 1)
+    if(data->roi_merge > 1)
     {
         struct mdp_display_commit_lr ext_commit_lr;
         memset(&ext_commit_lr, 0, sizeof(struct mdp_display_commit_lr));
@@ -694,7 +662,7 @@ static int impl_update(struct framebuffer *fb)
         
         ret = ioctl(fb->fd, MSMFB_DISPLAY_COMMIT_LR, &ext_commit_lr);
     }
-    else if(roi_merge == 1)
+    else if(data->roi_merge == 1)
     {
         struct mdp_display_commit_s ext_commit_s;
         memset(&ext_commit_s, 0, sizeof(struct mdp_display_commit_s));

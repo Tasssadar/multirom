@@ -26,6 +26,8 @@
 #include MR_QCOM_OVERLAY_HEADER
 #endif
 
+#define NUM_BUFFERS 3
+
 #define MSMFB_DISPLAY_COMMIT_N      _IOW(MSMFB_IOCTL_MAGIC, 164, \
                                     struct mdp_display_commit_n)
 #define MSMFB_DISPLAY_COMMIT_S      _IOW(MSMFB_IOCTL_MAGIC, 164, \
@@ -37,6 +39,37 @@ enum {
     FILE_FOUND = 0x01,
     ROI_MERGE = 0x02,
     PARTIAL_UPDATE = 0x04
+};
+
+struct fb_qcom_overlay_mem_info {
+    uint8_t *mem_buf;
+    int size;
+    int ion_fd;
+    int mem_fd;
+    int offset;
+    struct ion_handle_data handle_data;
+};
+
+struct fb_qcom_vsync {
+    int fb_fd;
+    int enabled;
+    volatile int _run_thread;
+    pthread_t thread;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    struct timespec time;
+};
+
+struct fb_qcom_overlay_data {
+    struct fb_qcom_overlay_mem_info mem_info[NUM_BUFFERS];
+    struct fb_qcom_vsync *vsync;
+    int active_mem;
+    int overlayL_id;
+    int overlayR_id;
+    int leftSplit;
+    int rightSplit;
+    int width;
+    int roi_merge;
 };
 
 struct mdp_display_commit_n {
