@@ -1486,11 +1486,11 @@ int multirom_has_kexec(void)
         uint32_t i;
         static const char *checks[] = {
             "CONFIG_KEXEC_HARDBOOT=y",
-#ifndef MR_KEXEC_DTB
+/*#ifndef MR_KEXEC_DTB
             "CONFIG_ATAGS_PROC=y",
-#else
+#else*/
             "CONFIG_PROC_DEVICETREE=y",
-#endif
+//#endif
         };
         //                   0             1       2     3
         char *cmd_grep[] = { busybox_path, "grep", NULL, "/ikconfig", NULL };
@@ -1511,11 +1511,11 @@ int multirom_has_kexec(void)
         // Kernel without /proc/config.gz enabled - check for /proc/atags file,
         // if it is present, there is good change kexec-hardboot is enabled too.
         ERROR("/proc/config.gz is not available!\n");
-#ifndef MR_KEXEC_DTB
+/*#ifndef MR_KEXEC_DTB
         const char *checkfile = "/proc/atags";
-#else
+#else*/
         const char *checkfile = "/proc/device-tree";
-#endif
+//#endif
         if(access(checkfile, R_OK) < 0)
         {
             ERROR("%s was not found!\n", checkfile);
