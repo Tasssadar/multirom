@@ -362,14 +362,14 @@ exit:
     devices_close();
 
 run_main_init:
+    umount("/dev/pts");
+    rmdir("/dev/pts");
+    rmdir("/dev/socket");
+
     if(access(KEEP_REALDATA, F_OK) < 0)
     {
         umount(REALDATA);
-        umount("/dev/pts");
         umount("/dev");
-        rmdir("/dev/pts");
-        rmdir("/dev/socket");
-        rmdir("/dev");
         rmdir(REALDATA);
         encryption_destroy();
     }
@@ -379,8 +379,6 @@ run_main_init:
     umount("/proc");
     umount("/sys/fs/pstore");
     umount("/sys");
-    rmdir("/proc");
-    rmdir("/sys");
 
     INFO("Running main_init\n");
 
