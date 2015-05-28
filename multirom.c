@@ -1469,60 +1469,67 @@ int multirom_has_kexec(void)
 
 #if MR_DEVICE_HOOKS >= 5
     has_kexec = mrom_hook_has_kexec();
-    if(has_kexec != -1)
-        return has_kexec;
 #endif
 
-    if(access("/proc/config.gz", F_OK) >= 0)
+    if(has_kexec == -1)
     {
-        char *cmd_cp[] = { busybox_path, "cp", "/proc/config.gz", "/ikconfig.gz", NULL };
-        run_cmd(cmd_cp);
-
-        char *cmd_gzip[] = { busybox_path, "gzip", "-d", "/ikconfig.gz", NULL };
-        run_cmd(cmd_gzip);
-
-        has_kexec = 1;
-
-        uint32_t i;
-        static const char *checks[] = {
-            "CONFIG_KEXEC_HARDBOOT=y",
-#ifndef MR_KEXEC_DTB
-            "CONFIG_ATAGS_PROC=y",
-#else
-            "CONFIG_PROC_DEVICETREE=y",
-#endif
-        };
-        //                   0             1       2     3
-        char *cmd_grep[] = { busybox_path, "grep", NULL, "/ikconfig", NULL };
-        for(i = 0; i < ARRAY_SIZE(checks); ++i)
+        if(access("/proc/config.gz", F_OK) >= 0)
         {
-            cmd_grep[2] = (char*)checks[i];
-            if(run_cmd(cmd_grep) != 0)
+            char *cmd_cp[] = { busybox_path, "cp", "/proc/config.gz", "/ikconfig.gz", NULL };
+            run_cmd(cmd_cp);
+
+            char *cmd_gzip[] = { busybox_path, "gzip", "-d", "/ikconfig.gz", NULL };
+            run_cmd(cmd_gzip);
+
+            has_kexec = 1;
+
+            uint32_t i;
+            static const char *checks[] = {
+                "CONFIG_KEXEC_HARDBOOT=y",
+#ifndef MR_KEXEC_DTB
+                "CONFIG_ATAGS_PROC=y",
+#else
+                "CONFIG_PROC_DEVICETREE=y",
+#endif
+            };
+            //                   0             1       2     3
+            char *cmd_grep[] = { busybox_path, "grep", NULL, "/ikconfig", NULL };
+            for(i = 0; i < ARRAY_SIZE(checks); ++i)
             {
-                has_kexec = 0;
-                ERROR("%s not found in /proc/config.gz!\n", checks[i]);
+                cmd_grep[2] = (char*)checks[i];
+                if(run_cmd(cmd_grep) != 0)
+                {
+                    has_kexec = 0;
+                    ERROR("%s not found in /proc/config.gz!\n", checks[i]);
+                }
             }
-        }
 
-        remove("/ikconfig");
-    }
-    else
-    {
-        // Kernel without /proc/config.gz enabled - check for /proc/atags file,
-        // if it is present, there is good change kexec-hardboot is enabled too.
-        ERROR("/proc/config.gz is not available!\n");
-#ifndef MR_KEXEC_DTB
-        const char *checkfile = "/proc/atags";
-#else
-        const char *checkfile = "/proc/device-tree";
-#endif
-        if(access(checkfile, R_OK) < 0)
-        {
-            ERROR("%s was not found!\n", checkfile);
-            has_kexec = 0;
+            remove("/ikconfig");
         }
         else
-            has_kexec = 1;
+        {
+            // Kernel without /proc/config.gz enabled - check for /proc/atags file,
+            // if it is present, there is good change kexec-hardboot is enabled too.
+            ERROR("/proc/config.gz is not available!\n");
+#ifndef MR_KEXEC_DTB
+            const char *checkfile = "/proc/atags";
+#else
+            const char *checkfile = "/proc/device-tree";
+#endif
+            if(access(checkfile, R_OK) < 0)
+            {
+                ERROR("%s was not found!\n", checkfile);
+                has_kexec = 0;
+            }
+            else
+                has_kexec = 1;
+        }
+    }
+
+    if(has_kexec && mr_system("%s -u", kexec_path) != 0)
+    {
+        ERROR("kexec -u test has failed, kernel doesn't have kexec-hardboot patch enabled in config!\n");
+        has_kexec = 0;
     }
 
     return has_kexec;
