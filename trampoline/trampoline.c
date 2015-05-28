@@ -243,21 +243,21 @@ static void fixup_symlinks(void)
             {
                 buff[len] = 0;
                 // if the symlink already points to ../init, skip it.
-                if(strcmp(buff, "../main_init") == 0)
+                if(strcmp(buff, "../init") == 0)
                     continue;
             }
         }
 
         ERROR("Fixing up symlink '%s' -> '%s' to '%s' -> '../init')\n", init_links[i], buff, init_links[i]);
         unlink(init_links[i]);
-        symlink("../main_init", init_links[i]);
+        symlink("../init", init_links[i]);
     }
 }
 
 int main(int argc, char *argv[])
 {
     int i, res;
-    static char *const cmd[] = { "/main_init", NULL };
+    static char *const cmd[] = { "/init", NULL };
     struct fstab *fstab = NULL;
     char *inject_path = NULL;
     char *mrom_dir = NULL;
@@ -387,6 +387,7 @@ run_main_init:
     fixup_symlinks();
 
     chmod("/main_init", EXEC_MASK);
+    rename("/main_init", "/init");
 
     res = execve(cmd[0], cmd, NULL);
     ERROR("execve returned %d %d %s\n", res, errno, strerror(errno));
