@@ -257,7 +257,7 @@ int main(int argc, char *argv[])
 
     // cryptfs prints informations, we don't want that
     stdout_fd = dup(1);
-    freopen("/dev/null", "a", stdout);
+    freopen("/dev/null", "ae", stdout);
 
     switch(cmd)
     {

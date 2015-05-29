@@ -25,6 +25,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <cutils/android_reboot.h>
+#include <unistd.h>
 
 #ifdef HAVE_SELINUX
 #include <selinux/label.h>
@@ -389,7 +390,7 @@ char *run_get_stdout_with_exit(char **cmd, int *exit_code)
 char *run_get_stdout_with_exit_with_env(char **cmd, int *exit_code, char *const *envp)
 {
    int fd[2];
-   if(pipe(fd) < 0)
+   if(pipe2(fd, O_CLOEXEC) < 0)
         return NULL;
 
     pid_t pid = vfork();
