@@ -63,9 +63,10 @@
 #endif
 
 #define SYSFS_PREFIX    "/sys"
-#define FIRMWARE_DIR1   "/etc/firmware"
-#define FIRMWARE_DIR2   "/vendor/firmware"
-#define FIRMWARE_DIR3   "/firmware/image"
+
+static const char *firmware_dirs[] = { "/etc/firmware",
+                                       "/vendor/firmware",
+                                       "/firmware/image" };
 
 #ifdef HAVE_SELINUX
 static struct selabel_handle *sehandle;
@@ -164,7 +165,6 @@ void devices_init(void)
     if(device_fd < 0)
         return;
 
-    fcntl(device_fd, F_SETFD, FD_CLOEXEC);
     fcntl(device_fd, F_SETFL, O_NONBLOCK);
 
     int i, len;
@@ -289,7 +289,7 @@ void fixup_sys_perms(const char *upath)
         if ((strlen(upath) + strlen(dp->attr) + 6) > sizeof(buf))
             return;
 
-        sprintf(buf,"/sys%s/%s", upath, dp->attr);
+        snprintf(buf, sizeof(buf), "/sys%s/%s", upath, dp->attr);
         DEBUG("fixup %s %d %d 0%o\n", buf, dp->uid, dp->gid, dp->perm);
         chown(buf, dp->uid, dp->gid);
         chmod(buf, dp->perm);
@@ -393,7 +393,6 @@ static int make_dir(const char *path, mode_t mode)
 static void add_platform_device(const char *path)
 {
     int path_len = strlen(path);
-    struct listnode *node;
     struct platform_node *bus;
     const char *name = path;
 
@@ -401,15 +400,6 @@ static void add_platform_device(const char *path)
         name += 9;
         if (!strncmp(name, "platform/", 9))
             name += 9;
-    }
-
-    list_for_each_reverse(node, &platform_names) {
-        bus = node_to_item(node, struct platform_node, list);
-        if ((bus->path_len < path_len) &&
-                (path[bus->path_len] == '/') &&
-                !strncmp(path, bus->path, bus->path_len))
-            /* subdevice of an existing platform, ignore it */
-            return;
     }
 
     DEBUG("adding platform device %s (%s)\n", name, path);
@@ -551,7 +541,7 @@ static char **get_character_device_symlinks(struct uevent *uevent)
 
     /* skip "/devices/platform/<driver>" */
     parent = strchr(uevent->path + pdev->path_len, '/');
-    if (!*parent)
+    if (!parent)
         goto err;
 
     if (!strncmp(parent, "/usb", 4)) {
@@ -875,8 +865,8 @@ static int is_booting(void)
 
 static void process_firmware_event(struct uevent *uevent)
 {
-    char *root, *loading, *data, *file1 = NULL, *file2 = NULL, *file3 = NULL;
-    int l, loading_fd, data_fd, fw_fd;
+    char *root, *loading, *data;
+    int l, loading_fd, data_fd, fw_fd, i;
     int booting = is_booting();
 
     DEBUG("firmware: loading '%s' for '%s'\n",
@@ -894,61 +884,53 @@ static void process_firmware_event(struct uevent *uevent)
     if (l == -1)
         goto loading_free_out;
 
-    l = asprintf(&file1, FIRMWARE_DIR1"/%s", uevent->firmware);
-    if (l == -1)
-        goto data_free_out;
-
-    l = asprintf(&file2, FIRMWARE_DIR2"/%s", uevent->firmware);
-    if (l == -1)
-        goto data_free_out;
-
-    l = asprintf(&file3, FIRMWARE_DIR3"/%s", uevent->firmware);
-    if (l == -1)
-        goto data_free_out;
-
     loading_fd = open(loading, O_WRONLY | O_CLOEXEC);
     if(loading_fd < 0)
-        goto file_free_out;
+        goto data_free_out;
 
     data_fd = open(data, O_WRONLY | O_CLOEXEC);
     if(data_fd < 0)
         goto loading_close_out;
 
 try_loading_again:
-    fw_fd = open(file1, O_RDONLY | O_CLOEXEC);
-    if(fw_fd < 0) {
-        fw_fd = open(file2, O_RDONLY | O_CLOEXEC);
-        if (fw_fd < 0) {
-            fw_fd = open(file3, O_RDONLY | O_CLOEXEC);
-            if (fw_fd < 0) {
-                if (booting) {
-                        /* If we're not fully booted, we may be missing
-                         * filesystems needed for firmware, wait and retry.
-                         */
-                    usleep(100000);
-                    booting = is_booting();
-                    goto try_loading_again;
-                }
-                INFO("firmware: could not open '%s' %d\n", uevent->firmware, errno);
-                write(loading_fd, "-1", 2);
-                goto data_close_out;
-            }
+    for (i = 0; i < ARRAY_SIZE(firmware_dirs); i++) {
+        char *file = NULL;
+        l = asprintf(&file, "%s/%s", firmware_dirs[i], uevent->firmware);
+        if (l == -1)
+            goto data_free_out;
+        fw_fd = open(file, O_RDONLY|O_CLOEXEC);
+        free(file);
+        if (fw_fd >= 0) {
+            if(!load_firmware(fw_fd, loading_fd, data_fd))
+                INFO("firmware: copy success { '%s', '%s' }\n", root, uevent->firmware);
+            else
+                INFO("firmware: copy failure { '%s', '%s' }\n", root, uevent->firmware);
+            break;
         }
     }
 
-    if(!load_firmware(fw_fd, loading_fd, data_fd))
-        DEBUG("firmware: copy success { '%s', '%s' }\n", root, uevent->firmware);
-    else
-        ERROR("firmware: copy failure { '%s', '%s' }\n", root, uevent->firmware);
+    if (fw_fd < 0) {
+// disable for multirom to prevent loop
+#if 0
+        if (booting) {
+            /* If we're not fully booted, we may be missing
+             * filesystems needed for firmware, wait and retry.
+             */
+            usleep(100000);
+            booting = is_booting();
+            goto try_loading_again;
+        }
+#endif
+        INFO("firmware: could not open '%s': %s\n", uevent->firmware, strerror(errno));
+        write(loading_fd, "-1", 2);
+        goto data_close_out;
+    }
 
     close(fw_fd);
 data_close_out:
     close(data_fd);
 loading_close_out:
     close(loading_fd);
-file_free_out:
-    free(file1);
-    free(file2);
 data_free_out:
     free(data);
 loading_free_out:
@@ -972,7 +954,9 @@ static void handle_firmware_event(struct uevent *uevent)
     pid = fork();
     if (!pid) {
         process_firmware_event(uevent);
-        exit(EXIT_SUCCESS);
+        _exit(EXIT_SUCCESS);
+    } else if (pid < 0) {
+        log_event_print("could not fork to process firmware event: %s\n", strerror(errno));
     }
 }
 
