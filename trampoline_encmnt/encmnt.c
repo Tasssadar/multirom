@@ -140,10 +140,10 @@ static int handle_decrypt(int stdout_fd, const char *password)
         {
             default:
             case ENCMNT_UIRES_ERROR:
-                ERROR("pw_ui_run() failed!");
+                ERROR("pw_ui_run() failed!\n");
                 return -1;
             case ENCMNT_UIRES_BOOT_INTERNAL:
-                INFO("Wants to boot internal!");
+                INFO("Wants to boot internal!\n");
                 write(stdout_fd, ENCMNT_BOOT_INTERNAL_OUTPUT, strlen(ENCMNT_BOOT_INTERNAL_OUTPUT));
                 fsync(stdout_fd);
                 return 0;
@@ -165,7 +165,7 @@ static int handle_decrypt(int stdout_fd, const char *password)
         if(de->d_type == DT_BLK && strncmp(de->d_name, "dm-", 3) == 0)
         {
             snprintf(buff, sizeof(buff), "/dev/block/%s\n", de->d_name);
-            INFO("Found block device %s", buff);
+            INFO("Found block device %s\n", buff);
             write(stdout_fd, buff, strlen(buff));
             fsync(stdout_fd);
             res = 0;

@@ -22,6 +22,7 @@ LOCAL_C_INCLUDES += $(multirom_local_path) $(mr_twrp_path) $(mr_twrp_path)/crypt
 LOCAL_SRC_FILES := \
     encmnt.c \
     pw_ui.c \
+    ../rom_quirks.c \
 
 include $(multirom_local_path)/device_defines.mk
 
