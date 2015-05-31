@@ -975,9 +975,7 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     {
         case ROM_DEFAULT:
         {
-            mount("/realdata", "/data", "", MS_BIND, "");
-            rom_quirks_on_android_mounted_fs(to_boot);
-            umount("/data");
+            rom_quirks_on_initrd_finalized();
             break;
         }
         case ROM_LINUX_INTERNAL:
@@ -997,7 +995,7 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
                 if(multirom_create_media_link() == -1)
                     return -1;
 
-                rom_quirks_on_android_mounted_fs(to_boot);
+                rom_quirks_on_initrd_finalized();
             }
 
             if(to_boot->partition)
@@ -2321,9 +2319,10 @@ next_itr:
 int multirom_mount_usb(struct usb_partition *part)
 {
     mkdir("/mnt", 0777);
+    mkdir("/mnt/mrom", 0777);
 
     char path[256];
-    sprintf(path, "/mnt/%s", part->name);
+    snprintf(path, sizeof(path), "/mnt/mrom/%s", part->name);
     if(mkdir(path, 0777) != 0 && errno != EEXIST)
     {
         ERROR("Failed to create dir for mount %s\n", path);
@@ -2331,7 +2330,7 @@ int multirom_mount_usb(struct usb_partition *part)
     }
 
     char src[256];
-    sprintf(src, "/dev/block/%s", part->name);
+    snprintf(src, sizeof(src), "/dev/block/%s", part->name);
 
     if(strncmp(part->fs, "ntfs", 4) == 0)
     {

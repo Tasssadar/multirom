@@ -19,6 +19,6 @@
 
 struct multirom_rom;
 
-void rom_quirks_on_android_mounted_fs(struct multirom_rom *rom);
+void rom_quirks_on_initrd_finalized(void);
 
 #endif
