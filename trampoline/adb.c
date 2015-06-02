@@ -148,6 +148,7 @@ void adb_init_usb(void)
     write_file("/sys/class/android_usb/android0/iSerial", serial);
 
     write_file("/sys/class/android_usb/android0/enable", "1");
+    write_file("/sys/devices/platform/android_usb/usb_function_switch", "3");
 }
 
 int adb_init_busybox(void)
