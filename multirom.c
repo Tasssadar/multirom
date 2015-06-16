@@ -1397,11 +1397,11 @@ int multirom_create_media_link(void)
             fputc(api_level > 19 ? '3' : '2', f);
             fclose(f);
             chmod(LAYOUT_VERSION, 0600);
-
-            if(api_level >= 21)
-                if(mr_system("chcon -t install_data_file %s", LAYOUT_VERSION) != 0)
-                    ERROR("Failed to set SELinux context to .layout_version\n");
         }
+
+        if(api_level >= 21)
+            if(mr_system("chcon -t install_data_file %s", LAYOUT_VERSION) != 0)
+                ERROR("Failed to set SELinux context to .layout_version\n");
     }
 
     return 0;
