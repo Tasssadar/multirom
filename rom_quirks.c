@@ -104,6 +104,68 @@ static void inject_file_contexts(void)
     fclose(f);
 }
 
+
+static void inject_initrc_restorecon_layoutversion(void)
+{
+    FILE *f;
+    char line[512];
+
+    f = fopen("/init.rc", "re");
+    if(!f)
+    {
+        ERROR("Failed to open /init.rc!");
+        return;
+    }
+
+    // check if import already exits
+    while(fgets(line, sizeof(line), f))
+    {
+        if(strstartswith(line, "import /init.layout_version.rc"))
+        {
+            INFO("/init.rc has been already injected.");
+            fclose(f);
+            return;
+        }
+    }
+
+    fclose(f);
+
+
+    // create the init.layout_version.rc file which has the
+    // restorecon command
+    INFO("Create /init.layout_version.rc");
+    f = fopen("/init.layout_version.rc", "w");
+    if(!f)
+    {
+        ERROR("Failed to create /init.layout_version.rc!");
+        return;
+    }
+
+    fputs("on early-init\n"
+          "    # Set the security context of /data/.layout_version if present.\n"
+          "    restorecon /data/.layout_version\n",
+        f);
+    fclose(f);
+    chmod("/init.layout_version.rc", 0750);
+
+
+    // go ahead add the import
+    INFO("Injecting /init.rc");
+    f = fopen("/init.rc", "ae");
+    if(!f)
+    {
+        ERROR("Failed to open /init.rc for appending!");
+        return;
+    }
+
+    fputs("\n"
+        "# fix for SELinux unlabled layout_version\n"
+        "import /init.layout_version.rc\n",
+        f);
+    fclose(f);
+}
+
+
 void rom_quirks_on_initrd_finalized(void)
 {
     // walk over all _regular_ files in /
@@ -126,6 +188,14 @@ void rom_quirks_on_initrd_finalized(void)
             // MultiROM folders don't have any context
             if(strcmp(dt->d_name, "file_contexts") == 0)
                 inject_file_contexts();
+
+
+            // "/data/.layout_version" is created without proper SELinux
+            // context during "multirom_create_media_link" function
+            // add a "restorecon /data/.layout_version" to init.rc
+            if(strcmp(dt->d_name, "init.rc") == 0)
+                inject_initrc_restorecon_layoutversion();
+
 
             // franco.Kernel includes script init.fk.sh which remounts /system as read only
             // comment out lines with mount and /system in all .sh scripts in /
