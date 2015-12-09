@@ -222,7 +222,11 @@ int calc_mt_pos(int val, int *range, int d_max)
 
 static void mt_recalc_pos_rotation(touch_event *ev)
 {
-    switch(fb_rotation)
+    int rotation = fb_rotation;
+#ifdef MR_INPUT_ROTATION
+    rotation += MR_INPUT_ROTATION;
+#endif
+    switch(rotation % 360)
     {
         case 0:
             ev->x = ev->orig_x;
@@ -231,8 +235,14 @@ static void mt_recalc_pos_rotation(touch_event *ev)
         case 90:
             ev->x = ev->orig_y;
             ev->y = ev->orig_x;
-
-            ev->y = fb_height - ev->y;
+            
+            // Offset & inversion
+            ev->y = fb_width - ev->y;
+            
+            // Scaling
+            ev->x = ev->x * mt_screen_res[0]/mt_screen_res[1];
+            ev->y = ev->y * mt_screen_res[1]/mt_screen_res[0];
+            
             break;
         case 180:
             ev->x = fb_width - ev->orig_x;
@@ -242,7 +252,13 @@ static void mt_recalc_pos_rotation(touch_event *ev)
             ev->x = ev->orig_y;
             ev->y = ev->orig_x;
 
-            ev->x = fb_width - ev->x;
+            // Offset & inversion
+            ev->x = fb_height - ev->x;
+            
+            // Scaling
+            ev->x = ev->x * mt_screen_res[0]/mt_screen_res[1];
+            ev->y = ev->y * mt_screen_res[1]/mt_screen_res[0];
+            
             break;
     }
 }
