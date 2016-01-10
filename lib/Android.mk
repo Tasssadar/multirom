@@ -95,7 +95,7 @@ include $(CLEAR_VARS)
 #
 LOCAL_ARM_MODE := arm
 
-LOCAL_SRC_FILES:= \
+LOCAL_SRC_FILES := \
     src/base/ftbbox.c \
     src/base/ftbitmap.c \
     src/base/ftfstype.c \
@@ -103,7 +103,6 @@ LOCAL_SRC_FILES:= \
     src/base/ftlcdfil.c \
     src/base/ftstroke.c \
     src/base/fttype1.c \
-    src/base/ftxf86.c \
     src/base/ftbase.c \
     src/base/ftsystem.c \
     src/base/ftinit.c \
@@ -119,6 +118,14 @@ LOCAL_SRC_FILES:= \
 
 ifeq ($(shell if [ -e "$(ANDROID_BUILD_TOP)/external/freetype/src/gzip/ftgzip.c" ]; then echo "hasgzip"; fi),hasgzip)
 LOCAL_SRC_FILES += src/gzip/ftgzip.c
+endif
+
+ifeq ($(shell if [ -e "$(ANDROID_BUILD_TOP)/external/freetype/src/base/ftxf86.c" ]; then echo "found"; fi),found)
+    LOCAL_SRC_FILES += src/base/ftxf86.c
+else
+    LOCAL_SRC_FILES += \
+        src/base/ftfntfmt.c \
+        src/base/ftmm.c
 endif
 
 LOCAL_C_INCLUDES += \

@@ -22,6 +22,7 @@
 #include <sys/mount.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 #include "../lib/fstab.h"
 #include "../lib/util.h"

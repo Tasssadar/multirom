@@ -17,7 +17,7 @@ else
     $(error Failed to find path to TWRP, which is required to build MultiROM with encryption support)
 endif
 
-LOCAL_C_INCLUDES += $(multirom_local_path) $(mr_twrp_path) $(mr_twrp_path)/crypto/scrypt/lib/crypto external/openssl/include
+LOCAL_C_INCLUDES += $(multirom_local_path) $(mr_twrp_path) $(mr_twrp_path)/crypto/scrypt/lib/crypto external/openssl/include external/boringssl/include
 
 LOCAL_SRC_FILES := \
     encmnt.c \
