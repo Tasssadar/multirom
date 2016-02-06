@@ -15,11 +15,22 @@
  * along with MultiROM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
- #ifndef FW_MOUNTER_DEFINES_H
- #define FW_MOUNTER_DEFINES_H
+#ifndef RCADDITIONS_H
+#define RCADDITIONS_H
 
- #define FW_MOUNTER_FSTAB "/sbin/fw_mounter.fstab"
- #define FW_MOUNTER_BIN "fw_mounter"
- #define FW_MOUNTER_PATH "/sbin/"FW_MOUNTER_BIN
+#include "lib/containers.h"
 
- #endif
+struct rcadditions
+{
+    map *triggers;
+    char *eof_append;
+    char *file_contexts_append;
+};
+
+void rcadditions_append_trigger(struct rcadditions *r, const char *trigger, const char *what);
+void rcadditions_append_file(struct rcadditions *r, const char *what);
+void rcadditions_append_contexts(struct rcadditions *r, const char *what);
+void rcadditions_free(struct rcadditions *r);
+void rcadditions_write_to_files(struct rcadditions *r);
+
+#endif

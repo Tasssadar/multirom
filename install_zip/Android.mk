@@ -24,7 +24,7 @@ ifneq ($(MR_DEVICE_VARIANTS),)
 	MR_DEVICES += $(MR_DEVICE_VARIANTS)
 endif
 
-$(MULTIROM_ZIP_TARGET): multirom trampoline fw_mounter signapk bbootimg mrom_kexec_static mrom_adbd $(multirom_extra_dep)
+$(MULTIROM_ZIP_TARGET): multirom trampoline signapk bbootimg mrom_kexec_static mrom_adbd $(multirom_extra_dep)
 	@echo
 	@echo
 	@echo "A crowdfunding campaign for MultiROM took place in 2013. These people got perk 'The Tenth':"

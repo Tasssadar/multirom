@@ -24,6 +24,7 @@
 #include "lib/fstab.h"
 #include "lib/containers.h"
 #include "kexec.h"
+#include "rcadditions.h"
 
 enum
 {
@@ -114,6 +115,7 @@ struct multirom_status
     struct usb_partition **partitions;
     char *curr_rom_part;
     struct fstab *fstab;
+    struct rcadditions rc;
 };
 
 int multirom(const char *rom_to_boot);
@@ -134,8 +136,8 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
 void multirom_free_status(struct multirom_status *s);
 void multirom_free_rom(void *rom);
 int multirom_init_fb(int rotation);
-int multirom_prep_android_mounts(struct multirom_rom *rom);
-int multirom_create_media_link(void);
+int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom *rom);
+int multirom_create_media_link(struct multirom_status *s);
 int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_part **fw_part);
 int multirom_get_api_level(const char *path);
 int multirom_get_rom_type(struct multirom_rom *rom);

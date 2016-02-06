@@ -19,6 +19,7 @@ LOCAL_SRC_FILES:= \
     multirom_ui_portrait.c \
     multirom_ui_themes.c \
     pong.c \
+    rcadditions.c \
     rom_quirks.c \
 
 # With these, GCC optimizes aggressively enough so full-screen alpha blending
@@ -59,9 +60,6 @@ include $(BUILD_EXECUTABLE)
 
 # Trampoline
 include $(multirom_local_path)/trampoline/Android.mk
-
-# fw_mounter
-include $(multirom_local_path)/fw_mounter/Android.mk
 
 # ZIP installer
 include $(multirom_local_path)/install_zip/Android.mk

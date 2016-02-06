@@ -85,7 +85,7 @@ static void inject_file_contexts(void)
 
     fclose(f);
 
-    INFO("Injecting /file_contexts");
+    INFO("Injecting /file_contexts\n");
     f = fopen("/file_contexts", "ae");
     if(!f)
     {

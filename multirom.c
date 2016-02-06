@@ -51,7 +51,6 @@
 #include "hooks.h"
 #include "rom_quirks.h"
 #include "kexec.h"
-#include "fw_mounter/fw_mounter_defines.h"
 
 #define REALDATA "/realdata"
 #define BUSYBOX_BIN "busybox"
@@ -253,7 +252,7 @@ void multirom_emergency_reboot(void)
     char *tail;
     char *last_end;
     int cur_y;
-    uid_t media_rw_id;
+    unsigned int media_rw_id;
 
     if(multirom_init_fb(0) < 0)
     {
@@ -306,7 +305,7 @@ void multirom_emergency_reboot(void)
     free(klog);
 
     media_rw_id = decode_uid("media_rw");
-    if(media_rw_id != -1)
+    if(media_rw_id != -1U)
         chown("../multirom_log.txt", (uid_t)media_rw_id, (gid_t)media_rw_id);
     chmod("../multirom_log.txt", 0666);
 
@@ -990,13 +989,16 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
             {
                 exit &= ~(EXIT_UMOUNT);
 
-                if(multirom_prep_android_mounts(to_boot) == -1)
+                if(multirom_prep_android_mounts(s, to_boot) == -1)
                     return -1;
 
-                if(multirom_create_media_link() == -1)
+                if(multirom_create_media_link(s) == -1)
                     return -1;
 
                 rom_quirks_on_initrd_finalized();
+
+                rcadditions_write_to_files(&s->rc);
+                rcadditions_free(&s->rc);
             }
 
             if(to_boot->partition)
@@ -1064,66 +1066,39 @@ char *multirom_find_fstab_in_rc(const char *rcfile)
 // works. There is a chance Google will disable all services which don't have
 // context set in sepolicy. That will be a problem.
 
-static int multirom_inject_fw_mounter(char *rc_with_mount_all, struct fstab_part *fw_part)
+// UPDATE: fw_mounter gets shut down by SELinux on 6.0, inject .rc files and file_contexts instead.
+
+static int multirom_inject_fw_mounter(struct multirom_status *s, struct fstab_part *fw_part)
 {
-    static const char *trigger_line = "    start mrom_fw_mounter\n";
-    static const char *service_block =
-        "\nservice mrom_fw_mounter "FW_MOUNTER_PATH"\n"
-        "    disabled\n"
-        "    oneshot\n"
-        "    user root\n"
-        "    group root\n";
+    char buf[512];
 
-    char *rc_file, *p;
-    size_t rc_len, alloc_size;
-    char line[512];
-    FILE *f = fopen(rc_with_mount_all, "r+e");
-    if(!f)
+    rcadditions_append_contexts(&s->rc,
+        "/realdata/media/0/multirom/roms/[^/]+/firmware.img u:object_r:asec_image_file:s0\n"
+        "/realdata/media/multirom/roms/[^/]+/firmware.img u:object_r:asec_image_file:s0\n");
+
+    snprintf(buf, sizeof(buf), "    restorecon %s\n", fw_part->device);
+    rcadditions_append_trigger(&s->rc, "fs", buf);
+
+    snprintf(buf, sizeof(buf), "    mount %s loop@%s %s ", fw_part->type, fw_part->device, fw_part->path);
+    rcadditions_append_trigger(&s->rc, "fs", buf);
+
+    if(fw_part->options_raw)
     {
-        ERROR("Failed to open file \"%s\" to inject fw_mounter!\n", rc_with_mount_all);
-        fstab_destroy_part(fw_part);
-        return -1;
+        char *c, *opts = strdup(fw_part->options_raw);
+        for(c = opts; *c; ++c)
+            if(*c == ',')
+                *c = ' ';
+        rcadditions_append_trigger(&s->rc, "fs", opts);
+        free(opts);
     }
 
-    fseek(f, 0, SEEK_END);
-    rc_len = ftell(f);
-    fseek(f, 0, SEEK_SET);
+    rcadditions_append_trigger(&s->rc, "fs", "\n");
 
-    alloc_size = rc_len + 1 + strlen(trigger_line);
-    rc_file = malloc(alloc_size);
-    rc_file[0] = 0;
-
-    while(fgets(line, sizeof(line), f))
-    {
-        for(p = line; isspace(*p); ++p);
-
-        if(*p && *p != '#' && line[strlen(line)-1] == '\n' && strncmp(p, "mount_all", 9) == 0)
-            strcat(rc_file, trigger_line);
-        strcat(rc_file, line);
-    }
-
-    fseek(f, 0, SEEK_SET);
-    fputs(rc_file, f);
-    fputs(service_block, f);
-
-    free(rc_file);
-    fclose(f);
-
-    // copy fw_mounter to /sbin
-    snprintf(line, sizeof(line), "%s/%s", mrom_dir(), FW_MOUNTER_BIN);
-    copy_file(line, FW_MOUNTER_PATH);
-    chmod(FW_MOUNTER_PATH, 0755);
-
-    // prepare fstab for it
-    struct fstab *fw_fstab = fstab_create_empty(2);
-    fstab_add_part_struct(fw_fstab, fw_part);
-    fstab_save(fw_fstab, FW_MOUNTER_FSTAB);
-    fstab_destroy(fw_fstab);
-
+    fstab_destroy_part(fw_part);
     return 0;
 }
 
-int multirom_prep_android_mounts(struct multirom_rom *rom)
+int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom *rom)
 {
     char in[128];
     char out[128];
@@ -1219,14 +1194,11 @@ int multirom_prep_android_mounts(struct multirom_rom *rom)
 
     if(has_fw && fw_part)
     {
-        // Can't mount the image here because it might clash with /firmware mounted
-        // for encryption
-        INFO("Mounting ROM's FW image instead of FW partition, using fw_mounter\n");
+        INFO("Mounting ROM's FW image instead of FW partition\n");
         snprintf(from, sizeof(from), "%s/firmware.img", rom->base_path);
         fw_part->device = realloc(fw_part->device, strlen(from)+1);
         strcpy(fw_part->device, from);
-        multirom_inject_fw_mounter(rc_with_mount_all, fw_part);
-        fw_part = NULL;
+        multirom_inject_fw_mounter(s, fw_part);
     }
 
 #if MR_DEVICE_HOOKS >= 1
@@ -1328,7 +1300,7 @@ exit:
     return res;
 }
 
-int multirom_create_media_link(void)
+int multirom_create_media_link(struct multirom_status *s)
 {
     int media_new = 0;
     int api_level = multirom_get_api_level("/system/build.prop");
@@ -1399,6 +1371,10 @@ int multirom_create_media_link(void)
             fclose(f);
             chmod(LAYOUT_VERSION, 0600);
         }
+
+        // We need to set SELinux context for this file in case it was created by multirom,
+        // but can't do it here because selinux was not initialized
+        rcadditions_append_trigger(&s->rc, "post-fs-data", "    restorecon " LAYOUT_VERSION "\n");
     }
 
     return 0;
