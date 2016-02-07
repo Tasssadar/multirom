@@ -1092,8 +1092,6 @@ static int multirom_inject_fw_mounter(struct multirom_status *s, struct fstab_pa
     }
 
     rcadditions_append_trigger(&s->rc, "fs", "\n");
-
-    fstab_destroy_part(fw_part);
     return 0;
 }
 
