@@ -3,4 +3,4 @@
 	url = https://github.com/Tasssadar/kexec-tools
 [submodule "adbd"]
 	path = adbd
-	url = https://github.com/Tasssadar/multirom_adbd.git
+	url = https://github.com/multirom-nexus6p/multirom_adbd.git
