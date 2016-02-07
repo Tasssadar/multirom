@@ -433,12 +433,12 @@ int multirom_default_status(struct multirom_status *s)
         rom->id = multirom_generate_rom_id();
         rom->name = strdup(dr->d_name);
 
-        sprintf(path, "%s/%s", roms_path, rom->name);
+        snprintf(path, sizeof(path), "%s/%s", roms_path, rom->name);
         rom->base_path = strdup(path);
 
         rom->type = multirom_get_rom_type(rom);
 
-        sprintf(path, "%s/boot.img", rom->base_path);
+        snprintf(path, sizeof(path), "%s/boot.img", rom->base_path);
         rom->has_bootimg = access(path, R_OK) == 0 ? 1 : 0;
 
         multirom_find_rom_icon(rom);
@@ -1072,9 +1072,8 @@ static int multirom_inject_fw_mounter(struct multirom_status *s, struct fstab_pa
 {
     char buf[512];
 
-    rcadditions_append_contexts(&s->rc,
-        "/realdata/media/0/multirom/roms/[^/]+/firmware.img u:object_r:asec_image_file:s0\n"
-        "/realdata/media/multirom/roms/[^/]+/firmware.img u:object_r:asec_image_file:s0\n");
+    rcadditions_append_contexts(&s->rc, fw_part->device);
+    rcadditions_append_contexts(&s->rc, " u:object_r:asec_image_file:s0\n");
 
     snprintf(buf, sizeof(buf), "    restorecon %s\n", fw_part->device);
     rcadditions_append_trigger(&s->rc, "fs", buf);
@@ -1103,7 +1102,6 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
     char in[128];
     char out[128];
     char path[256];
-    char rc_with_mount_all[128] = { 0 };
     char *fstab_name = NULL;
     int has_fw = 0;
     struct fstab_part *fw_part = NULL;
@@ -1139,11 +1137,7 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
             chmod(out, EXEC_MASK);
 
             if(!fstab_name && strcmp(dp->d_name, "init."TARGET_DEVICE".rc") == 0)
-            {
                 fstab_name = multirom_find_fstab_in_rc(out);
-                if(fstab_name)
-                    snprintf(rc_with_mount_all, sizeof(rc_with_mount_all), "%s", out);
-            }
         }
     }
     closedir(d);
