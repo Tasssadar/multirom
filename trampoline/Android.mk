@@ -26,6 +26,13 @@ LOCAL_CFLAGS += -DPRODUCT_MODEL="\"$(PRODUCT_MODEL)\"" -DPRODUCT_MANUFACTURER="\
 # to find fstab
 LOCAL_CFLAGS += -DTARGET_DEVICE="\"$(TARGET_DEVICE)\""
 
+# create by-name symlinks for kernels that don't have it (eg older HTC One M7)
+# specify MR_POPULATE_BY_NAME_PATH := "/dev/block/platform/msm_sdcc.1/by-name"
+# or similar in BoardConfig
+ifneq ($(MR_POPULATE_BY_NAME_PATH),)
+    LOCAL_CFLAGS += -DMR_POPULATE_BY_NAME_PATH=\"$(MR_POPULATE_BY_NAME_PATH)\"
+endif
+
 ifneq ($(MR_DEVICE_HOOKS),)
 ifeq ($(MR_DEVICE_HOOKS_VER),)
     $(info MR_DEVICE_HOOKS is set but MR_DEVICE_HOOKS_VER is not specified!)
