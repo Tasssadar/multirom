@@ -52,4 +52,8 @@ ifeq ($(MR_ENCRYPTION),true)
     LOCAL_SRC_FILES += encryption.c
 endif
 
+ifeq ($(MR_ENCRYPTION_FAKE_PROPERTIES),true)
+    LOCAL_CFLAGS += -DMR_ENCRYPTION_FAKE_PROPERTIES
+endif
+
 include $(BUILD_EXECUTABLE)
