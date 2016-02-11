@@ -66,7 +66,11 @@ include $(multirom_local_path)/trampoline/Android.mk
 include $(multirom_local_path)/install_zip/Android.mk
 
 # Kexec-tools
-include $(multirom_local_path)/kexec-tools/Android.mk
+ifeq ($(TARGET_ARCH),arm64)
+    include $(multirom_local_path)/kexec-tools-arm64/Android.mk
+else
+    include $(multirom_local_path)/kexec-tools/Android.mk
+endif
 
 # adbd
 include $(multirom_local_path)/adbd/Android.mk
