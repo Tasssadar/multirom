@@ -21,8 +21,10 @@
 #include <pthread.h>
 #include <stdio.h>
 
-#include "util.h"
-#include "fstab.h"
+#include "lib/fstab.h"
+#include "lib/containers.h"
+#include "kexec.h"
+#include "rcadditions.h"
 
 enum
 {
@@ -48,7 +50,7 @@ enum
 #define MASK_LINUX (M(ROM_LINUX_INTERNAL) | M(ROM_LINUX_USB))
 #define MASK_KEXEC (MASK_LINUX)
 
-enum 
+enum
 {
     EXIT_REBOOT              = 0x01,
     EXIT_UMOUNT              = 0x02,
@@ -58,6 +60,14 @@ enum
     EXIT_KEXEC               = 0x20,
 
     EXIT_REBOOT_MASK         = (EXIT_REBOOT | EXIT_REBOOT_RECOVERY | EXIT_REBOOT_BOOTLOADER | EXIT_SHUTDOWN),
+};
+
+enum
+{
+    AUTOBOOT_NAME            = 0x00,
+    AUTOBOOT_LAST            = 0x01,
+    AUTOBOOT_FORCE_CURRENT   = 0x02,
+    AUTOBOOT_CHECK_KEYS      = 0x04,
 };
 
 struct usb_partition
@@ -79,6 +89,7 @@ struct multirom_rom
     int id;
     char *name;
     char *base_path;
+    char *icon_path;
     int type;
     int has_bootimg;
     struct usb_partition *partition;
@@ -87,22 +98,27 @@ struct multirom_rom
 struct multirom_status
 {
     int is_second_boot;
+    int is_running_in_primary_rom;
     int auto_boot_seconds;
+    int auto_boot_type;
     int colors;
     int brightness;
     int enable_adb;
     int hide_internal;
     char *int_display_name;
     int rotation;
+    int force_generic_fb;
+    float anim_duration_coef;
     struct multirom_rom *auto_boot_rom;
     struct multirom_rom *current_rom;
     struct multirom_rom **roms;
     struct usb_partition **partitions;
     char *curr_rom_part;
     struct fstab *fstab;
+    struct rcadditions rc;
 };
 
-int multirom(void);
+int multirom(const char *rom_to_boot);
 int multirom_find_base_dir(void);
 void multirom_emergency_reboot(void);
 int multirom_default_status(struct multirom_status *s);
@@ -115,35 +131,33 @@ int multirom_load_status(struct multirom_status *s);
 void multirom_import_internal(void);
 void multirom_dump_status(struct multirom_status *s);
 int multirom_save_status(struct multirom_status *s);
+void multirom_fixup_rom_name(struct multirom_rom *rom, char *name, const char *def);
 int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to_boot);
 void multirom_free_status(struct multirom_status *s);
 void multirom_free_rom(void *rom);
 int multirom_init_fb(int rotation);
-int multirom_prep_android_mounts(struct multirom_rom *rom);
-int multirom_create_media_link(void);
-int multirom_process_android_fstab(char *fstab_name);
+int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom *rom);
+int multirom_create_media_link(struct multirom_status *s);
+int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_part **fw_part);
 int multirom_get_api_level(const char *path);
 int multirom_get_rom_type(struct multirom_rom *rom);
-void multirom_take_screenshot(void);
 int multirom_get_trampoline_ver(void);
 int multirom_has_kexec(void);
 int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom);
 int multirom_get_bootloader_cmdline(struct multirom_status *s, char *str, size_t size);
 int multirom_find_file(char *res, const char *name_part, const char *path);
-int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *rom, char **cmd);
-int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *rom, char **cmd);
+int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *rom, struct kexec *kexec);
+int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *rom, struct kexec *kexec);
 int multirom_extract_bytes(const char *dst, FILE *src, size_t size);
 int multirom_update_partitions(struct multirom_status *s);
 void multirom_destroy_partition(void *part);
 void multirom_set_usb_refresh_thread(struct multirom_status *s, int run);
 void multirom_set_usb_refresh_handler(void (*handler)(void));
 int multirom_mount_usb(struct usb_partition *part);
-int multirom_mount_loop(const char *src, const char *dst, const char *fs, int flags);
-int multirom_copy_log(char *klog);
+int multirom_copy_log(char *klog, const char *dest_path_relative);
 int multirom_scan_partition_for_roms(struct multirom_status *s, struct usb_partition *p);
 struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uuid);
 int multirom_path_exists(char *base, char *filename);
-int multirom_search_last_kmsg(const char *expr);
 struct rom_info *multirom_parse_rom_info(struct multirom_status *s, struct multirom_rom *rom);
 void multirom_destroy_rom_info(struct rom_info *info);
 char **multirom_get_rom_info_str(struct rom_info *info, char *key);
@@ -151,15 +165,9 @@ int multirom_replace_aliases_cmdline(char **s, struct rom_info *i, struct multir
 int multirom_replace_aliases_root_path(char **s, struct multirom_rom *rom);
 char *multirom_get_klog(void);
 int multirom_get_battery(void);
-void multirom_set_brightness(int val);
 int multirom_run_scripts(const char *type, struct multirom_rom *rom);
 int multirom_update_rd_trampoline(const char *path);
 char *multirom_find_fstab_in_rc(const char *rcfile);
-
-#ifdef MR_DEVICE_HOOKS
-#if MR_DEVICE_HOOKS >= 1
-int mrom_hook_after_android_mounts(const char *busybox_path, const char *base_path, int type);
-#endif
-#endif
+void multirom_find_rom_icon(struct multirom_rom *rom);
 
 #endif

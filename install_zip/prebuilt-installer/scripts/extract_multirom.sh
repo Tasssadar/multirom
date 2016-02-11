@@ -25,17 +25,21 @@ fi
 
 rm "$base/boot.img-ubuntu"*
 rm "$base/infos/"*
+rm "$base/res/"*
 cp -r /tmp/multirom/* "$base/"
 chmod 755 "$base/multirom"
 chmod 755 "$base/busybox"
 chmod 750 "$base/trampoline"
 chmod 755 "$base/kexec"
 chmod 755 "$base/ntfs-3g"
+chmod 755 "$base/exfat-fuse"
 chmod 755 "$base/lz4"
 chmod 755 "$base/ubuntu-init/init"
 chmod 644 "$base/ubuntu-init/local"
 chmod 755 "$base/ubuntu-touch-init/init"
 chmod 644 "$base/ubuntu-touch-init/scripts/touch"
+chmod 755 "$base/ubuntu-touch-sysimage-init/init"
+chmod 644 "$base/ubuntu-touch-sysimage-init/scripts/touch"
 
 # This makes does not allows access for media scanner on android, but
 # still is enough for ubuntu

@@ -28,6 +28,8 @@ delete("/tmp/bootimg.cfg");
 delete("/tmp/initrd.img");
 delete("/tmp/zImage");
 delete("/tmp/boot.img");
+delete("/tmp/dtb.img");
+delete("/tmp/second.img");
 delete("/tmp/newboot.img");
 delete("/tmp/extract_multirom.sh");
 delete("/tmp/inject_boot.sh");

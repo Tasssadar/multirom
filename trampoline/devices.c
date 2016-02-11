@@ -39,19 +39,34 @@
 
 #include <private/android_filesystem_config.h>
 #include <sys/time.h>
-#include <asm/page.h>
 #include <sys/wait.h>
 
 #include <cutils/list.h>
 #include <cutils/uevent.h>
 
 #include "devices.h"
-#include "../util.h"
-#include "log.h"
+#include "../lib/util.h"
+#include "../lib/log.h"
+
+//#define DEBUG_MISSING_UEVENTS 1
+
+#ifdef DEBUG_MISSING_UEVENTS
+#define UEVENT_ERR(x...) ERROR(x)
+#else
+#define UEVENT_ERR(x...)
+#endif
+
+#if 0
+#define DEBUG(x...) INFO(x)
+#else
+#define DEBUG(x...)
+#endif
 
 #define SYSFS_PREFIX    "/sys"
-#define FIRMWARE_DIR1   "/etc/firmware"
-#define FIRMWARE_DIR2   "/vendor/firmware"
+
+static const char *firmware_dirs[] = { "/etc/firmware",
+                                       "/vendor/firmware",
+                                       "/firmware/image" };
 
 #ifdef HAVE_SELINUX
 static struct selabel_handle *sehandle;
@@ -63,7 +78,7 @@ static int device_fd = -1;
 static volatile int run_event_thread = 1;
 static pthread_t uevent_thread;
 
-static void *uevent_thread_work(void *cookie)
+static void *uevent_thread_work(UNUSED void *cookie)
 {
     struct pollfd ufd;
     int nr;
@@ -75,7 +90,7 @@ static void *uevent_thread_work(void *cookie)
         ufd.revents = 0;
         nr = poll(&ufd, 1, 0);
 
-        if (nr > 0 && ufd.revents == POLLIN)
+        if (nr > 0 && (ufd.revents & POLLIN))
             handle_device_fd();
 
         usleep(100000);
@@ -88,17 +103,17 @@ static void init_single_path(const char *path)
     int fd, dfd;
     DIR *d;
 
-    INFO("Initializing device %s", path);
+    DEBUG("Initializing device %s\n", path);
     d = opendir(path);
     if(!d)
     {
-        ERROR("Failed to open dir %s", path);
+        UEVENT_ERR("Failed to open folder %s\n", path);
         return;
     }
 
     dfd = dirfd(d);
 
-    fd = openat(dfd, "uevent", O_WRONLY);
+    fd = openat(dfd, "uevent", O_WRONLY | O_CLOEXEC);
     if(fd >= 0)
     {
         write(fd, "add\n", 4);
@@ -106,7 +121,9 @@ static void init_single_path(const char *path)
         handle_device_fd();
     }
     else
-        ERROR("Failed to open uevent at %s", path);
+    {
+        UEVENT_ERR("Failed to open uevent at %s\n", path);
+    }
 
     closedir(d);
 }
@@ -118,7 +135,7 @@ static void init_folder(const char *path)
     DIR *d = opendir(path);
     if(!d)
     {
-        ERROR("Failed to open folder %s\n", path);
+        UEVENT_ERR("Failed to open folder %s\n", path);
         return;
     }
 
@@ -143,12 +160,11 @@ static void init_folder(const char *path)
 
 void devices_init(void)
 {
-    /* is 64K enough? udev uses 16MB! */
-    device_fd = uevent_open_socket(64*1024, true);
+    /* is 256K enough? udev uses 16MB! */
+    device_fd = uevent_open_socket(256*1024, true);
     if(device_fd < 0)
         return;
 
-    fcntl(device_fd, F_SETFD, FD_CLOEXEC);
     fcntl(device_fd, F_SETFL, O_NONBLOCK);
 
     int i, len;
@@ -164,6 +180,12 @@ void devices_init(void)
             free(path);
         }
     }
+
+    // /dev/null
+    init_single_path("/sys/devices/virtual/mem/null");
+
+    // /dev/fuse
+    init_single_path("/sys/devices/virtual/misc/fuse");
 
     run_event_thread = 1;
     pthread_create(&uevent_thread, NULL, uevent_thread_work, NULL);
@@ -206,7 +228,8 @@ struct perm_node {
 
 struct platform_node {
     char *name;
-    int name_len;
+    char *path;
+    int path_len;
     struct listnode list;
 };
 
@@ -266,8 +289,8 @@ void fixup_sys_perms(const char *upath)
         if ((strlen(upath) + strlen(dp->attr) + 6) > sizeof(buf))
             return;
 
-        sprintf(buf,"/sys%s/%s", upath, dp->attr);
-        INFO("fixup %s %d %d 0%o\n", buf, dp->uid, dp->gid, dp->perm);
+        snprintf(buf, sizeof(buf), "/sys%s/%s", upath, dp->attr);
+        DEBUG("fixup %s %d %d 0%o\n", buf, dp->uid, dp->gid, dp->perm);
         chown(buf, dp->uid, dp->gid);
         chmod(buf, dp->perm);
     }
@@ -305,7 +328,7 @@ static mode_t get_device_perm(const char *path, unsigned *uid, unsigned *gid)
 }
 
 static void make_device(const char *path,
-                        const char *upath,
+                        UNUSED const char *upath,
                         int block, int major, int minor)
 {
     unsigned uid;
@@ -367,61 +390,59 @@ static int make_dir(const char *path, mode_t mode)
 }
 
 
-static void add_platform_device(const char *name)
+static void add_platform_device(const char *path)
 {
-    int name_len = strlen(name);
-    struct listnode *node;
+    int path_len = strlen(path);
     struct platform_node *bus;
+    const char *name = path;
 
-    list_for_each_reverse(node, &platform_names) {
-        bus = node_to_item(node, struct platform_node, list);
-        if ((bus->name_len < name_len) &&
-                (name[bus->name_len] == '/') &&
-                !strncmp(name, bus->name, bus->name_len))
-            /* subdevice of an existing platform, ignore it */
-            return;
+    if (!strncmp(path, "/devices/", 9)) {
+        name += 9;
+        if (!strncmp(name, "platform/", 9))
+            name += 9;
     }
 
-    INFO("adding platform device %s\n", name);
+    DEBUG("adding platform device %s (%s)\n", name, path);
 
     bus = calloc(1, sizeof(struct platform_node));
-    bus->name = strdup(name);
-    bus->name_len = name_len;
+    bus->path = strdup(path);
+    bus->path_len = path_len;
+    bus->name = bus->path + (name - path);
     list_add_tail(&platform_names, &bus->list);
 }
 
 /*
- * given a name that may start with a platform device, find the length of the
+ * given a path that may start with a platform device, find the length of the
  * platform device prefix.  If it doesn't start with a platform device, return
  * 0.
  */
-static const char *find_platform_device(const char *name)
+static struct platform_node *find_platform_device(const char *path)
 {
-    int name_len = strlen(name);
+    int path_len = strlen(path);
     struct listnode *node;
     struct platform_node *bus;
 
     list_for_each_reverse(node, &platform_names) {
         bus = node_to_item(node, struct platform_node, list);
-        if ((bus->name_len < name_len) &&
-                (name[bus->name_len] == '/') &&
-                !strncmp(name, bus->name, bus->name_len))
-            return bus->name;
+        if ((bus->path_len < path_len) &&
+                (path[bus->path_len] == '/') &&
+                !strncmp(path, bus->path, bus->path_len))
+            return bus;
     }
 
     return NULL;
 }
 
-static void remove_platform_device(const char *name)
+static void remove_platform_device(const char *path)
 {
     struct listnode *node;
     struct platform_node *bus;
 
     list_for_each_reverse(node, &platform_names) {
         bus = node_to_item(node, struct platform_node, list);
-        if (!strcmp(name, bus->name)) {
-            INFO("removing platform device %s\n", name);
-            free(bus->name);
+        if (!strcmp(path, bus->path)) {
+            DEBUG("removing platform device %s\n", bus->name);
+            free(bus->path);
             list_remove(node);
             free(bus);
             return;
@@ -507,8 +528,10 @@ static char **get_character_device_symlinks(struct uevent *uevent)
     char **links;
     int link_num = 0;
     int width;
+    struct platform_node *pdev;
 
-    if (strncmp(uevent->path, "/devices/platform/", 18))
+    pdev = find_platform_device(uevent->path);
+    if (!pdev)
         return NULL;
 
     links = malloc(sizeof(char *) * 2);
@@ -517,8 +540,8 @@ static char **get_character_device_symlinks(struct uevent *uevent)
     memset(links, 0, sizeof(char *) * 2);
 
     /* skip "/devices/platform/<driver>" */
-    parent = strchr(uevent->path + 18, '/');
-    if (!*parent)
+    parent = strchr(uevent->path + pdev->path_len, '/');
+    if (!parent)
         goto err;
 
     if (!strncmp(parent, "/usb", 4)) {
@@ -554,7 +577,7 @@ err:
 static char **parse_platform_block_device(struct uevent *uevent)
 {
     const char *device;
-    const char *path;
+    struct platform_node *pdev;
     char *slash;
     int width;
     char buf[256];
@@ -566,25 +589,25 @@ static char **parse_platform_block_device(struct uevent *uevent)
     unsigned int size;
     struct stat info;
 
+    pdev = find_platform_device(uevent->path);
+    if (!pdev)
+        return NULL;
+    device = pdev->name;
+
     char **links = malloc(sizeof(char *) * 4);
     if (!links)
         return NULL;
     memset(links, 0, sizeof(char *) * 4);
 
-    /* Drop "/devices/platform/" */
-    path = uevent->path;
-    device = path + 18;
-    device = find_platform_device(device);
-    if (!device)
-        goto err;
-
-    INFO("found platform device %s\n", device);
+    DEBUG("found platform device %s\n", device);
 
     snprintf(link_path, sizeof(link_path), "/dev/block/platform/%s", device);
 
     if (uevent->partition_name) {
         p = strdup(uevent->partition_name);
         sanitize(p);
+        if (strcmp(uevent->partition_name, p))
+            INFO("Linking partition '%s' as '%s'\n", uevent->partition_name, p);
         if (asprintf(&links[link_num], "%s/by-name/%s", link_path, p) > 0)
             link_num++;
         else
@@ -599,17 +622,13 @@ static char **parse_platform_block_device(struct uevent *uevent)
             links[link_num] = NULL;
     }
 
-    slash = strrchr(path, '/');
+    slash = strrchr(uevent->path, '/');
     if (asprintf(&links[link_num], "%s/%s", link_path, slash + 1) > 0)
         link_num++;
     else
         links[link_num] = NULL;
 
     return links;
-
-err:
-    free(links);
-    return NULL;
 }
 
 static void handle_device(const char *action, const char *devpath,
@@ -642,12 +661,12 @@ static void handle_device(const char *action, const char *devpath,
 
 static void handle_platform_device_event(struct uevent *uevent)
 {
-    const char *name = uevent->path + 18; /* length of /devices/platform/ */
+    const char *path = uevent->path;
 
     if (!strcmp(uevent->action, "add"))
-        add_platform_device(name);
+        add_platform_device(path);
     else if (!strcmp(uevent->action, "remove"))
-        remove_platform_device(name);
+        remove_platform_device(path);
 }
 
 static const char *parse_device_name(struct uevent *uevent, unsigned int len)
@@ -685,7 +704,7 @@ static void handle_block_device_event(struct uevent *uevent)
     snprintf(devpath, sizeof(devpath), "%s%s", base, name);
     make_dir(base, 0755);
 
-    if (!strncmp(uevent->path, "/devices/platform/", 18))
+    if (!strncmp(uevent->path, "/devices/", 9))
         links = parse_platform_block_device(uevent);
 
     handle_device(uevent->action, devpath, uevent->path, 1,
@@ -846,11 +865,11 @@ static int is_booting(void)
 
 static void process_firmware_event(struct uevent *uevent)
 {
-    char *root, *loading, *data, *file1 = NULL, *file2 = NULL;
-    int l, loading_fd, data_fd, fw_fd;
+    char *root, *loading, *data;
+    int l, loading_fd, data_fd, fw_fd, i;
     int booting = is_booting();
 
-    INFO("firmware: loading '%s' for '%s'\n",
+    DEBUG("firmware: loading '%s' for '%s'\n",
          uevent->firmware, uevent->path);
 
     l = asprintf(&root, SYSFS_PREFIX"%s/", uevent->path);
@@ -865,54 +884,53 @@ static void process_firmware_event(struct uevent *uevent)
     if (l == -1)
         goto loading_free_out;
 
-    l = asprintf(&file1, FIRMWARE_DIR1"/%s", uevent->firmware);
-    if (l == -1)
-        goto data_free_out;
-
-    l = asprintf(&file2, FIRMWARE_DIR2"/%s", uevent->firmware);
-    if (l == -1)
-        goto data_free_out;
-
-    loading_fd = open(loading, O_WRONLY);
+    loading_fd = open(loading, O_WRONLY | O_CLOEXEC);
     if(loading_fd < 0)
-        goto file_free_out;
+        goto data_free_out;
 
-    data_fd = open(data, O_WRONLY);
+    data_fd = open(data, O_WRONLY | O_CLOEXEC);
     if(data_fd < 0)
         goto loading_close_out;
 
 try_loading_again:
-    fw_fd = open(file1, O_RDONLY);
-    if(fw_fd < 0) {
-        fw_fd = open(file2, O_RDONLY);
-        if (fw_fd < 0) {
-            if (booting) {
-                    /* If we're not fully booted, we may be missing
-                     * filesystems needed for firmware, wait and retry.
-                     */
-                usleep(100000);
-                booting = is_booting();
-                goto try_loading_again;
-            }
-            INFO("firmware: could not open '%s' %d\n", uevent->firmware, errno);
-            write(loading_fd, "-1", 2);
-            goto data_close_out;
+    for (i = 0; i < ARRAY_SIZE(firmware_dirs); i++) {
+        char *file = NULL;
+        l = asprintf(&file, "%s/%s", firmware_dirs[i], uevent->firmware);
+        if (l == -1)
+            goto data_free_out;
+        fw_fd = open(file, O_RDONLY|O_CLOEXEC);
+        free(file);
+        if (fw_fd >= 0) {
+            if(!load_firmware(fw_fd, loading_fd, data_fd))
+                INFO("firmware: copy success { '%s', '%s' }\n", root, uevent->firmware);
+            else
+                INFO("firmware: copy failure { '%s', '%s' }\n", root, uevent->firmware);
+            break;
         }
     }
 
-    if(!load_firmware(fw_fd, loading_fd, data_fd))
-        INFO("firmware: copy success { '%s', '%s' }\n", root, uevent->firmware);
-    else
-        INFO("firmware: copy failure { '%s', '%s' }\n", root, uevent->firmware);
+    if (fw_fd < 0) {
+// disable for multirom to prevent loop
+#if 0
+        if (booting) {
+            /* If we're not fully booted, we may be missing
+             * filesystems needed for firmware, wait and retry.
+             */
+            usleep(100000);
+            booting = is_booting();
+            goto try_loading_again;
+        }
+#endif
+        INFO("firmware: could not open '%s': %s\n", uevent->firmware, strerror(errno));
+        write(loading_fd, "-1", 2);
+        goto data_close_out;
+    }
 
     close(fw_fd);
 data_close_out:
     close(data_fd);
 loading_close_out:
     close(loading_fd);
-file_free_out:
-    free(file1);
-    free(file2);
 data_free_out:
     free(data);
 loading_free_out:
@@ -936,11 +954,13 @@ static void handle_firmware_event(struct uevent *uevent)
     pid = fork();
     if (!pid) {
         process_firmware_event(uevent);
-        exit(EXIT_SUCCESS);
+        _exit(EXIT_SUCCESS);
+    } else if (pid < 0) {
+        log_event_print("could not fork to process firmware event: %s\n", strerror(errno));
     }
 }
 
-#define UEVENT_MSG_LEN  1024
+#define UEVENT_MSG_LEN  2048
 void handle_device_fd(void)
 {
     char msg[UEVENT_MSG_LEN+2];

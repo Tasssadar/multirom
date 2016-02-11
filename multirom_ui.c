@@ -23,30 +23,47 @@
 #include <errno.h>
 #include <string.h>
 
+#include "lib/framebuffer.h"
+#include "lib/input.h"
+#include "lib/log.h"
+#include "lib/listview.h"
+#include "lib/util.h"
+#include "lib/button.h"
+#include "lib/progressdots.h"
+#include "lib/workers.h"
+#include "lib/containers.h"
+#include "lib/animation.h"
+#include "lib/notification_card.h"
+#include "lib/tabview.h"
+#include "lib/colors.h"
+
 #include "multirom_ui.h"
-#include "framebuffer.h"
-#include "input.h"
-#include "log.h"
-#include "listview.h"
-#include "util.h"
-#include "button.h"
-#include "checkbox.h"
+#include "multirom_ui_themes.h"
+#include "hooks.h"
 #include "version.h"
 #include "pong.h"
-#include "progressdots.h"
-#include "multirom_ui_themes.h"
-#include "workers.h"
-
 
 static struct multirom_status *mrom_status = NULL;
 static struct multirom_rom *selected_rom = NULL;
 static volatile int exit_ui_code = -1;
-static fb_msgbox *active_msgbox = NULL;
 static volatile int loop_act = 0;
 static multirom_themes_info *themes_info = NULL;
 static multirom_theme *cur_theme = NULL;
 
 static pthread_mutex_t exit_code_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static struct auto_boot_data
+{
+    ncard_builder *b;
+    int seconds;
+    int destroy;
+    pthread_mutex_t mutex;
+} auto_boot_data = {
+    .b = NULL,
+    .seconds = 0,
+    .destroy = 0,
+    .mutex = PTHREAD_MUTEX_INITIALIZER,
+};
 
 uint32_t CLR_PRIMARY = LBLUE;
 uint32_t CLR_SECONDARY = LBLUE2;
@@ -84,8 +101,29 @@ static void list_block(char *path, int rec)
     closedir(d);
 }
 
+static void reveal_rect_alpha_step(void *data, float interpolated)
+{
+    fb_rect *r = data;
+    interpolated = 1.f - interpolated;
+    r->color = (r->color & ~(0xFF << 24)) | (((int)(0xFF*interpolated)) << 24);
+    fb_request_draw();
+}
+
 int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 {
+    if(s->auto_boot_rom && (s->auto_boot_type & AUTOBOOT_CHECK_KEYS))
+    {
+        start_input_thread_wait(1);
+        int res = is_any_key_pressed() || get_last_key() != -1;
+        stop_input_thread();
+
+        if(!res)
+        {
+            *to_boot = s->auto_boot_rom;
+            return UI_EXIT_BOOT_ROM;
+        }
+    }
+
     if(multirom_init_fb(s->rotation) < 0)
         return UI_EXIT_BOOT_ROM;
 
@@ -95,9 +133,8 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     exit_ui_code = -1;
     selected_rom = NULL;
-    active_msgbox = NULL;
 
-    multirom_ui_setup_colors(s->colors, &CLR_PRIMARY, &CLR_SECONDARY);
+    colors_select(s->colors);
     themes_info = multirom_ui_init_themes();
     if((cur_theme = multirom_ui_select_theme(themes_info, fb_width, fb_height)) == NULL)
     {
@@ -105,34 +142,41 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
         ERROR("Couldn't find theme for resolution %dx%d!\n", fb_width, fb_height);
         fb_add_text(0, 0, WHITE, SIZE_SMALL, "Couldn't find theme for resolution %dx%d!\nPress POWER to reboot.", fb_width, fb_height);
-        fb_draw();
-        fb_clear();
-        fb_close();
+        fb_force_draw();
 
         start_input_thread();
         while(wait_for_key() != KEY_POWER);
         stop_input_thread();
+
+        fb_clear();
+        fb_close();
         return UI_EXIT_REBOOT;
     }
 
     workers_start();
+    anim_init(s->anim_duration_coef);
 
-    multirom_ui_init_header();
-    multirom_ui_switch(TAB_INTERNAL);
+    multirom_ui_init_theme(TAB_INTERNAL);
 
-    add_touch_handler(&multirom_ui_touch_handler, NULL);
     start_input_thread();
     keyaction_enable(1);
-    keyaction_set_destroy_msgbox_handle(multirom_ui_destroy_msgbox);
 
-    multirom_set_brightness(s->brightness);
+    fb_set_brightness(s->brightness);
+
+    if(s->auto_boot_rom && s->auto_boot_seconds > 0 && (s->auto_boot_type & AUTOBOOT_CHECK_KEYS) == 0)
+        multirom_ui_auto_boot();
+    else
+    {
+        fb_rect *r = fb_add_rect_lvl(1000, 0, 0, fb_width, fb_height, BLACK);
+        call_anim *a = call_anim_create(r, reveal_rect_alpha_step, 500, INTERPOLATOR_ACCELERATE);
+        a->on_finished_call = fb_remove_item;
+        a->on_finished_data = r;
+        call_anim_add(a);
+    }
 
     fb_freeze(0);
 
-    if(s->auto_boot_rom && s->auto_boot_seconds > 0)
-        multirom_ui_auto_boot();
-    else
-        fb_draw();
+    fb_request_draw();
 
     while(1)
     {
@@ -146,8 +190,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
         if(loop_act & LOOP_UPDATE_USB)
         {
             multirom_find_usb_roms(mrom_status);
-            if(themes_info->data->selected_tab == TAB_USB)
-                multirom_ui_tab_rom_update_usb(themes_info->data->tab_data);
+            multirom_ui_tab_rom_update_usb();
             loop_act &= ~(LOOP_UPDATE_USB);
         }
 
@@ -156,31 +199,30 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
             loop_act &= ~(LOOP_START_PONG);
             keyaction_enable(0);
             input_push_context();
+            anim_push_context();
             fb_push_context();
 
             pong();
 
             fb_pop_context();
+            anim_pop_context();
             input_pop_context();
             keyaction_enable(1);
         }
 
         if(loop_act & LOOP_CHANGE_CLR)
         {
+            pthread_mutex_unlock(&exit_code_mutex);
             fb_freeze(1);
 
-            multirom_ui_setup_colors(s->colors, &CLR_PRIMARY, &CLR_SECONDARY);
-
-            // force redraw tab
-            int tab = themes_info->data->selected_tab;
-            themes_info->data->selected_tab = -1;
-
-            multirom_ui_destroy_tab(tab);
-            multirom_ui_switch(tab);
+            multirom_ui_destroy_theme();
+            colors_select(s->colors);
+            multirom_ui_init_theme(TAB_MISC);
 
             fb_freeze(0);
-            fb_draw();
+            fb_request_draw();
 
+            pthread_mutex_lock(&exit_code_mutex);
             loop_act &= ~(LOOP_CHANGE_CLR);
         }
 
@@ -192,70 +234,101 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     keyaction_enable(0);
     keyaction_clear();
 
-    rm_touch_handler(&multirom_ui_touch_handler, NULL);
-
-    fb_create_msgbox(500*DPI_MUL, 250*DPI_MUL, CLR_PRIMARY);
+    ncard_builder *b = ncard_create_builder();
+    ncard_set_pos(b, NCARD_POS_CENTER);
 
     switch(exit_ui_code)
     {
         case UI_EXIT_BOOT_ROM:
+        {
             *to_boot = selected_rom;
-            fb_msgbox_add_text(-1, 40*DPI_MUL, SIZE_BIG, "Booting ROM...");
-            fb_msgbox_add_text(-1, -1, SIZE_NORMAL, selected_rom->name);
+            ncard_set_title(b, "Booting...");
+
+            char buff[64];
+            snprintf(buff, sizeof(buff), "<i>%s</i>", selected_rom->name);
+            ncard_set_text(b, buff);
             break;
+        }
         case UI_EXIT_REBOOT:
+            ncard_set_text(b, "\nRebooting...\n\n");
+            break;
         case UI_EXIT_REBOOT_RECOVERY:
+            ncard_set_text(b, "\nRebooting to recovery...\n\n");
+            break;
         case UI_EXIT_REBOOT_BOOTLOADER:
-            fb_msgbox_add_text(-1, -1, SIZE_BIG, "Rebooting...");
+            ncard_set_text(b, "\nRebooting to bootloader...\n\n");
             break;
         case UI_EXIT_SHUTDOWN:
-            fb_msgbox_add_text(-1, -1, SIZE_BIG, "Shutting down...");
+            ncard_set_text(b, "\nShutting down...\n\n");
             break;
     }
 
-    fb_draw();
+    ncard_show(b, 1);
+    anim_stop(1);
     fb_freeze(1);
+    fb_force_draw();
 
+    multirom_ui_destroy_theme();
+    multirom_ui_free_themes(themes_info);
+    themes_info = NULL;
+
+    stop_input_thread();
+    workers_stop();
+
+#if MR_DEVICE_HOOKS >= 2
+    mrom_hook_before_fb_close();
+#endif
+    fb_close();
+    return exit_ui_code;
+}
+
+void multirom_ui_init_theme(int tab)
+{
+    memset(themes_info->data, 0, sizeof(multirom_theme_data));
+    themes_info->data->selected_tab = -1;
+
+    multirom_ui_init_header();
+    fb_set_background(C_BACKGROUND);
+
+    themes_info->data->tabs->on_page_changed_by_swipe = multirom_ui_switch;
+    themes_info->data->tabs->on_pos_changed = multirom_ui_change_header_selector_pos;
+
+    int i;
+    for(i = 0; i < TAB_COUNT; ++i)
+    {
+        tabview_add_page(themes_info->data->tabs, -1);
+        switch(i)
+        {
+            case TAB_USB:
+            case TAB_INTERNAL:
+                themes_info->data->tab_data[i] = multirom_ui_tab_rom_init(i);
+                break;
+            case TAB_MISC:
+                themes_info->data->tab_data[i] = multirom_ui_tab_misc_init();
+                break;
+        }
+    }
+    add_touch_handler(&tabview_touch_handler, themes_info->data->tabs);
+    tabview_update_positions(themes_info->data->tabs);
+    multirom_ui_switch(tab);
+}
+
+void multirom_ui_destroy_theme(void)
+{
     cur_theme->destroy(themes_info->data);
+
+    tabview_destroy(themes_info->data->tabs);
+    themes_info->data->tabs = NULL;
 
     int i;
     for(i = 0; i < TAB_COUNT; ++i)
     {
         button_destroy(themes_info->data->tab_btns[i]);
         themes_info->data->tab_btns[i] = NULL;
+        multirom_ui_destroy_tab(i);
     }
 
-    stop_input_thread();
-
-    multirom_ui_destroy_tab(themes_info->data->selected_tab);
-    multirom_ui_free_themes(themes_info);
-    themes_info = NULL;
-
-    workers_stop();
-
     fb_clear();
-    fb_close();
-    return exit_ui_code;
-}
-
-
-void multirom_ui_setup_colors(int clr, uint32_t *primary, uint32_t *secondary)
-{
-    static const int clrs[][2] = {
-        // Primary,   Secondary - OxAAGGBBRR
-        { LBLUE,      LBLUE2 },     // CLRS_BLUE
-        { 0xFFCC66AA, 0xFFCC89B6 }, // CLRS_PURPLE
-        { 0xFF00BD8A, 0xFF51F2C9 }, // CLRS_GREEN
-        { 0xFF008AFF, 0xFF51AEFF }, // CLRS_ORANGE
-        { 0xFF0000CC, 0xFF6363FF }, // CLRS_RED
-        { 0xFF2F5EB8, 0xFF689CFF }, // CLRS_BROWN
-    };
-
-    if(clr < 0 || clr >= (int)ARRAY_SIZE(clrs))
-        clr = 0;
-
-    *primary = clrs[clr][0];
-    *secondary = clrs[clr][1];
 }
 
 void multirom_ui_init_header(void)
@@ -263,9 +336,9 @@ void multirom_ui_init_header(void)
     cur_theme->init_header(themes_info->data);
 }
 
-void multirom_ui_header_select(int tab)
+void multirom_ui_change_header_selector_pos(float pos)
 {
-    cur_theme->header_select(themes_info->data, tab);
+    cur_theme->header_set_tab_selector_pos(themes_info->data, pos);
 }
 
 void multirom_ui_destroy_tab(int tab)
@@ -276,16 +349,21 @@ void multirom_ui_destroy_tab(int tab)
             break;
         case TAB_USB:
         case TAB_INTERNAL:
-            multirom_ui_tab_rom_destroy(themes_info->data->tab_data);
+            multirom_ui_tab_rom_destroy(themes_info->data->tab_data[tab]);
             break;
         case TAB_MISC:
-            multirom_ui_tab_misc_destroy(themes_info->data->tab_data);
+            multirom_ui_tab_misc_destroy(themes_info->data->tab_data[tab]);
             break;
         default:
             assert(0);
             break;
     }
-    themes_info->data->tab_data = NULL;
+    themes_info->data->tab_data[tab] = NULL;
+}
+
+void multirom_ui_switch_btn(void *data)
+{
+    multirom_ui_switch(*((int*)data));
 }
 
 void multirom_ui_switch(int tab)
@@ -293,29 +371,9 @@ void multirom_ui_switch(int tab)
     if(tab == themes_info->data->selected_tab)
         return;
 
-    fb_freeze(1);
-
-    multirom_ui_header_select(tab);
-
-    // destroy old tab
-    multirom_ui_destroy_tab(themes_info->data->selected_tab);
-
-    // init new tab
-    switch(tab)
-    {
-        case TAB_USB:
-        case TAB_INTERNAL:
-            themes_info->data->tab_data = multirom_ui_tab_rom_init(tab);
-            break;
-        case TAB_MISC:
-            themes_info->data->tab_data = multirom_ui_tab_misc_init();
-            break;
-    }
-
+    tabview_set_active_page(themes_info->data->tabs, tab,
+            themes_info->data->selected_tab == -1 ? 0 : 200);
     themes_info->data->selected_tab = tab;
-
-    fb_freeze(0);
-    fb_draw();
 }
 
 void multirom_ui_fill_rom_list(listview *view, int mask)
@@ -323,7 +381,6 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
     int i;
     struct multirom_rom *rom;
     void *data;
-    listview_item *it;
     char part_desc[64];
     for(i = 0; mrom_status->roms && mrom_status->roms[i]; ++i)
     {
@@ -338,102 +395,92 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
         if(rom->type == ROM_DEFAULT && mrom_status->hide_internal)
             continue;
 
-        data = rom_item_create(rom->name, rom->partition ? part_desc : NULL);
-        it = listview_add_item(view, rom->id, data);
-
-        if ((mrom_status->auto_boot_rom && rom == mrom_status->auto_boot_rom) ||
-            (!mrom_status->auto_boot_rom && rom == mrom_status->current_rom))
-        {
-            listview_select_item(view, it);
-        }
+        data = rom_item_create(rom->name, rom->partition ? part_desc : NULL, rom->icon_path);
+        listview_add_item(view, rom->id, data);
     }
-
-    if(view->items != NULL && view->selected == NULL)
-        listview_select_item(view, view->items[0]);
 }
 
-int multirom_ui_touch_handler(touch_event *ev, void *data)
+static void multirom_ui_destroy_auto_boot_data(void)
 {
-    static int touch_count = 0;
-    if(ev->changed & TCHNG_ADDED)
+    if(auto_boot_data.b)
     {
-        if(++touch_count == 4)
-        {
-            multirom_take_screenshot();
-            touch_count = 0;
-        }
-
-        multirom_ui_destroy_msgbox();
+        ncard_destroy_builder(auto_boot_data.b);
+        auto_boot_data.b = NULL;
     }
-
-    if((ev->changed & TCHNG_REMOVED) && touch_count > 0)
-        --touch_count;
-
-    return -1;
+    auto_boot_data.destroy = 1;
 }
 
-int multirom_ui_destroy_msgbox(void)
+static void multirom_ui_auto_boot_hidden(UNUSED void *data)
 {
-    if(!active_msgbox)
-        return 0;
+    pthread_mutex_lock(&auto_boot_data.mutex);
+    multirom_ui_destroy_auto_boot_data();
+    pthread_mutex_unlock(&auto_boot_data.mutex);
+}
+
+static void multirom_ui_auto_boot_now(void *data)
+{
+    multirom_ui_auto_boot_hidden(data);
 
     pthread_mutex_lock(&exit_code_mutex);
-    fb_destroy_msgbox();
-    fb_freeze(0);
-    fb_draw();
-    active_msgbox = NULL;
-    set_touch_handlers_mode(HANDLERS_FIRST);
+    selected_rom = mrom_status->auto_boot_rom;
+    exit_ui_code = UI_EXIT_BOOT_ROM;
     pthread_mutex_unlock(&exit_code_mutex);
-    return 1;
+}
+
+static void multirom_ui_auto_boot_tick(UNUSED void *data)
+{
+    char buff[128];
+
+    pthread_mutex_lock(&auto_boot_data.mutex);
+
+    if(auto_boot_data.destroy)
+    {
+        pthread_mutex_unlock(&auto_boot_data.mutex);
+        return;
+    }
+
+    if(--auto_boot_data.seconds == 0)
+    {
+        multirom_ui_destroy_auto_boot_data();
+        pthread_mutex_unlock(&auto_boot_data.mutex);
+
+        pthread_mutex_lock(&exit_code_mutex);
+        selected_rom = mrom_status->auto_boot_rom;
+        exit_ui_code = UI_EXIT_BOOT_ROM;
+        pthread_mutex_unlock(&exit_code_mutex);
+    }
+    else
+    {
+        call_anim *a = call_anim_create(NULL, NULL, 1000, INTERPOLATOR_LINEAR);
+        a->duration = 1000; // in call_anim_create, duration is multiplied by coef - we don't want that here
+        a->on_finished_call = multirom_ui_auto_boot_tick;
+        call_anim_add(a);
+
+        snprintf(buff, sizeof(buff), "\n<b>ROM:</b> <y>%s</y>\n\nBooting in %d second%s.",
+            mrom_status->auto_boot_rom->name, auto_boot_data.seconds, auto_boot_data.seconds != 1 ? "s" : "");
+        ncard_set_text(auto_boot_data.b, buff);
+        ncard_show(auto_boot_data.b, 0);
+    }
+
+    pthread_mutex_unlock(&auto_boot_data.mutex);
 }
 
 void multirom_ui_auto_boot(void)
 {
-    int seconds = mrom_status->auto_boot_seconds*1000;
-    active_msgbox = fb_create_msgbox(500*DPI_MUL, 300*DPI_MUL, CLR_PRIMARY);
+    ncard_builder *b = ncard_create_builder();
+    auto_boot_data.b = b;
+    auto_boot_data.seconds = mrom_status->auto_boot_seconds + 1;
+    auto_boot_data.destroy = 0;
 
-    fb_msgbox_add_text(-1, 40*DPI_MUL, SIZE_BIG, "Auto-boot");
-    fb_msgbox_add_text(-1, active_msgbox->h-100*DPI_MUL, SIZE_NORMAL, "ROM: %s", mrom_status->auto_boot_rom->name);
-    fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to cancel");
+    ncard_set_pos(b, NCARD_POS_CENTER);
+    ncard_set_cancelable(b, 1);
+    ncard_set_title(b, "Auto-boot");
+    ncard_add_btn(b, BTN_NEGATIVE, "Cancel", ncard_hide_callback, NULL);
+    ncard_add_btn(b, BTN_POSITIVE, "Boot now", multirom_ui_auto_boot_now, NULL);
+    ncard_set_on_hidden(b, multirom_ui_auto_boot_hidden, NULL);
+    ncard_set_from_black(b, 1);
 
-    fb_text *sec_text = fb_msgbox_add_text(-1, -1, SIZE_BIG, "%d", seconds/1000);
-
-    fb_draw();
-    fb_freeze(1);
-    set_touch_handlers_mode(HANDLERS_ALL);
-
-    while(1)
-    {
-        pthread_mutex_lock(&exit_code_mutex);
-        if(!active_msgbox)
-        {
-            pthread_mutex_unlock(&exit_code_mutex);
-            break;
-        }
-        pthread_mutex_unlock(&exit_code_mutex);
-
-        seconds -= 50;
-        if(seconds <= 0)
-        {
-            pthread_mutex_lock(&exit_code_mutex);
-            selected_rom = mrom_status->auto_boot_rom;
-            active_msgbox = NULL;
-            exit_ui_code = UI_EXIT_BOOT_ROM;
-            pthread_mutex_unlock(&exit_code_mutex);
-            fb_destroy_msgbox();
-            fb_freeze(0);
-            break;
-        }
-        else if((seconds+50)/1000 != seconds/1000)
-        {
-            sprintf(sec_text->text, "%d", seconds/1000);
-            fb_freeze(0);
-            fb_draw();
-            fb_freeze(1);
-        }
-        usleep(50000);
-    }
-    set_touch_handlers_mode(HANDLERS_FIRST);
+    multirom_ui_auto_boot_tick(NULL);
 }
 
 void multirom_ui_refresh_usb_handler(void)
@@ -443,7 +490,7 @@ void multirom_ui_refresh_usb_handler(void)
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-void multirom_ui_start_pong(int action)
+void multirom_ui_start_pong(UNUSED void *data)
 {
     pthread_mutex_lock(&exit_code_mutex);
     loop_act |= LOOP_START_PONG;
@@ -453,34 +500,29 @@ void multirom_ui_start_pong(int action)
 void *multirom_ui_tab_rom_init(int tab_type)
 {
     tab_data_roms *t = mzalloc(sizeof(tab_data_roms));
-    themes_info->data->tab_data = t;
+    themes_info->data->tab_data[tab_type] = t;
 
     t->list = mzalloc(sizeof(listview));
     t->list->item_draw = &rom_item_draw;
     t->list->item_hide = &rom_item_hide;
     t->list->item_height = &rom_item_height;
     t->list->item_destroy = &rom_item_destroy;
-    t->list->item_selected = &multirom_ui_tab_rom_selected;
     t->list->item_confirmed = &multirom_ui_tab_rom_confirmed;
-
-    t->boot_btn = mzalloc(sizeof(button));
-    list_add(t->boot_btn, &t->buttons);
 
     cur_theme->tab_rom_init(themes_info->data, t, tab_type);
 
     listview_init_ui(t->list);
+    tabview_add_item(themes_info->data->tabs, tab_type, t->list);
 
     if(tab_type == TAB_INTERNAL)
         multirom_ui_fill_rom_list(t->list, MASK_INTERNAL);
+    else
+        multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
 
     listview_update_ui(t->list);
 
     int has_roms = (int)(t->list->items == NULL);
     multirom_ui_tab_rom_set_empty((void*)t, has_roms);
-
-    t->boot_btn->clicked = &multirom_ui_tab_rom_boot_btn;
-    button_init_ui(t->boot_btn, "Boot", SIZE_BIG);
-    button_enable(t->boot_btn, !has_roms);
 
     if(tab_type == TAB_USB)
     {
@@ -493,6 +535,9 @@ void *multirom_ui_tab_rom_init(int tab_type)
 void multirom_ui_tab_rom_destroy(void *data)
 {
     multirom_set_usb_refresh_thread(mrom_status, 0);
+    pthread_mutex_lock(&exit_code_mutex);
+    loop_act &= ~(LOOP_UPDATE_USB);
+    pthread_mutex_unlock(&exit_code_mutex);
 
     tab_data_roms *t = (tab_data_roms*)data;
 
@@ -501,42 +546,24 @@ void multirom_ui_tab_rom_destroy(void *data)
 
     listview_destroy(t->list);
 
-    fb_rm_text(t->rom_name);
-
     if(t->usb_prog)
         progdots_destroy(t->usb_prog);
 
     free(t);
 }
 
-void multirom_ui_tab_rom_selected(listview_item *prev, listview_item *now)
+void multirom_ui_tab_rom_confirmed(UNUSED listview_item *it)
 {
-    struct multirom_rom *rom = multirom_get_rom_by_id(mrom_status, now->id);
-    if(!rom || !themes_info->data->tab_data)
-        return;
-
-    tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data;
-
-    free(t->rom_name->text);
-    t->rom_name->text = malloc(strlen(rom->name)+1);
-    strcpy(t->rom_name->text, rom->name);
-
-    cur_theme->center_rom_name(t, rom->name);
-
-    fb_draw();
+    multirom_ui_tab_rom_boot();
 }
 
-void multirom_ui_tab_rom_confirmed(listview_item *it)
+void multirom_ui_tab_rom_boot(void)
 {
-    multirom_ui_tab_rom_boot_btn(0);
-}
-
-void multirom_ui_tab_rom_boot_btn(int action)
-{
-    if(!themes_info->data->tab_data)
+    int cur_tab = themes_info->data->selected_tab;
+    if(!themes_info->data->tab_data[cur_tab])
         return;
 
-    tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data;
+    tab_data_roms *t = themes_info->data->tab_data[cur_tab];
     if(!t->list->selected)
         return;
 
@@ -544,51 +571,39 @@ void multirom_ui_tab_rom_boot_btn(int action)
     if(!rom)
         return;
 
+    int error = 0;
+    ncard_builder *b = ncard_create_builder();
+    ncard_set_pos(b, NCARD_POS_CENTER);
+    ncard_add_btn(b, BTN_NEGATIVE, "ok", ncard_hide_callback, NULL);
+    ncard_set_cancelable(b, 1);
+    ncard_set_title(b, "Error");
+
     int m = M(rom->type);
     if(m & MASK_UNSUPPORTED)
     {
-        active_msgbox = fb_create_msgbox(550*DPI_MUL, 360*DPI_MUL, DRED);
-        fb_msgbox_add_text(-1, 30*DPI_MUL, SIZE_BIG, "Error");
-        fb_msgbox_add_text(-1, 90*DPI_MUL, SIZE_NORMAL, "Unsupported ROM type.");
-        fb_msgbox_add_text(-1, 180*DPI_MUL, SIZE_NORMAL, "See XDA thread for more info.");
-        fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to close");
-
-        fb_draw();
-        fb_freeze(1);
-        set_touch_handlers_mode(HANDLERS_ALL);
-        return;
+        ncard_set_text(b, "Unsupported ROM type, see XDA thread for more info!");
+        error = 1;
     }
-
-    if (((m & MASK_KEXEC) || ((m & MASK_ANDROID) && rom->has_bootimg)) &&
-        multirom_has_kexec() != 0)
+    else if (((m & MASK_KEXEC) || ((m & MASK_ANDROID) && rom->has_bootimg)) &&
+        !multirom_has_kexec())
     {
-        active_msgbox = fb_create_msgbox(550*DPI_MUL, 360*DPI_MUL, DRED);
-        fb_msgbox_add_text(-1, 30*DPI_MUL, SIZE_BIG, "Error");
-        fb_msgbox_add_text(-1, 90*DPI_MUL, SIZE_NORMAL, "Kexec-hardboot support");
-        fb_msgbox_add_text(-1, 125*DPI_MUL, SIZE_NORMAL, "required to boot this ROM.");
-        fb_msgbox_add_text(-1, 180*DPI_MUL, SIZE_NORMAL, "Use kernel with");
-        fb_msgbox_add_text(-1, 215*DPI_MUL, SIZE_NORMAL, "kexec-hardboot support.");
-        fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to close");
-
-        fb_draw();
-        fb_freeze(1);
-        set_touch_handlers_mode(HANDLERS_ALL);
-        return;
+        ncard_set_text(b, "Kexec-hardboot support is required to boot this ROM.\n\n"
+                "Install kernel with kexec-hardboot support to your Internal ROM!");
+        error = 1;
     }
-
-    if((m & MASK_KEXEC) && strchr(rom->name, ' '))
+    else if((m & MASK_KEXEC) && strchr(rom->name, ' '))
     {
-        active_msgbox = fb_create_msgbox(550*DPI_MUL, 360*DPI_MUL, DRED);
-        fb_msgbox_add_text(-1, 30*DPI_MUL, SIZE_BIG, "Error");
-        fb_msgbox_add_text(-1, 90*DPI_MUL, SIZE_NORMAL, "ROM's name contains spaces");
-        fb_msgbox_add_text(-1, 180*DPI_MUL, SIZE_NORMAL, "Remove spaces from ROM's name");
-        fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to close");
+        ncard_set_text(b, "ROM's name contains spaces. Please remove spaces from this ROM's name");
+        error = 1;
+    }
 
-        fb_draw();
-        fb_freeze(1);
-        set_touch_handlers_mode(HANDLERS_ALL);
+    if(error)
+    {
+        ncard_show(b, 1);
         return;
     }
+    else
+        ncard_destroy_builder(b);
 
     pthread_mutex_lock(&exit_code_mutex);
     selected_rom = rom;
@@ -596,22 +611,19 @@ void multirom_ui_tab_rom_boot_btn(int action)
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-void multirom_ui_tab_rom_update_usb(void *data)
+void multirom_ui_tab_rom_update_usb(void)
 {
-    tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data;
+    tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data[TAB_USB];
     listview_clear(t->list);
-
-    t->rom_name->text = realloc(t->rom_name->text, 1);
-    t->rom_name->text[0] = 0;
 
     multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
     listview_update_ui(t->list);
 
-    multirom_ui_tab_rom_set_empty(data, (int)(t->list->items == NULL));
-    fb_draw();
+    multirom_ui_tab_rom_set_empty(t, (int)(t->list->items == NULL));
+    fb_request_draw();
 }
 
-void multirom_ui_tab_rom_refresh_usb(int action)
+void multirom_ui_tab_rom_refresh_usb(UNUSED int action)
 {
     multirom_update_partitions(mrom_status);
 }
@@ -621,34 +633,36 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
     assert(empty == 0 || empty == 1);
 
     tab_data_roms *t = (tab_data_roms*)data;
-    int width = cur_theme->get_tab_width(themes_info->data);
-
-    static const char *str[] = { "Select ROM to boot:", "No ROMs in this location!" };
-    t->title_text->head.x = center_x(t->list->x, width, SIZE_BIG, str[empty]);
-    t->title_text->text = realloc(t->title_text->text, strlen(str[empty])+1);
-    strcpy(t->title_text->text, str[empty]);
 
     if(t->boot_btn)
         button_enable(t->boot_btn, !empty);
 
     if(empty && !t->usb_text)
     {
-        const int line_len = 37;
-        static const char *txt = "This list is refreshed automagically,\njust plug in the USB drive and  wait.";
-        int x = t->list->x + (width/2 - (line_len*ISO_CHAR_WIDTH*SIZE_NORMAL)/2);
-        int y = center_y(t->list->y, t->list->h, SIZE_NORMAL);
-        t->usb_text = fb_add_text(x, y, WHITE, SIZE_NORMAL, txt);
-        list_add(t->usb_text, &t->ui_elements);
+        fb_text_proto *p = fb_text_create(0, 0, C_TEXT, SIZE_NORMAL, "This list is refreshed automagically, just plug in the USB drive and wait.");
+        p->wrap_w = t->list->w - 100*DPI_MUL;
+        p->justify = JUSTIFY_CENTER;
+        t->usb_text = fb_text_finalize(p);
+        list_add(&t->ui_elements, t->usb_text);
+        tabview_add_item(themes_info->data->tabs, TAB_USB, t->usb_text);
 
-        x = t->list->x + ((width/2) - (PROGDOTS_W/2));
-        t->usb_prog = progdots_create(x, y+100*DPI_MUL);
+        center_text(t->usb_text, t->list->x, -1, t->list->w, -1);
+        t->usb_text->y = t->list->y + t->list->h*0.2;
+
+        int x = t->list->x + ((t->list->w/2) - (PROGDOTS_W/2));
+        t->usb_prog = progdots_create(x, t->usb_text->y+100*DPI_MUL);
+        tabview_add_item(themes_info->data->tabs, TAB_USB, t->usb_prog->rect);
+        tabview_add_item(themes_info->data->tabs, TAB_USB, t->usb_prog);
     }
     else if(!empty && t->usb_text)
     {
+        tabview_rm_item(themes_info->data->tabs, TAB_USB, t->usb_prog->rect);
+        tabview_rm_item(themes_info->data->tabs, TAB_USB, t->usb_prog);
         progdots_destroy(t->usb_prog);
         t->usb_prog = NULL;
 
-        list_rm(t->usb_text, &t->ui_elements, &fb_remove_item);
+        tabview_rm_item(themes_info->data->tabs, TAB_USB, t->usb_text);
+        list_rm(&t->ui_elements, t->usb_text, &fb_remove_item);
         t->usb_text = NULL;
     }
 }
@@ -670,8 +684,10 @@ void multirom_ui_tab_misc_destroy(void *data)
     free(t);
 }
 
-void multirom_ui_tab_misc_change_clr(int clr)
+void multirom_ui_tab_misc_change_clr(void *data)
 {
+    int clr = *((int*)data);
+
     if((loop_act & LOOP_CHANGE_CLR) || mrom_status->colors == clr)
         return;
 
@@ -681,28 +697,27 @@ void multirom_ui_tab_misc_change_clr(int clr)
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-void multirom_ui_reboot_btn(int action)
+void multirom_ui_reboot_btn(void *data)
 {
+    int action = *((int*)data);
     pthread_mutex_lock(&exit_code_mutex);
     exit_ui_code = action;
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
-void multirom_ui_tab_misc_copy_log(int action)
+void multirom_ui_tab_misc_copy_log(UNUSED void *data)
 {
     multirom_dump_status(mrom_status);
 
-    int res = multirom_copy_log(NULL);
+    int res = multirom_copy_log(NULL, "../multirom_log.txt");
 
-    static const char *text[] = { "Failed to copy log to sdcard!", "Successfully copied error log!" };
+    static const char *text[] = { "Failed to copy log to sdcard!", "Error log was saved to:\n\n<s>/sdcard/multirom_log.txt</s>" };
 
-    active_msgbox = fb_create_msgbox(550*DPI_MUL, 260*DPI_MUL, res ? DRED : CLR_PRIMARY);
-    fb_msgbox_add_text(-1, 50*DPI_MUL, SIZE_NORMAL, (char*)text[res+1]);
-    if(res == 0)
-        fb_msgbox_add_text(-1, -1, SIZE_NORMAL, "/sdcard/multirom/error.txt");
-    fb_msgbox_add_text(-1, active_msgbox->h-60*DPI_MUL, SIZE_NORMAL, "Touch anywhere to close");
-
-    fb_draw();
-    fb_freeze(1);
-    set_touch_handlers_mode(HANDLERS_ALL);
+    ncard_builder *b = ncard_create_builder();
+    ncard_set_pos(b, NCARD_POS_CENTER);
+    ncard_add_btn(b, BTN_NEGATIVE, "ok", ncard_hide_callback, NULL);
+    ncard_set_title(b, "Save error log");
+    ncard_set_text(b, text[res+1]);
+    ncard_set_cancelable(b, 1);
+    ncard_show(b, 1);
 }

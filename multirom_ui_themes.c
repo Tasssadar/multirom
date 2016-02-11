@@ -18,19 +18,18 @@
 #include "multirom_ui.h"
 #include "multirom_ui_themes.h"
 #include "multirom.h"
-#include "util.h"
-#include "log.h"
+#include "lib/util.h"
+#include "lib/log.h"
 
 multirom_themes_info *multirom_ui_init_themes(void)
 {
     multirom_themes_info *i = mzalloc(sizeof(multirom_themes_info));
 
     i->data = mzalloc(sizeof(multirom_theme_data));
-    i->data->selected_tab = -1;
 
 #define ADD_THEME(RES) \
     extern struct multirom_theme theme_info_ ## RES; \
-    list_add(&theme_info_ ## RES, &i->themes);
+    list_add(&i->themes, &theme_info_ ## RES);
 
     // universal themes which scale according to DPI_MUL
     ADD_THEME(landscape);

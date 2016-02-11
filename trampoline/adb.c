@@ -29,8 +29,8 @@
 #include <linux/loop.h>
 
 #include "adb.h"
-#include "../util.h"
-#include "log.h"
+#include "../lib/util.h"
+#include "../lib/log.h"
 
 static pthread_t adb_thread;
 static volatile int run_thread = 0;
@@ -46,6 +46,7 @@ static char * const ENV[] = {
     "ANDROID_DATA=/data",
     "EXTERNAL_STORAGE=/sdcard",
     "ANDROID_PROPERTY_WORKSPACE=8,49152",
+    "SHELL=/mrom_bin/sh",
 
     NULL
 };
@@ -55,7 +56,7 @@ static void *adb_thread_work(void *mrom_path)
     int enabled = adb_is_enabled((char*)mrom_path);
     free(mrom_path);
 
-    if(enabled != 0)
+    if(enabled == 0)
         return NULL;
 
     adb_init_usb();
@@ -72,8 +73,9 @@ static void *adb_thread_work(void *mrom_path)
         adb_pid = fork();
         if(adb_pid == 0) // child
         {
-            setsid();
             umask(077);
+            setsid();
+            stdio_to_null();
             setpgid(0, getpid());
 
             static char * const cmd[] = { adbd_path, NULL };
@@ -83,8 +85,7 @@ static void *adb_thread_work(void *mrom_path)
         else
         {
             int status = 0;
-            while(waitpid(adb_pid, &status, WNOHANG) == 0)
-                usleep(300000);
+            waitpid(adb_pid, &status, 0);
         }
         usleep(300000);
     }
@@ -127,6 +128,10 @@ void adb_quit(void)
 
 void adb_init_usb(void)
 {
+    mkdir_with_perms("/dev/usb-ffs", 0770, "shell", "shell");
+    mkdir_with_perms("/dev/usb-ffs/adb", 0770, "shell", "shell");
+    mount("adb", "/dev/usb-ffs/adb", "functionfs", 0, "uid=2000,gid=2000");
+
     write_file("/sys/class/android_usb/android0/enable", "0");
 
     char serial[64] = { 0 };
@@ -136,12 +141,14 @@ void adb_init_usb(void)
     // for all devices, so I guess it is universal
     write_file("/sys/class/android_usb/android0/idVendor", "18d1");
     write_file("/sys/class/android_usb/android0/idProduct", "d001");
+    write_file("/sys/class/android_usb/android0/f_ffs/aliases", "adb");
     write_file("/sys/class/android_usb/android0/functions", "adb");
     write_file("/sys/class/android_usb/android0/iManufacturer", PRODUCT_MANUFACTURER);
     write_file("/sys/class/android_usb/android0/iProduct", PRODUCT_MODEL);
     write_file("/sys/class/android_usb/android0/iSerial", serial);
 
     write_file("/sys/class/android_usb/android0/enable", "1");
+    write_file("/sys/devices/platform/android_usb/usb_function_switch", "3");
 }
 
 int adb_init_busybox(void)
@@ -189,11 +196,15 @@ void adb_cleanup(void)
 
     umount("/dev/pts");
     rmdir("/dev/pts");
+
+    umount("/dev/usb-ffs/adb");
+    rmdir("/dev/usb-ffs/adb");
+    rmdir("/dev/usb-ffs");
 }
 
 int adb_get_serial(char *serial, int maxlen)
 {
-    FILE *f = fopen("/proc/cmdline", "r");
+    FILE *f = fopen("/proc/cmdline", "re");
     if(!f)
         return -1;
 
@@ -225,5 +236,5 @@ int adb_is_enabled(char *mrom_path)
     char *cmd[] = { busybox_path, "grep", "^enable_adb=1$", cfg, NULL };
     sprintf(cfg, "%s/multirom.ini", mrom_path);
 
-    return run_cmd(cmd) == 0 ? 0 : -1;
+    return run_cmd(cmd) == 0 ? 1 : 0;
 }
