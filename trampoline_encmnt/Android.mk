@@ -27,3 +27,14 @@ LOCAL_SRC_FILES := \
 include $(multirom_local_path)/device_defines.mk
 
 include $(BUILD_EXECUTABLE)
+
+include $(CLEAR_VARS)
+
+LOCAL_MODULE := libmultirom_fake_properties
+LOCAL_MODULE_TAGS := eng
+LOCAL_C_INCLUDES += $(multirom_local_path)
+
+LOCAL_SRC_FILES := fake_properties.c
+
+include $(multirom_local_path)/device_defines.mk
+include $(BUILD_SHARED_LIBRARY)

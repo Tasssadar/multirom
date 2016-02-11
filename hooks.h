@@ -41,6 +41,11 @@ void mrom_hook_fixup_bootimg_cmdline(char *bootimg_cmdline, size_t bootimg_cmdli
 int mrom_hook_has_kexec(void);
 #endif
 
+#if MR_DEVICE_HOOKS >= 6
+void tramp_hook_encryption_setup(void);
+void tramp_hook_encryption_cleanup(void);
+#endif
+
 #endif /* MR_DEVICE_HOOKS */
 
 #endif /* MR_DEVICE_HOOKS_H */
