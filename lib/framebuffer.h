@@ -21,6 +21,7 @@
 #include <linux/fb.h>
 #include <stdarg.h>
 #include <pthread.h>
+#include <string.h>
 
 #if defined(RECOVERY_BGRA) || defined(RECOVERY_RGBX)
 #define PIXEL_SIZE 4

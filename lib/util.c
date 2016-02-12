@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#define _GNU_SOURCE
 
 #include <stdarg.h>
 #include <stdlib.h>
@@ -23,7 +24,6 @@
 #include <errno.h>
 #include <time.h>
 #include <dirent.h>
-#include <fcntl.h>
 #include <cutils/android_reboot.h>
 #include <unistd.h>
 

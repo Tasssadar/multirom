@@ -14,7 +14,7 @@ endif
 
 multirom_extra_dep :=
 ifeq ($(MR_ENCRYPTION),true)
-	multirom_extra_dep += trampoline_encmnt linker
+	multirom_extra_dep += trampoline_encmnt linker libmultirom_fake_properties
 else
 	MR_ENCRYPTION := false
 endif
@@ -59,6 +59,7 @@ $(MULTIROM_ZIP_TARGET): multirom trampoline signapk bbootimg mrom_kexec_static m
 		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/libm.so $(MULTIROM_INST_DIR)/multirom/enc/; \
 		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/libstdc++.so $(MULTIROM_INST_DIR)/multirom/enc/; \
 		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/libc++.so $(MULTIROM_INST_DIR)/multirom/enc/; \
+		cp -a $(TARGET_OUT_SHARED_LIBRARIES)/libmultirom_fake_properties.so $(MULTIROM_INST_DIR)/multirom/enc/; \
 		if [ -n "$(MR_ENCRYPTION_SETUP_SCRIPT)" ]; then sh "$(ANDROID_BUILD_TOP)/$(MR_ENCRYPTION_SETUP_SCRIPT)" "$(ANDROID_BUILD_TOP)" "$(MULTIROM_INST_DIR)/multirom/enc"; fi; \
 	fi
 

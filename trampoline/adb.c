@@ -27,7 +27,9 @@
 #include <sys/mount.h>
 #include <sys/klog.h>
 #include <linux/loop.h>
+#include <unistd.h>
 
+#include <fcntl.h>
 #include "adb.h"
 #include "../lib/util.h"
 #include "../lib/log.h"
