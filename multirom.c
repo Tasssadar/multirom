@@ -2197,6 +2197,10 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
     if(!strstr(cmdline, " mrom_kexecd=1") && sizeof(cmdline)-strlen(cmdline)-1 >= sizeof("mrom_kexecd=1"))
         strcat(cmdline, "mrom_kexecd=1");
 
+#if MR_DEVICE_HOOKS >= 6
+    mrom_hook_fixup_full_cmdline(cmdline, sizeof(cmdline));
+#endif
+
     kexec_add_arg(kexec, cmdline);
 
     res = 0;
