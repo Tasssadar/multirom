@@ -1,4 +1,5 @@
 # MultiROM
+ifeq ($(TARGET_RECOVERY_IS_MULTIROM),true)
 LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
@@ -77,3 +78,5 @@ endif
 
 # libmultirom
 include $(multirom_local_path)/lib/Android.mk
+
+endif
