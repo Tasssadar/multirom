@@ -77,6 +77,16 @@ static int impl_open(struct framebuffer *fb)
     fb->vi.red.msb_right = 0;
     fb->vi.transp.offset  = 0;
     fb->vi.transp.length  = 0;
+#elif defined(RECOVERY_ABGR)
+    INFO("Pixel format: ABGR_8888\n");
+    fb->vi.red.offset     = 0;
+    fb->vi.red.length     = 8;
+    fb->vi.green.offset   = 8;
+    fb->vi.green.length   = 8;
+    fb->vi.blue.offset    = 16;
+    fb->vi.blue.length    = 8;
+    fb->vi.transp.offset  = 24;
+    fb->vi.transp.length  = 8;
 #else
 #error "Unknown pixel format"
 #endif
