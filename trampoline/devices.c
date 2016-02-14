@@ -606,6 +606,7 @@ static char **parse_platform_block_device(struct uevent *uevent)
     if (uevent->partition_name) {
         p = strdup(uevent->partition_name);
         sanitize(p);
+        DEBUG("Linking partition '%s' as '%s', %s/by-name/%s\n", uevent->partition_name, p, link_path, p);
         if (strcmp(uevent->partition_name, p))
             INFO("Linking partition '%s' as '%s'\n", uevent->partition_name, p);
         if (asprintf(&links[link_num], "%s/by-name/%s", link_path, p) > 0)
