@@ -29,6 +29,7 @@
 #include <errno.h>
 
 #include "framebuffer.h"
+#include "framebuffer_qcom_overlay.h"
 #include "log.h"
 #include "util.h"
 
@@ -38,37 +39,6 @@
 
 #define ALIGN(x, align) (((x) + ((align)-1)) & ~((align)-1))
 #define MAX_DISPLAY_DIM  2048
-#define NUM_BUFFERS 3
-
-struct fb_qcom_overlay_mem_info {
-    uint8_t *mem_buf;
-    int size;
-    int ion_fd;
-    int mem_fd;
-    int offset;
-    struct ion_handle_data handle_data;
-};
-
-struct fb_qcom_vsync {
-    int fb_fd;
-    int enabled;
-    volatile int _run_thread;
-    pthread_t thread;
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
-    struct timespec time;
-};
-
-struct fb_qcom_overlay_data {
-    struct fb_qcom_overlay_mem_info mem_info[NUM_BUFFERS];
-    struct fb_qcom_vsync *vsync;
-    int active_mem;
-    int overlayL_id;
-    int overlayR_id;
-    int leftSplit;
-    int rightSplit;
-    int width;
-};
 
 #define VSYNC_PREFIX "VSYNC="
 
@@ -255,6 +225,29 @@ static int isDisplaySplit(struct fb_qcom_overlay_data *data)
         return 1;
 
     return 0;
+}
+
+static void has_roi_merge(struct fb_qcom_overlay_data *data)
+{
+    char temp[128];
+    FILE* fp;
+    int found = 0;
+    
+    fp = fopen("/sys/class/graphics/fb0/msm_fb_panel_info", "re");
+    if(fp)
+    {
+        found |= FILE_FOUND;
+        while(fgets(temp, sizeof(temp), fp) != NULL)
+        {
+            if((strstr(temp, "roi_merge")) != NULL)
+                found |= ROI_MERGE;
+            if((strstr(temp, "pu_en")) != NULL)
+                found |= PARTIAL_UPDATE;
+        }
+        fclose(fp);
+    }
+    
+    data->roi_merge = found;
 }
 
 static int free_ion_mem(struct fb_qcom_overlay_data *data)
@@ -461,7 +454,6 @@ static int allocate_overlay(struct fb_qcom_overlay_data *data, int fd, int width
 static int free_overlay(struct fb_qcom_overlay_data *data, int fd)
 {
     int ret = 0;
-    struct mdp_display_commit ext_commit;
 
     if(!isDisplaySplit(data))
     {
@@ -501,13 +493,42 @@ static int free_overlay(struct fb_qcom_overlay_data *data, int fd)
         }
     }
 
-    memset(&ext_commit, 0, sizeof(struct mdp_display_commit));
-    ext_commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+    if(data->roi_merge > 1)
+    {
+        struct mdp_display_commit_lr ext_commit_lr;
+        
+        memset(&ext_commit_lr, 0, sizeof(struct mdp_display_commit_lr));
+        ext_commit_lr.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+        
+        data->overlayL_id = MSMFB_NEW_REQUEST;
+        data->overlayR_id = MSMFB_NEW_REQUEST;
+        
+        ret = ioctl(fd, MSMFB_DISPLAY_COMMIT_LR, &ext_commit_lr);
+    }
+    else if(data->roi_merge == 1)
+    {
+        struct mdp_display_commit_s ext_commit_s;
+        
+        memset(&ext_commit_s, 0, sizeof(struct mdp_display_commit_s));
+        ext_commit_s.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+        
+        data->overlayL_id = MSMFB_NEW_REQUEST;
+        data->overlayR_id = MSMFB_NEW_REQUEST;
+        
+        ret = ioctl(fd, MSMFB_DISPLAY_COMMIT_S, &ext_commit_s);
+    }
+    else
+    {
+        struct mdp_display_commit_n ext_commit_n;
+        memset(&ext_commit_n, 0, sizeof(struct mdp_display_commit_n));
+        ext_commit_n.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+        
+        data->overlayL_id = MSMFB_NEW_REQUEST;
+        data->overlayR_id = MSMFB_NEW_REQUEST;
+        
+        ret = ioctl(fd, MSMFB_DISPLAY_COMMIT_N, &ext_commit_n);
+    }
 
-    data->overlayL_id = MSMFB_NEW_REQUEST;
-    data->overlayR_id = MSMFB_NEW_REQUEST;
-
-    ret = ioctl(fd, MSMFB_DISPLAY_COMMIT, &ext_commit);
     if(ret < 0)
     {
         ERROR("Clear MSMFB_DISPLAY_COMMIT failed!");
@@ -526,6 +547,7 @@ static int impl_open(struct framebuffer *fb)
     data->leftSplit = data->width / 2;
 
     setDisplaySplit(data);
+    has_roi_merge(data);
 
 #ifdef TW_SCREEN_BLANK_ON_BOOT
     ioctl(fb->fd, FBIOBLANK, FB_BLANK_POWERDOWN);
@@ -565,7 +587,6 @@ static int impl_update(struct framebuffer *fb)
 {
     int ret = 0;
     struct msmfb_overlay_data ovdataL, ovdataR;
-    struct mdp_display_commit ext_commit;
     struct fb_qcom_overlay_data *data = fb->impl_data;
     struct fb_qcom_overlay_mem_info *info = &data->mem_info[data->active_mem];
 
@@ -631,18 +652,43 @@ static int impl_update(struct framebuffer *fb)
         }
     }
 
-    memset(&ext_commit, 0, sizeof(struct mdp_display_commit));
-    ext_commit.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+    if(data->roi_merge > 1)
+    {
+        struct mdp_display_commit_lr ext_commit_lr;
+        memset(&ext_commit_lr, 0, sizeof(struct mdp_display_commit_lr));
+        ext_commit_lr.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+        
+        fb_qcom_vsync_wait(data->vsync);
+        
+        ret = ioctl(fb->fd, MSMFB_DISPLAY_COMMIT_LR, &ext_commit_lr);
+    }
+    else if(data->roi_merge == 1)
+    {
+        struct mdp_display_commit_s ext_commit_s;
+        memset(&ext_commit_s, 0, sizeof(struct mdp_display_commit_s));
+        ext_commit_s.flags = MDP_DISPLAY_COMMIT_OVERLAY;
 
-    fb_qcom_vsync_wait(data->vsync);
+        fb_qcom_vsync_wait(data->vsync);
 
-    ret = ioctl(fb->fd, MSMFB_DISPLAY_COMMIT, &ext_commit);
+        ret = ioctl(fb->fd, MSMFB_DISPLAY_COMMIT_S, &ext_commit_s);
+    }
+    else
+    {
+        struct mdp_display_commit_n ext_commit_n;
+        memset(&ext_commit_n, 0, sizeof(struct mdp_display_commit_n));
+        ext_commit_n.flags = MDP_DISPLAY_COMMIT_OVERLAY;
+
+        fb_qcom_vsync_wait(data->vsync);
+
+        ret = ioctl(fb->fd, MSMFB_DISPLAY_COMMIT_N, &ext_commit_n);
+    }
+    
     if(ret < 0)
     {
         ERROR("overlay_display_frame failed, overlay commit Failed\n!");
         return -1;
     }
-
+    
     if(++data->active_mem >= NUM_BUFFERS)
         data->active_mem = 0;
 
