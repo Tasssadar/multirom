@@ -576,6 +576,19 @@ err:
 
 static char **parse_platform_block_device(struct uevent *uevent)
 {
+#ifdef MR_DEV_BLOCK_BOOTDEVICE
+    #define DEV_BLOCK_BOOTDEVICE "/dev/block/bootdevice" // add '/dev/block/bootdevice/...' support
+    #define LINKS_NUM_OF_SYMLINKS 8 // used to be hardcoded 4 below
+        // old: 0- /dev/block/platform/%s/by-name/<name>
+        // old: 1- /dev/block/platform/%s/by-num/p__
+        // old: 2- /dev/block/platform/%s/<mmcblk>
+        // add: 3- /dev/block/bootdevice/by-name/<name>
+        // add: 4- /dev/block/bootdevice/by-num/p__
+        // add: 5- /dev/block/bootdevice/<mmcblk>
+#else
+    #define LINKS_NUM_OF_SYMLINKS 4 // used to be hardcoded 4 below
+#endif
+
     const char *device;
     struct platform_node *pdev;
     char *slash;
@@ -594,10 +607,10 @@ static char **parse_platform_block_device(struct uevent *uevent)
         return NULL;
     device = pdev->name;
 
-    char **links = malloc(sizeof(char *) * 4);
+    char **links = malloc(sizeof(char *) * LINKS_NUM_OF_SYMLINKS);
     if (!links)
         return NULL;
-    memset(links, 0, sizeof(char *) * 4);
+    memset(links, 0, sizeof(char *) * LINKS_NUM_OF_SYMLINKS);
 
     DEBUG("found platform device %s\n", device);
 
@@ -607,12 +620,18 @@ static char **parse_platform_block_device(struct uevent *uevent)
         p = strdup(uevent->partition_name);
         sanitize(p);
         DEBUG("Linking partition '%s' as '%s', %s/by-name/%s\n", uevent->partition_name, p, link_path, p);
-        if (strcmp(uevent->partition_name, p))
+        if (strcmp(uevent->partition_name, p) == 0) // <--used to be missing ! or == 0
             INFO("Linking partition '%s' as '%s'\n", uevent->partition_name, p);
         if (asprintf(&links[link_num], "%s/by-name/%s", link_path, p) > 0)
             link_num++;
         else
             links[link_num] = NULL;
+#ifdef MR_DEV_BLOCK_BOOTDEVICE
+        if (asprintf(&links[link_num], "%s/by-name/%s", DEV_BLOCK_BOOTDEVICE, p) > 0)
+            link_num++;
+        else
+            links[link_num] = NULL;
+#endif
         free(p);
     }
 
@@ -621,6 +640,12 @@ static char **parse_platform_block_device(struct uevent *uevent)
             link_num++;
         else
             links[link_num] = NULL;
+#ifdef MR_DEV_BLOCK_BOOTDEVICE
+        if (asprintf(&links[link_num], "%s/by-num/p%d", DEV_BLOCK_BOOTDEVICE, uevent->partition_num) > 0)
+            link_num++;
+        else
+            links[link_num] = NULL;
+#endif
     }
 
     slash = strrchr(uevent->path, '/');
@@ -628,6 +653,12 @@ static char **parse_platform_block_device(struct uevent *uevent)
         link_num++;
     else
         links[link_num] = NULL;
+#ifdef MR_DEV_BLOCK_BOOTDEVICE
+    if (asprintf(&links[link_num], "%s/%s", DEV_BLOCK_BOOTDEVICE, slash + 1) > 0)
+        link_num++;
+    else
+        links[link_num] = NULL;
+#endif
 
     return links;
 }
