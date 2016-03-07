@@ -33,6 +33,11 @@ ifneq ($(MR_POPULATE_BY_NAME_PATH),)
     LOCAL_CFLAGS += -DMR_POPULATE_BY_NAME_PATH=\"$(MR_POPULATE_BY_NAME_PATH)\"
 endif
 
+# also add /dev/block/bootdevice symlinks
+ifeq ($(MR_DEV_BLOCK_BOOTDEVICE),true)
+    LOCAL_CFLAGS += -DMR_DEV_BLOCK_BOOTDEVICE
+endif
+
 ifneq ($(MR_DEVICE_HOOKS),)
 ifeq ($(MR_DEVICE_HOOKS_VER),)
     $(info MR_DEVICE_HOOKS is set but MR_DEVICE_HOOKS_VER is not specified!)
