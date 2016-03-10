@@ -49,6 +49,7 @@ static int get_footer_from_opts(char *output, size_t output_size, const char *op
     static const char *names[] = {
         "encryptable=",
         "forceencrypt=",
+        "forcefdeorfbe=",
         NULL
     };
 
