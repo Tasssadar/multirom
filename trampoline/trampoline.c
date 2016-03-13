@@ -36,6 +36,10 @@
 #include "../hooks.h"
 #include "encryption.h"
 
+#ifdef MR_POPULATE_BY_NAME_PATH
+	#include "Populate_ByName_using_emmc.c"
+#endif
+
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 #define REALDATA "/realdata"
 #define MULTIROM_BIN "multirom"
@@ -335,6 +339,11 @@ int main(int argc, char *argv[])
         ERROR("Waiting too long for fb0");
         goto exit;
     }
+
+#ifdef MR_POPULATE_BY_NAME_PATH
+    //nkk71 M7 hack
+    Populate_ByName_using_emmc();
+#endif
 
     fstab = fstab_auto_load();
     if(!fstab)
