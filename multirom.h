@@ -104,6 +104,7 @@ struct multirom_status
     int colors;
     int brightness;
     int enable_adb;
+    int enable_kmsg_logging;
     int hide_internal;
     char *int_display_name;
     int rotation;

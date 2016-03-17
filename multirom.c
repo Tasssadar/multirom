@@ -18,6 +18,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <time.h>
 #include <string.h>
 #include <dirent.h>
 #include <sys/types.h>
@@ -109,6 +110,132 @@ int multirom_find_base_dir(void)
     return -1;
 }
 
+#define MAX_LASTKMSG_LOGS 5
+enum
+{
+    BACKUP_LAST_KMSG    = 0,
+    BACKUP_EARLY_KLOG   = 1,
+    BACKUP_LATE_KLOG    = 2,
+    BACKUP_LAST_KEXEC   = 3
+};
+
+void multirom_kmsg_logging(int kmsg_backup_type)
+{
+    // types of logging:
+    //     BACKUP_LAST_KMSG  -> backup last_kmsg
+    //     BACKUP_EARLY_KMSG -> current klog upon entering mrom
+    //     BACKUP_LATE_KMSG  -> current klog upon exiting mrom
+
+    int i;
+    char path_logs_dir[256];
+    char path_file_1[256];
+    char path_file_2[256];
+
+    static const char *kmsg_paths[] = {
+        "/proc/last_kmsg",
+        "/sys/fs/pstore/console-ramoops",
+        NULL,
+    };
+
+    // make the logs folder visible outside multirom folder
+    static const char log_dir_name[] = "../multirom-klogs";
+    static const char ext[] = "txt";
+
+    // current date time
+    char datetime[] = "yyyy-mm-dd-HHMMSS";
+    time_t rawtime = time(NULL);
+    struct tm  *timeinfo = localtime(&rawtime);
+    strftime(datetime, sizeof(datetime), "%Y-%m-%d-%H%M%S", timeinfo);
+
+    // filename: last_kmsg_1_2016-03-11-153600.txt
+    // filename: curr_kmsg_0_2016-03-11-153600.txt (this is current klog upon enterting mrom)
+    // filename: curr_kmsg_1_2016-03-11-153600.txt (this is current klog upon exiting mrom)
+    // filename: last_kexec_0_2016-03-11-153600.txt (same klog as pulled in multirom_load_kexec function) 
+    char base_name[15];
+
+    if (kmsg_backup_type == BACKUP_LAST_KMSG)
+        strcpy(base_name, "last_kmsg");
+    else if (kmsg_backup_type == BACKUP_EARLY_KLOG)
+        strcpy(base_name, "curr_kmsg_0");
+    else if (kmsg_backup_type == BACKUP_LATE_KLOG)
+        strcpy(base_name, "curr_kmsg_1");
+    else if (kmsg_backup_type == BACKUP_LAST_KEXEC)
+        strcpy(base_name, "last_kexec_0");
+    else
+        return;
+
+
+    // set path and create if needed
+    sprintf(path_logs_dir, "%s/%s", mrom_dir(), log_dir_name);
+    mkdir(path_logs_dir, 0777);
+
+    // open directory and keep walking :)
+    DIR *dp = opendir(path_logs_dir);
+    if (!dp)
+        return;
+
+    struct dirent *de = NULL;
+
+    if (kmsg_backup_type == BACKUP_LAST_KMSG)
+    {
+        char *pos = NULL;
+        char tmp[5];
+
+        // delete last one (MAX_LASTKMSG_LOGS), and rename the older ones
+        while((de = readdir(dp)))
+        {
+            if (strncmp(de->d_name, base_name, strlen(base_name)) != 0)
+                continue;
+
+            sprintf(path_file_1, "%s/%s", path_logs_dir, de->d_name);
+            sprintf(path_file_2, "%s/%s", path_logs_dir, de->d_name);
+
+            for (i = MAX_LASTKMSG_LOGS; i >= 0; i--)
+            {
+                sprintf(tmp, "_%i_", i);
+                pos = strstr(path_file_2, tmp);
+                if (pos != NULL)
+                {
+                    sprintf(tmp, "_%i_", i+1);
+                    strncpy(pos, tmp, strlen(tmp));
+                    if (i == MAX_LASTKMSG_LOGS)
+                        INFO("Deleting oldest kmsg log '%s' res=%d\n", path_file_1, remove(path_file_1));
+                    else
+                        INFO("Renaming older kmsg log '%s' to '%s' res=%d\n", path_file_1, path_file_2, rename(path_file_1, path_file_2));
+                }
+            }
+        }
+
+        // now copy the last kernel msg
+        sprintf(path_file_1, "%s/%s_%i_%s.%s", path_logs_dir, base_name, 0, datetime, ext);
+        for(i = 0; kmsg_paths[i]; ++i)
+        {
+            if (access(kmsg_paths[i], R_OK) == 0)
+            {
+                INFO("Backing up last kmsg '%s' to '%s' res=%d\n", kmsg_paths[i], path_file_1, copy_file(kmsg_paths[i], path_file_1));
+                break;
+            }
+        }
+    }
+    else
+    {
+        // delete previous one
+        while((de = readdir(dp)))
+        {
+            if (strncmp(de->d_name, base_name, strlen(base_name)) != 0)
+                continue;
+
+            sprintf(path_file_1, "%s/%s", path_logs_dir, de->d_name);
+            remove(path_file_1);
+        }
+
+        // now copy current klog
+        sprintf(path_file_1, "%s/%s_%s.%s", log_dir_name, base_name, datetime, ext);
+        INFO("Backing up current klog to '%s' res=%d\n", path_file_1, multirom_copy_log(NULL, path_file_1));
+    }
+    closedir(dp);
+}
+
 int multirom(const char *rom_to_boot)
 {
     if(multirom_find_base_dir() == -1)
@@ -122,6 +249,12 @@ int multirom(const char *rom_to_boot)
 
     multirom_load_status(&s);
     multirom_dump_status(&s);
+
+    if (s.enable_kmsg_logging != 0)
+    {
+        multirom_kmsg_logging(BACKUP_LAST_KMSG);
+        multirom_kmsg_logging(BACKUP_EARLY_KLOG);
+    }
 
     struct multirom_rom *to_boot = NULL;
     int exit = (EXIT_REBOOT | EXIT_UMOUNT);
@@ -224,6 +357,8 @@ int multirom(const char *rom_to_boot)
     }
 
 finish:
+    if (s.enable_kmsg_logging != 0)
+        multirom_kmsg_logging(BACKUP_LATE_KLOG);
     multirom_save_status(&s);
     multirom_free_status(&s);
 
@@ -382,6 +517,7 @@ int multirom_default_status(struct multirom_status *s)
     s->colors = 0;
     s->brightness = MULTIROM_DEFAULT_BRIGHTNESS;
     s->enable_adb = 0;
+    s->enable_kmsg_logging = 0;
     s->rotation = MULTIROM_DEFAULT_ROTATION;
     s->anim_duration_coef = 1.f;
 
@@ -526,6 +662,8 @@ int multirom_load_status(struct multirom_status *s)
             s->brightness = atoi(arg);
         else if(strstr(name, "enable_adb"))
             s->enable_adb = atoi(arg);
+        else if(strstr(name, "enable_kmsg_logging"))
+            s->enable_kmsg_logging = atoi(arg);
         else if(strstr(name, "hide_internal"))
             s->hide_internal = atoi(arg);
         else if(strstr(name, "int_display_name"))
@@ -628,6 +766,7 @@ int multirom_save_status(struct multirom_status *s)
     fprintf(f, "colors_v2=%d\n", s->colors);
     fprintf(f, "brightness=%d\n", s->brightness);
     fprintf(f, "enable_adb=%d\n", s->enable_adb);
+    fprintf(f, "enable_kmsg_logging=%d\n", s->enable_kmsg_logging);
     fprintf(f, "hide_internal=%d\n", s->hide_internal);
     fprintf(f, "int_display_name=%s\n", s->int_display_name ? s->int_display_name : "");
     fprintf(f, "rotation=%d\n", s->rotation);
@@ -662,6 +801,7 @@ void multirom_dump_status(struct multirom_status *s)
     INFO("  colors_v2=%d\n", s->colors);
     INFO("  brightness=%d\n", s->brightness);
     INFO("  enable_adb=%d\n", s->enable_adb);
+    INFO("  enable_kmsg_logging=%d\n", s->enable_kmsg_logging);
     INFO("  rotation=%d\n", s->rotation);
     INFO("  force_generic_fb=%d\n", s->force_generic_fb);
     INFO("  anim_duration_coef=%f\n", s->anim_duration_coef);
@@ -1647,6 +1787,8 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
         umount("/mnt/image");
 
     multirom_copy_log(NULL, "last_kexec_log.txt");
+    if (s->enable_kmsg_logging != 0)
+        multirom_kmsg_logging(BACKUP_LAST_KEXEC);
 
 exit:
     kexec_destroy(&kexec);
