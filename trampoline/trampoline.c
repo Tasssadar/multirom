@@ -134,7 +134,7 @@ static int try_mount_all_entries(struct fstab *fstab, struct fstab_part *first_d
     const char *fs_types[] = { "ext4", "f2fs", "ext3", "ext2" };
     const char *fs_opts [] = {
         "barrier=1,data=ordered,nomblk_io_submit,noauto_da_alloc,errors=panic", // ext4
-        "inline_xattr,flush_merge,errors=recover", // f2fs
+        "inline_xattr,flush_merge", // f2fs
         "", // ext3
         "" // ext2
     };
