@@ -39,6 +39,8 @@
 #endif
 
 #define TMP_RD_UNPACKED_DIR "/mrom_rd"
+#define TMP_RD2 TMP_RD_UNPACKED_DIR "/sbin/ramdisk.cpio"
+#define TMP_RD2_UNPACKED_DIR TMP_RD_UNPACKED_DIR "/second"
 
 static int get_img_trampoline_ver(struct bootimg *img)
 {
@@ -51,21 +53,45 @@ static int get_img_trampoline_ver(struct bootimg *img)
 static int copy_rd_files(UNUSED const char *path, UNUSED const char *busybox_path)
 {
     char buf[256];
+    char path_dir[64];
     char path_init[64];
+    char path_main[64];
+    char path_mrom_enc[64];
+    char path_mrom_fstab[64];
+    char path_ueventd[64];
+    char path_watchdog[64];
 
-    if (access(TMP_RD_UNPACKED_DIR "/init.real", F_OK) != -1) {
-        snprintf(path_init, sizeof(path_init), TMP_RD_UNPACKED_DIR "/init.real");
-    } else {
-        snprintf(path_init, sizeof(path_init), TMP_RD_UNPACKED_DIR "/init");
+    if (access(TMP_RD2, F_OK) != -1)
+    {
+        snprintf(path_dir, sizeof(path_dir), TMP_RD2_UNPACKED_DIR);
+        snprintf(path_init, sizeof(path_init), TMP_RD2_UNPACKED_DIR "/init");
+        snprintf(path_main, sizeof(path_main), TMP_RD2_UNPACKED_DIR "/main_init");
+        snprintf(path_mrom_enc, sizeof(path_mrom_enc), TMP_RD2_UNPACKED_DIR "/mrom_enc");
+        snprintf(path_mrom_fstab, sizeof(path_mrom_fstab), TMP_RD2_UNPACKED_DIR "/mrom.fstab");
+        snprintf(path_ueventd, sizeof(path_ueventd), TMP_RD2_UNPACKED_DIR "/sbin/ueventd");
+        snprintf(path_watchdog, sizeof(path_watchdog), TMP_RD2_UNPACKED_DIR "/sbin/watchdogd");
+    }
+    else
+    {
+        snprintf(path_dir, sizeof(path_dir), TMP_RD_UNPACKED_DIR);
+        if (access(TMP_RD_UNPACKED_DIR "/init.real", F_OK) != -1) {
+            snprintf(path_init, sizeof(path_init), TMP_RD_UNPACKED_DIR "/init.real");
+        } else {
+            snprintf(path_init, sizeof(path_init), TMP_RD_UNPACKED_DIR "/init");
+        }
+        snprintf(path_main, sizeof(path_main), TMP_RD_UNPACKED_DIR "/main_init");
+        snprintf(path_mrom_enc, sizeof(path_mrom_enc), TMP_RD_UNPACKED_DIR "/mrom_enc");
+        snprintf(path_mrom_fstab, sizeof(path_mrom_fstab), TMP_RD_UNPACKED_DIR "/mrom.fstab");
+        snprintf(path_ueventd, sizeof(path_ueventd), TMP_RD_UNPACKED_DIR "/sbin/ueventd");
+        snprintf(path_watchdog, sizeof(path_watchdog), TMP_RD_UNPACKED_DIR "/sbin/watchdogd");
     }
 
-    if (access(TMP_RD_UNPACKED_DIR"/main_init", F_OK) < 0 &&
-        rename(path_init, TMP_RD_UNPACKED_DIR"/main_init") < 0)
+    if (access(path_main, F_OK) < 0 &&
+            rename(path_init, path_main))
     {
-        ERROR("Failed to move %s to /main_init!\n", path_init);
+        ERROR("Failed to move %s to %s!\n", path_init, path_main);
         return -1;
     }
-
     snprintf(buf, sizeof(buf), "%s/trampoline", mrom_dir());
     if(copy_file(buf, path_init) < 0)
     {
@@ -74,22 +100,22 @@ static int copy_rd_files(UNUSED const char *path, UNUSED const char *busybox_pat
     }
     chmod(path_init, 0750);
 
-    remove(TMP_RD_UNPACKED_DIR"/sbin/ueventd");
-    remove(TMP_RD_UNPACKED_DIR"/sbin/watchdogd");
-    symlink("../main_init", TMP_RD_UNPACKED_DIR"/sbin/ueventd");
-    symlink("../main_init", TMP_RD_UNPACKED_DIR"/sbin/watchdogd");
+    remove(path_ueventd);
+    remove(path_watchdog);
+    symlink("../main_init", path_ueventd);
+    symlink("../main_init", path_watchdog);
 
 #ifdef MR_USE_MROM_FSTAB
     snprintf(buf, sizeof(buf), "%s/mrom.fstab", mrom_dir());
-    copy_file(buf, TMP_RD_UNPACKED_DIR"/mrom.fstab");
+    copy_file(buf, path_mrom_fstab);
 #else
-    remove(TMP_RD_UNPACKED_DIR"/mrom.fstab");
+    remove(path_mrom_fstab);
 #endif
 
 #ifdef MR_ENCRYPTION
-    remove_dir(TMP_RD_UNPACKED_DIR"/mrom_enc");
+    remove_dir(path_mrom_enc);
 
-    if(mr_system("busybox cp -a \"%s/enc\" \"%s/mrom_enc\"", mrom_dir(), TMP_RD_UNPACKED_DIR) != 0)
+    if (mr_system("busybox cp -a \"%s/enc\" \"%s/mrom_enc\"", mrom_dir(), path_dir) != 0)
     {
         ERROR("Failed to copy encryption files!\n");
         return -1;
@@ -100,13 +126,71 @@ static int copy_rd_files(UNUSED const char *path, UNUSED const char *busybox_pat
 
 #define RD_GZIP 1
 #define RD_LZ4  2
-static int inject_rd(const char *path)
+static int inject_second_rd(const char *path, const char *second_path)
 {
     int result = -1;
     uint32_t magic = 0;
 
     FILE *f = fopen(path, "re");
     if(!f)
+    {
+        ERROR("Couldn't open %s!\n", path);
+        return -1;
+    }
+    fread(&magic, sizeof(magic), 1, f);
+    fclose(f);
+
+    mkdir(TMP_RD2_UNPACKED_DIR, 0755);
+
+    // Decompress initrd
+    int type;
+    char buff[256];
+    char busybox_path[256];
+    snprintf(busybox_path, sizeof(busybox_path), "%s/busybox", mrom_dir());
+
+    char *cmd[] = { busybox_path, "sh", "-c", buff, NULL };
+
+    snprintf(buff, sizeof(buff), "B=\"%s\"; cd \"%s\"; \"$B\" cat \"%s\" | \"$B\" cpio -i", busybox_path, TMP_RD2_UNPACKED_DIR, second_path);
+
+    int r;
+    char *out = run_get_stdout_with_exit(cmd, &r);
+    if (r != 0)
+    {
+        ERROR("Output: %s\n", out);
+        ERROR("Failed to unpack second ramdisk!%s\n", buff);
+        goto fail;
+    }
+
+    // Update files
+    if (copy_rd_files(second_path, busybox_path) < 0)
+    {
+        goto fail;
+    }
+
+    // Pack initrd again
+    snprintf(buff, sizeof(buff), "B=\"%s\"; cd \"%s\"; \"$B\" find . | \"$B\" cpio -o -H newc > \"%s\"", busybox_path, TMP_RD2_UNPACKED_DIR, second_path);
+
+    out = run_get_stdout_with_exit(cmd, &r);
+    if (r != 0)
+    {
+        ERROR("Output: %s\n", out);
+        ERROR("Failed to pack ramdisk.cpio!\n");
+        goto fail;
+    }
+success:
+    result = 0;
+fail:
+    remove_dir(TMP_RD2_UNPACKED_DIR);
+    return result;
+}
+
+static int inject_rd(const char *path, const char *second_path)
+{
+    int result = -1;
+    uint32_t magic = 0;
+
+    FILE *f = fopen(path, "re");
+    if (!f)
     {
         ERROR("Couldn't open %s!\n", path);
         return -1;
@@ -148,12 +232,20 @@ static int inject_rd(const char *path)
         goto fail;
     }
 
-    // Update files
-    if(copy_rd_files(path, busybox_path) < 0)
+    if (access(TMP_RD2, F_OK) != -1)
+    {
+        if (inject_second_rd(path, second_path) < 0)
+        {
+            goto fail;
+        }
+    }
+    else if (copy_rd_files(path, busybox_path) < 0)
+    {
         goto fail;
+    }
 
-    // Pack initrd again
-    switch(type)
+    // Pack ramdisk
+    switch (type)
     {
         case RD_GZIP:
             snprintf(buff, sizeof(buff), "B=\"%s\"; cd \"%s\"; \"$B\" find . | \"$B\" cpio -o -H newc | \"$B\" gzip > \"%s\"", busybox_path, TMP_RD_UNPACKED_DIR, path);
@@ -184,6 +276,7 @@ int inject_bootimg(const char *img_path, int force)
     int img_ver;
     char initrd_path[256];
     static const char *initrd_tmp_name = "/inject-initrd.img";
+    static const char *initrd2_tmp_name = "/mrom_rd/sbin/ramdisk.cpio";
 
 #ifdef BOARD_BOOTIMAGE_PARTITION_SIZE
     if(access(img_path, F_OK) == 0)
@@ -219,7 +312,7 @@ int inject_bootimg(const char *img_path, int force)
         goto exit;
     }
 
-    if(inject_rd(initrd_tmp_name) >= 0)
+    if(inject_rd(initrd_tmp_name, initrd2_tmp_name) >= 0)
     {
         // Update the boot.img
         snprintf((char*)img.hdr.name, BOOT_NAME_SIZE, "tr_ver%d", VERSION_TRAMPOLINE);
