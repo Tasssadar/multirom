@@ -51,21 +51,28 @@ static int get_img_trampoline_ver(struct bootimg *img)
 static int copy_rd_files(UNUSED const char *path, UNUSED const char *busybox_path)
 {
     char buf[256];
+    char path_init[64];
+
+    if (access(TMP_RD_UNPACKED_DIR "/init.real", F_OK) != -1) {
+        snprintf(path_init, sizeof(path_init), TMP_RD_UNPACKED_DIR "/init.real");
+    } else {
+        snprintf(path_init, sizeof(path_init), TMP_RD_UNPACKED_DIR "/init");
+    }
 
     if (access(TMP_RD_UNPACKED_DIR"/main_init", F_OK) < 0 &&
-        rename(TMP_RD_UNPACKED_DIR"/init", TMP_RD_UNPACKED_DIR"/main_init") < 0)
+        rename(path_init, TMP_RD_UNPACKED_DIR"/main_init") < 0)
     {
-        ERROR("Failed to move /init to /main_init!\n");
+        ERROR("Failed to move %s to /main_init!\n", path_init);
         return -1;
     }
 
     snprintf(buf, sizeof(buf), "%s/trampoline", mrom_dir());
-    if(copy_file(buf, TMP_RD_UNPACKED_DIR"/init") < 0)
+    if(copy_file(buf, path_init) < 0)
     {
-        ERROR("Failed to copy trampoline to /init!\n");
+        ERROR("Failed to copy trampoline to %s!\n", path_init);
         return -1;
     }
-    chmod(TMP_RD_UNPACKED_DIR"/init", 0750);
+    chmod(path_init, 0750);
 
     remove(TMP_RD_UNPACKED_DIR"/sbin/ueventd");
     remove(TMP_RD_UNPACKED_DIR"/sbin/watchdogd");
