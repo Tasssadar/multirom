@@ -108,3 +108,28 @@ $(MULTIROM_UNINST_TARGET): signapk bbootimg
 
 .PHONY: multirom_uninstaller
 multirom_uninstaller: $(MULTIROM_UNINST_TARGET)
+
+
+
+KERNEL_ZIP_TARGET := $(PRODUCT_OUT)/multirom_kernel
+KERNEL_INST_DIR := $(PRODUCT_OUT)/multirom_kernel_installer
+
+$(KERNEL_ZIP_TARGET): $(PRODUCT_OUT)/kernel kernel_inject signapk
+	@echo ----- Making MultiROM Kernel ZIP installer ------
+	rm -rf $(KERNEL_INST_DIR)
+	mkdir -p $(KERNEL_INST_DIR)
+	cp -a $(install_zip_path)/prebuilt-kernel-installer/* $(KERNEL_INST_DIR)/
+	cp -a $(TARGET_ROOT_OUT)/kernel_inject $(KERNEL_INST_DIR)/scripts/
+	cp -a $(PRODUCT_OUT)/kernel $(KERNEL_INST_DIR)/scripts/kernel
+	mkdir -p $(KERNEL_INST_DIR)/system/lib
+	cp -a $(PRODUCT_OUT)/system/lib/modules $(KERNEL_INST_DIR)/system/lib/
+	$(install_zip_path)/extract_boot_dev.sh $(PWD)/$(MR_FSTAB) $(KERNEL_INST_DIR)/scripts/bootdev
+	$(install_zip_path)/make_updater_script.sh "$(MR_DEVICES)" $(KERNEL_INST_DIR)/META-INF/com/google/android "Installing Kernel for"
+	rm -f $(KERNEL_ZIP_TARGET).zip $(KERNEL_ZIP_TARGET)-unsigned.zip
+	cd $(KERNEL_INST_DIR) && zip -qr ../$(notdir $@)-unsigned.zip *
+	java -Djava.library.path=$(SIGNAPK_JNI_LIBRARY_PATH) -jar $(HOST_OUT_JAVA_LIBRARIES)/signapk.jar $(DEFAULT_SYSTEM_DEV_CERTIFICATE).x509.pem $(DEFAULT_SYSTEM_DEV_CERTIFICATE).pk8 $(KERNEL_ZIP_TARGET)-unsigned.zip $(KERNEL_ZIP_TARGET).zip
+	$(install_zip_path)/rename_zip.sh $(KERNEL_ZIP_TARGET) $(TARGET_DEVICE) $(PWD)/$(multirom_local_path)/version.h
+	@echo ----- Made MultiROM Kernel ZIP installer -------- $@.zip
+
+.PHONY: multirom_kernel_zip
+multirom_kernel_zip: $(KERNEL_ZIP_TARGET)
