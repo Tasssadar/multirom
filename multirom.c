@@ -110,7 +110,8 @@ int multirom_find_base_dir(void)
     return -1;
 }
 
-#define MAX_LASTKMSG_LOGS 5
+#define MAX_LASTKMSG_LOGS 3
+#define MAX_MROMKMSG_LOGS 5
 enum
 {
     BACKUP_LAST_KMSG    = 0,
@@ -119,17 +120,55 @@ enum
     BACKUP_LAST_KEXEC   = 3
 };
 
+void multirom_kmsg_rename_logs(const char *path_logs_dir, const char *base_name, const int max_count)
+{
+    DIR *dp = opendir(path_logs_dir);
+    if (!dp)
+        return;
+
+    int i;
+    char path_file_1[256];
+    char path_file_2[256];
+    char tmp[5];
+    char *pos = NULL;
+    struct dirent *de = NULL;
+
+    // delete last one (max_count), and rename the older ones
+    while((de = readdir(dp)))
+    {
+        if (strncmp(de->d_name, base_name, strlen(base_name)) != 0)
+            continue;
+
+        sprintf(path_file_1, "%s/%s", path_logs_dir, de->d_name);
+        sprintf(path_file_2, "%s/%s", path_logs_dir, de->d_name);
+
+        for (i = max_count; i >= 0; i--)
+        {
+            sprintf(tmp, "_%i_", i);
+            pos = strstr(path_file_2, tmp);
+            if (pos != NULL)
+            {
+                sprintf(tmp, "_%i_", i+1);
+                strncpy(pos, tmp, strlen(tmp));
+                if (i == max_count)
+                    INFO("Deleting oldest log '%s' res=%d\n", path_file_1, remove(path_file_1));
+                else
+                    INFO("Renaming older log '%s' to '%s' res=%d\n", path_file_1, path_file_2, rename(path_file_1, path_file_2));
+            }
+        }
+    }
+    closedir(dp);
+}
+
 void multirom_kmsg_logging(int kmsg_backup_type)
 {
     // types of logging:
     //     BACKUP_LAST_KMSG  -> backup last_kmsg
     //     BACKUP_EARLY_KMSG -> current klog upon entering mrom
     //     BACKUP_LATE_KMSG  -> current klog upon exiting mrom
-
-    int i;
+    //     BACKUP_LAST_KEXEC -> last kexec log
     char path_logs_dir[256];
-    char path_file_1[256];
-    char path_file_2[256];
+    char path_log_file[256];
 
     static const char *kmsg_paths[] = {
         "/proc/last_kmsg",
@@ -147,20 +186,20 @@ void multirom_kmsg_logging(int kmsg_backup_type)
     struct tm  *timeinfo = localtime(&rawtime);
     strftime(datetime, sizeof(datetime), "%Y-%m-%d-%H%M%S", timeinfo);
 
-    // filename: last_kmsg_1_2016-03-11-153600.txt
-    // filename: curr_kmsg_0_2016-03-11-153600.txt (this is current klog upon enterting mrom)
-    // filename: curr_kmsg_1_2016-03-11-153600.txt (this is current klog upon exiting mrom)
-    // filename: last_kexec_0_2016-03-11-153600.txt (same klog as pulled in multirom_load_kexec function) 
+    // filename: last_kmsg_n_2016-03-11-153600.txt
+    // filename: early_klg_0_2016-03-11-153600.txt (this is current klog upon enterting mrom)
+    // filename: mrom_klog_n_2016-03-11-153600.txt (this is current klog upon exiting mrom)
+    // filename: last_kexec_0_2016-03-11-153600.txt (same klog as pulled in multirom_load_kexec function)
     char base_name[15];
 
     if (kmsg_backup_type == BACKUP_LAST_KMSG)
         strcpy(base_name, "last_kmsg");
     else if (kmsg_backup_type == BACKUP_EARLY_KLOG)
-        strcpy(base_name, "curr_kmsg_0");
+        strcpy(base_name, "early_klg");
     else if (kmsg_backup_type == BACKUP_LATE_KLOG)
-        strcpy(base_name, "curr_kmsg_1");
+        strcpy(base_name, "mrom_klog");
     else if (kmsg_backup_type == BACKUP_LAST_KEXEC)
-        strcpy(base_name, "last_kexec_0");
+        strcpy(base_name, "last_kexec");
     else
         return;
 
@@ -169,71 +208,31 @@ void multirom_kmsg_logging(int kmsg_backup_type)
     sprintf(path_logs_dir, "%s/%s", mrom_dir(), log_dir_name);
     mkdir(path_logs_dir, 0777);
 
-    // open directory and keep walking :)
-    DIR *dp = opendir(path_logs_dir);
-    if (!dp)
-        return;
-
-    struct dirent *de = NULL;
-
     if (kmsg_backup_type == BACKUP_LAST_KMSG)
     {
-        char *pos = NULL;
-        char tmp[5];
+        int i;
 
-        // delete last one (MAX_LASTKMSG_LOGS), and rename the older ones
-        while((de = readdir(dp)))
-        {
-            if (strncmp(de->d_name, base_name, strlen(base_name)) != 0)
-                continue;
-
-            sprintf(path_file_1, "%s/%s", path_logs_dir, de->d_name);
-            sprintf(path_file_2, "%s/%s", path_logs_dir, de->d_name);
-
-            for (i = MAX_LASTKMSG_LOGS; i >= 0; i--)
-            {
-                sprintf(tmp, "_%i_", i);
-                pos = strstr(path_file_2, tmp);
-                if (pos != NULL)
-                {
-                    sprintf(tmp, "_%i_", i+1);
-                    strncpy(pos, tmp, strlen(tmp));
-                    if (i == MAX_LASTKMSG_LOGS)
-                        INFO("Deleting oldest kmsg log '%s' res=%d\n", path_file_1, remove(path_file_1));
-                    else
-                        INFO("Renaming older kmsg log '%s' to '%s' res=%d\n", path_file_1, path_file_2, rename(path_file_1, path_file_2));
-                }
-            }
-        }
+        multirom_kmsg_rename_logs(path_logs_dir, base_name, MAX_LASTKMSG_LOGS);
 
         // now copy the last kernel msg
-        sprintf(path_file_1, "%s/%s_%i_%s.%s", path_logs_dir, base_name, 0, datetime, ext);
+        sprintf(path_log_file, "%s/%s_%i_%s.%s", path_logs_dir, base_name, 0, datetime, ext);
         for(i = 0; kmsg_paths[i]; ++i)
         {
             if (access(kmsg_paths[i], R_OK) == 0)
             {
-                INFO("Backing up last kmsg '%s' to '%s' res=%d\n", kmsg_paths[i], path_file_1, copy_file(kmsg_paths[i], path_file_1));
+                INFO("Backing up last kmsg '%s' to '%s' res=%d\n", kmsg_paths[i], path_log_file, copy_file(kmsg_paths[i], path_log_file));
                 break;
             }
         }
     }
     else
     {
-        // delete previous one
-        while((de = readdir(dp)))
-        {
-            if (strncmp(de->d_name, base_name, strlen(base_name)) != 0)
-                continue;
-
-            sprintf(path_file_1, "%s/%s", path_logs_dir, de->d_name);
-            remove(path_file_1);
-        }
+        multirom_kmsg_rename_logs(path_logs_dir, base_name, (kmsg_backup_type == BACKUP_LATE_KLOG) ? MAX_MROMKMSG_LOGS : 0);
 
         // now copy current klog
-        sprintf(path_file_1, "%s/%s_%s.%s", log_dir_name, base_name, datetime, ext);
-        INFO("Backing up current klog to '%s' res=%d\n", path_file_1, multirom_copy_log(NULL, path_file_1));
+        sprintf(path_log_file, "%s/%s_%i_%s.%s", log_dir_name, base_name, 0, datetime, ext);
+        INFO("Backing up current klog to '%s' res=%d\n", path_log_file, multirom_copy_log(NULL, path_log_file));
     }
-    closedir(dp);
 }
 
 int multirom(const char *rom_to_boot)
