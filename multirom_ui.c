@@ -109,6 +109,65 @@ static void reveal_rect_alpha_step(void *data, float interpolated)
     fb_request_draw();
 }
 
+#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
+static void nokexec_multirom_ui_use_kexec(UNUSED void *data)
+{
+    pthread_mutex_lock(&exit_code_mutex);
+    nokexec()->selected_method = NO_KEXEC_BOOT_KEXEC;
+    exit_ui_code = UI_EXIT_BOOT_ROM;
+    pthread_mutex_unlock(&exit_code_mutex);
+}
+
+static void nokexec_multirom_ui_use_nokexec(UNUSED void *data)
+{
+    pthread_mutex_lock(&exit_code_mutex);
+    nokexec()->selected_method = NO_KEXEC_BOOT_NOKEXEC;
+    exit_ui_code = UI_EXIT_BOOT_ROM;
+    pthread_mutex_unlock(&exit_code_mutex);
+}
+
+void nokexec_multirom_ui_ask_confirm(void)
+{
+    ncard_builder *b = ncard_create_builder();
+    char buff[256];
+
+    ncard_set_pos(b, NCARD_POS_CENTER);
+    ncard_set_cancelable(b, 1);
+    ncard_set_title(b, "Confirm boot method");
+    ncard_add_btn(b, BTN_NEGATIVE, "Cancel", ncard_hide_callback, NULL);
+    ncard_add_btn(b, BTN_POSITIVE, "OK", nokexec_multirom_ui_use_nokexec, NULL);
+
+    snprintf(buff, sizeof(buff), "\nYour kernel (ie the one <i>currently</i> in primary slot) "
+                                 "does not support kexec-hardboot, you can still boot\n\n"
+                                 "<i>%s</i>\n\n"
+                                 "    <b>using no-kexec workaround</b>", selected_rom->name);
+    ncard_set_text(b, buff);
+
+    ncard_show(b, 1);
+}
+
+void nokexec_multirom_ui_ask_choice(void)
+{
+    ncard_builder *b = ncard_create_builder();
+    char buff[256];
+
+    ncard_set_pos(b, NCARD_POS_CENTER);
+    ncard_set_cancelable(b, 1);
+    ncard_set_title(b, "Choose boot method");
+    snprintf(buff, sizeof(buff), "\nYour kernel (ie the one <i>currently</i> in primary slot) "
+                                 "supports kexec-hardboot, but you have set the option to ask "
+                                 "which boot method to use.\n\n\n"
+                                 "How would you like to boot\n\n"
+                                 "<i>%s</i>\n\n", selected_rom->name);
+    ncard_set_text(b, buff);
+
+    ncard_add_btn(b, BTN_NEGATIVE, "[no-kexec workaround]", nokexec_multirom_ui_use_nokexec, NULL);
+    ncard_add_btn(b, BTN_POSITIVE, "[kexec]", nokexec_multirom_ui_use_kexec, NULL);
+
+    ncard_show(b, 1);
+}
+#endif //MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
+
 int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 {
     if(s->auto_boot_rom && (s->auto_boot_type & AUTOBOOT_CHECK_KEYS))
@@ -178,9 +237,47 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     fb_request_draw();
 
+#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
+        nokexec()->selected_method = NO_KEXEC_BOOT_NONE;    // let multirom_ui return the method
+#endif
+
     while(1)
     {
         pthread_mutex_lock(&exit_code_mutex);
+#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
+        if(exit_ui_code == UI_EXIT_BOOT_ROM && nokexec()->selected_method == NO_KEXEC_BOOT_NONE)
+        {
+            if(selected_rom->type == ROM_DEFAULT)
+            {
+                if(nokexec_is_secondary_in_primary())
+                    nokexec()->selected_method = NO_KEXEC_BOOT_PRIMARY;     // there's a secondary in primary slot, so restore primary first
+                else
+                    nokexec()->selected_method = NO_KEXEC_BOOT_KEXEC;       // normal
+            }
+            else if(!multirom_has_kexec())
+            {
+                if(nokexec()->is_ask_confirm || nokexec()->is_ask_choice)
+                {
+                    exit_ui_code = -1;
+                    nokexec_multirom_ui_ask_confirm();                      // also ask for confirmation
+                }
+                else
+                    nokexec()->selected_method = NO_KEXEC_BOOT_NOKEXEC;     // only when needed
+            }
+            else
+            {
+                if(nokexec()->is_ask_choice)
+                {
+                    exit_ui_code = -1;
+                    nokexec_multirom_ui_ask_choice();                       // ask which method to use
+                }
+                else if(nokexec()->is_forced)
+                    nokexec()->selected_method = NO_KEXEC_BOOT_NOKEXEC;     // always use no-kexec
+                else
+                    nokexec()->selected_method = NO_KEXEC_BOOT_KEXEC;       // normal
+            }
+        }
+#endif
         if(exit_ui_code != -1)
         {
             pthread_mutex_unlock(&exit_code_mutex);
@@ -246,6 +343,12 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
             char buff[64];
             snprintf(buff, sizeof(buff), "<i>%s</i>", selected_rom->name);
+#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
+            if (nokexec()->selected_method == NO_KEXEC_BOOT_NOKEXEC)
+                snprintf(buff, sizeof(buff), "<i>%s</i>\n\n(using no-kexec workaround)", selected_rom->name);
+            else if (nokexec()->selected_method == NO_KEXEC_BOOT_PRIMARY)
+                snprintf(buff, sizeof(buff), "<i>%s</i>\n\n(restoring primary kernel)", selected_rom->name);
+#endif
             ncard_set_text(b, buff);
             break;
         }
@@ -264,6 +367,10 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     }
 
     ncard_show(b, 1);
+#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
+    // sleep 2 seconds so we can see the boot notification card
+    sleep(2);
+#endif
     anim_stop(1);
     fb_freeze(1);
     fb_force_draw();
@@ -587,9 +694,23 @@ void multirom_ui_tab_rom_boot(void)
     else if (((m & MASK_KEXEC) || ((m & MASK_ANDROID) && rom->has_bootimg)) &&
         !multirom_has_kexec())
     {
+#ifndef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
         ncard_set_text(b, "Kexec-hardboot support is required to boot this ROM.\n\n"
                 "Install kernel with kexec-hardboot support to your Internal ROM!");
         error = 1;
+#else
+        if (nokexec()->is_disabled)
+        {
+            ncard_set_text(b, "Kexec-hardboot support is required to boot this ROM.\n\n"
+                    "<i>You can either:</i>\n"
+                    "1) Install kernel with kexec-hardboot support to your Internal ROM.\n"
+                    "\n"
+                    "2) Enable No-KEXEC Workaround in TWRP MultiROM Settings.");
+            error = 1;
+        }
+        else
+            error = 0;
+#endif
     }
     else if((m & MASK_KEXEC) && strchr(rom->name, ' '))
     {
