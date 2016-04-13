@@ -55,6 +55,10 @@ else
 endif
 endif
 
+ifeq ($(MR_UNIFIED_TABS),true)
+    LOCAL_CFLAGS += -DMR_UNIFIED_TABS
+endif
+
 include $(BUILD_EXECUTABLE)
 
 
