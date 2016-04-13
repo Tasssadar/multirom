@@ -404,7 +404,9 @@ void multirom_ui_init_theme(int tab)
         tabview_add_page(themes_info->data->tabs, -1);
         switch(i)
         {
+#ifndef MR_UNIFIED_TABS
             case TAB_USB:
+#endif
             case TAB_INTERNAL:
                 themes_info->data->tab_data[i] = multirom_ui_tab_rom_init(i);
                 break;
@@ -452,7 +454,9 @@ void multirom_ui_destroy_tab(int tab)
     {
         case -1:
             break;
+#ifndef MR_UNIFIED_TABS
         case TAB_USB:
+#endif
         case TAB_INTERNAL:
             multirom_ui_tab_rom_destroy(themes_info->data->tab_data[tab]);
             break;
@@ -623,18 +627,26 @@ void *multirom_ui_tab_rom_init(int tab_type)
     tabview_add_item(themes_info->data->tabs, tab_type, t->list);
 
     int masks;
+#ifdef MR_UNIFIED_TABS
+    masks = multirom_ui_fill_rom_list(t->list, MASK_INTERNAL | MASK_USB_ROMS);
+#else
     if (tab_type == TAB_INTERNAL) {
         masks = multirom_ui_fill_rom_list(t->list, MASK_INTERNAL);
     } else {
         masks = multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
     }
+#endif
 
     listview_update_ui(t->list);
 
+#ifdef MR_UNIFIED_TABS
+    int has_roms = ((masks & MASK_USB_ROMS) == 0);
+#else
     int has_roms = (int)(t->list->items == NULL);
+#endif
     multirom_ui_tab_rom_set_empty((void*)t, has_roms);
 
-    if(tab_type == TAB_USB)
+    if (tab_type == TAB_USB)
     {
         multirom_set_usb_refresh_handler(&multirom_ui_refresh_usb_handler);
         multirom_set_usb_refresh_thread(mrom_status, 1);
@@ -740,10 +752,19 @@ void multirom_ui_tab_rom_update_usb(void)
     tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data[TAB_USB];
     listview_clear(t->list);
 
-    multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
+    int masks;
+#ifdef MR_UNIFIED_TABS
+    masks = multirom_ui_fill_rom_list(t->list, MASK_INTERNAL | MASK_USB_ROMS);
+#else
+    masks = multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
+#endif
     listview_update_ui(t->list);
 
+#ifdef MR_UNIFIED_TABS
+    multirom_ui_tab_rom_set_empty(t, (masks & MASK_USB_ROMS) == 0);
+#else
     multirom_ui_tab_rom_set_empty(t, (int)(t->list->items == NULL));
+#endif
     fb_request_draw();
 }
 
@@ -757,6 +778,7 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
     assert(empty == 0 || empty == 1);
 
     tab_data_roms *t = (tab_data_roms*)data;
+    int it_count;
 
     if(t->boot_btn)
         button_enable(t->boot_btn, !empty);
@@ -771,7 +793,13 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
         tabview_add_item(themes_info->data->tabs, TAB_USB, t->usb_text);
 
         center_text(t->usb_text, t->list->x, -1, t->list->w, -1);
+
+        it_count = list_item_count(t->list->items);
+#ifdef MR_UNIFIED_TABS
+        t->usb_text->y = t->list->y + (it_count + 0.3) * t->list->item_height(t);
+#else
         t->usb_text->y = t->list->y + t->list->h*0.2;
+#endif
 
         int x = t->list->x + ((t->list->w/2) - (PROGDOTS_W/2));
         t->usb_prog = progdots_create(x, t->usb_text->y+100*DPI_MUL);

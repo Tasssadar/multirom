@@ -25,11 +25,17 @@
 enum
 {
     TAB_INTERNAL = 0,
+#ifndef MR_UNIFIED_TABS
     TAB_USB,
+#endif
     TAB_MISC,
 
     TAB_COUNT
 };
+
+#ifdef MR_UNIFIED_TABS
+#define TAB_USB TAB_INTERNAL
+#endif
 
 enum
 {
