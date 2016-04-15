@@ -72,6 +72,7 @@ void ncard_set_top_offset(int offset);
 void ncard_show(ncard_builder *b, int destroy_builder);
 void ncard_hide(void);
 int ncard_is_visible(void);
+int ncard_is_moving(void);
 int ncard_try_cancel(void);
 void ncard_hide_callback(void *data);
 void ncard_destroy_builder(ncard_builder *b);
