@@ -187,7 +187,7 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
             break;
         }
 
-        if(loop_act & LOOP_UPDATE_USB)
+        if(loop_act & LOOP_UPDATE_USB && !ncard_is_moving())
         {
             multirom_find_usb_roms(mrom_status);
             multirom_ui_tab_rom_update_usb();
