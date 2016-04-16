@@ -648,7 +648,7 @@ void fb_draw_rect(fb_rect *r)
 #else
             for(x = 0; x < rendered_w; ++x)
             {
-  #ifdef RECOVERY_RGBX || defined(RECOVERY_ABGR)
+  #if defined(RECOVERY_RGBX) || defined(RECOVERY_ABGR)
                 const uint32_t rb = (premult_color_rb & 0xFF00FF) + ((inv_alpha * (*bits & 0xFF00FF)) >> 8);
                 const uint32_t g = (premult_color_g & 0x00FF00) + ((inv_alpha * (*bits & 0x00FF00)) >> 8);
                 *bits = 0xFF000000 | (rb & 0xFF00FF) | (g & 0x00FF00);
