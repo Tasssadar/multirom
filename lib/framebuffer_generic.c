@@ -64,6 +64,16 @@ static int impl_open(struct framebuffer *fb)
     fb->vi.blue.length    = 8;
     fb->vi.transp.offset  = 0;
     fb->vi.transp.length  = 8;
+#elif  defined(RECOVERY_RGBA)
+    INFO("Pixel format: RGBA_8888\n");
+    fb->vi.red.offset     = 0;
+    fb->vi.red.length     = 8;
+    fb->vi.green.offset   = 8;
+    fb->vi.green.length   = 8;
+    fb->vi.blue.offset    = 16;
+    fb->vi.blue.length    = 8;
+    fb->vi.transp.offset  = 24;
+    fb->vi.transp.length  = 8;
 #elif defined(RECOVERY_RGB_565)
     INFO("Pixel format: RGB_565\n");
     fb->vi.blue.offset    = 0;
