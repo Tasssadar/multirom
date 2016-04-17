@@ -47,7 +47,7 @@ void multirom_ui_destroy_tab(int tab);
 int multirom_ui_destroy_msgbox(void);
 void multirom_ui_switch(int tab);
 void multirom_ui_switch_btn(void *data);
-void multirom_ui_fill_rom_list(listview *view, int mask);
+int multirom_ui_fill_rom_list(listview *view, int mask);
 void multirom_ui_auto_boot(void);
 void multirom_ui_refresh_usb_handler(void);
 void multirom_ui_start_pong(void *data);

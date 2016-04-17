@@ -481,9 +481,10 @@ void multirom_ui_switch(int tab)
     themes_info->data->selected_tab = tab;
 }
 
-void multirom_ui_fill_rom_list(listview *view, int mask)
+int multirom_ui_fill_rom_list(listview *view, int mask)
 {
     int i;
+    int ret = 0;
     struct multirom_rom *rom;
     void *data;
     char part_desc[64];
@@ -502,7 +503,9 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
 
         data = rom_item_create(rom->name, rom->partition ? part_desc : NULL, rom->icon_path);
         listview_add_item(view, rom->id, data);
+        ret |= M(rom->type);
     }
+    return ret;
 }
 
 static void multirom_ui_destroy_auto_boot_data(void)
@@ -619,10 +622,12 @@ void *multirom_ui_tab_rom_init(int tab_type)
     listview_init_ui(t->list);
     tabview_add_item(themes_info->data->tabs, tab_type, t->list);
 
-    if(tab_type == TAB_INTERNAL)
-        multirom_ui_fill_rom_list(t->list, MASK_INTERNAL);
-    else
-        multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
+    int masks;
+    if (tab_type == TAB_INTERNAL) {
+        masks = multirom_ui_fill_rom_list(t->list, MASK_INTERNAL);
+    } else {
+        masks = multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
+    }
 
     listview_update_ui(t->list);
 
