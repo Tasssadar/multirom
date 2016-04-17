@@ -758,7 +758,7 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
 
     if(empty && !t->usb_text)
     {
-        fb_text_proto *p = fb_text_create(0, 0, C_TEXT, SIZE_NORMAL, "This list is refreshed automagically, just plug in the USB drive and wait.");
+        fb_text_proto *p = fb_text_create(0, 0, C_TEXT, SIZE_NORMAL, "This list is refreshed automagically, just plug in an external storage and wait.");
         p->wrap_w = t->list->w - 100*DPI_MUL;
         p->justify = JUSTIFY_CENTER;
         t->usb_text = fb_text_finalize(p);
