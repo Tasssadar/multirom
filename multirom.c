@@ -1691,7 +1691,7 @@ int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_pa
         struct dirent *dp = NULL;
         while((dp = readdir(d)))
         {
-            if(strstr(dp->d_name, "fstab.") == dp->d_name && strcmp(dp->d_name, "fstab.goldfish") != 0)
+            if(strstr(dp->d_name, "fstab.") == dp->d_name && strcmp(dp->d_name, "fstab.goldfish") != 0 && strcmp(dp->d_name, "fstab.ranchu") != 0)
             {
                 fstab_name = realloc(fstab_name, strlen(dp->d_name)+1);
                 strcpy(fstab_name, dp->d_name);
