@@ -22,7 +22,7 @@
 #include <stdarg.h>
 #include <pthread.h>
 
-#if defined(RECOVERY_BGRA) || defined(RECOVERY_RGBX)
+#if defined(RECOVERY_BGRA) || defined(RECOVERY_RGBX) || defined(RECOVERY_ABGR)
 #define PIXEL_SIZE 4
 typedef uint32_t px_type;
 #else
@@ -34,14 +34,14 @@ typedef uint16_t px_type;
 #endif
 
 #ifdef RECOVERY_BGRA
-#define PX_IDX_A 0
-#define PX_IDX_R 1
-#define PX_IDX_G 2
-#define PX_IDX_B 3
-#define PX_GET_R(px) ((px & 0xFF00) >> 8)
-#define PX_GET_G(px) ((px & 0xFF0000) >> 16)
-#define PX_GET_B(px) ((px & 0xFF000000) >> 24)
-#define PX_GET_A(px) (px & 0xFF)
+#define PX_IDX_A 3
+#define PX_IDX_R 2
+#define PX_IDX_G 1
+#define PX_IDX_B 0
+#define PX_GET_R(px) ((px & 0xFF0000) >> 16)
+#define PX_GET_G(px) ((px & 0xFF00) >> 8)
+#define PX_GET_B(px) ((px & 0xFF))
+#define PX_GET_A(px) ((px & 0xFF000000) >> 24)
 #elif defined(RECOVERY_RGBX)
 #define PX_IDX_A 3
 #define PX_IDX_R 0
@@ -52,10 +52,19 @@ typedef uint16_t px_type;
 #define PX_GET_B(px) ((px & 0xFF0000) >> 16)
 #define PX_GET_A(px) ((px & 0xFF000000) >> 24)
 #elif defined(RECOVERY_RGB_565)
-#define PX_GET_R(px) (((((px & 0x1F)*100)/31)*0xFF)/100)
+#define PX_GET_R(px) ((((((px & 0xF800) >> 11)*100)/31)*0xFF)/100)
 #define PX_GET_G(px) ((((((px & 0x7E0) >> 5)*100)/63)*0xFF)/100)
-#define PX_GET_B(px) ((((((px & 0xF800) >> 11)*100)/31)*0xFF)/100)
+#define PX_GET_B(px) (((((px & 0x1F)*100)/31)*0xFF)/100)
 #define PX_GET_A(px) (0xFF)
+#elif defined(RECOVERY_ABGR)
+#define PX_IDX_A 3
+#define PX_IDX_R 0
+#define PX_IDX_G 1
+#define PX_IDX_B 2
+#define PX_GET_R(px) ((px & 0xFF))
+#define PX_GET_G(px) ((px & 0xFF00) >> 8)
+#define PX_GET_B(px) ((px & 0xFF0000) >> 16)
+#define PX_GET_A(px) ((px & 0xFF000000) >> 24)
 #endif
 
 struct framebuffer {

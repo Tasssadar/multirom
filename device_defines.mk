@@ -29,6 +29,8 @@ else ifeq ($(MR_PIXEL_FORMAT),"BGRA_8888")
     LOCAL_CFLAGS += -DRECOVERY_BGRA
 else ifeq ($(MR_PIXEL_FORMAT),"RGB_565")
     LOCAL_CFLAGS += -DRECOVERY_RGB_565
+else ifeq ($(MR_PIXEL_FORMAT),"ABGR_8888")
+	LOCAL_CFLAGS += -DRECOVERY_ABGR
 else
     $(info TARGET_RECOVERY_PIXEL_FORMAT or MR_PIXEL_FORMAT not set or have invalid value)
 endif

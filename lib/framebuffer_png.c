@@ -296,21 +296,9 @@ void fb_png_drop_unused(void)
 
 static inline void convert_fb_px_to_rgb888(px_type src, uint8_t *dest)
 {
-#ifdef RECOVERY_BGRA
-    dest[0] = ((src & 0xFF0000) >> 16); // R
-    dest[1] = ((src & 0xFF00) >> 8);    // G
-    dest[2] = (src & 0xFF);             // B
-#elif defined(RECOVERY_RGBX)
-    dest[0] = (src & 0xFF);             // R
-    dest[1] = ((src & 0xFF00) >> 8);    // G
-    dest[2] = ((src & 0xFF0000) >> 16); // B
-#elif defined(RECOVERY_RGB_565)
-    dest[0] = ((src & 0xF800) >> 8);    // R
-    dest[1] = ((src & 0x7E0) >> 3);     // G
-    dest[2] = ((src & 0x1F) << 3);      // B
-#else
-#error "Unknown pixel format"
-#endif
+    dest[0] = PX_GET_R(src);
+    dest[1] = PX_GET_G(src);
+    dest[2] = PX_GET_B(src);
 }
 
 int fb_png_save_img(const char *path, int w, int h, int stride, px_type *data)
