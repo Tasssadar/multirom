@@ -1686,12 +1686,16 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
     kexec_add_arg(kexec, "--initrd=/initrd.img");
 
 #ifdef MR_KEXEC_DTB
-    if(libbootimg_dump_dtb(&img, "/dtb.img") >= 0)
+    if(libbootimg_dump_dtb(&img, "/dtb.img") >= 0) {
+        printf("DTB: dtb image found!");
         kexec_add_arg(kexec, "--dtb=/dtb.img");
+    }
+    else {
+        printf("DTB: no dtb image found!");
 #ifdef MR_NOT_64BIT
-    else
         kexec_add_arg(kexec, "--dtb");
 #endif
+    }
 #endif
 
     char cmdline[1536];
@@ -1851,11 +1855,15 @@ int multirom_fill_kexec_linux(struct multirom_status *s, struct multirom_rom *ro
     }
     else
     {
+        printf("DTB: dtb image found!");
         str = find_boot_file("%r/dtb.img", root_path, rom->base_path);
     }
 
     if(!str)
+        printf("DTB: no dtb image found!");
+#ifdef MR_NOT_64BIT
         kexec_add_arg(kexec, "--dtb");
+#endif
     else
     {
         kexec_add_arg_prefix(kexec, "--dtb=", str);
