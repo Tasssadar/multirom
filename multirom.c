@@ -1615,7 +1615,9 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
     kexec_init(&kexec, kexec_path);
     kexec_add_arg(&kexec, "--mem-min="MR_KEXEC_MEM_MIN);
 #ifdef MR_KEXEC_DTB
+#ifdef MR_NOT_64BIT
     kexec_add_arg_prefix(&kexec, "--boardname=", TARGET_DEVICE);
+#endif
 #endif
 
     switch(rom->type)
@@ -1686,8 +1688,10 @@ int multirom_fill_kexec_android(struct multirom_status *s, struct multirom_rom *
 #ifdef MR_KEXEC_DTB
     if(libbootimg_dump_dtb(&img, "/dtb.img") >= 0)
         kexec_add_arg(kexec, "--dtb=/dtb.img");
+#ifdef MR_NOT_64BIT
     else
         kexec_add_arg(kexec, "--dtb");
+#endif
 #endif
 
     char cmdline[1536];

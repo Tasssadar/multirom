@@ -72,6 +72,11 @@ else
     include $(multirom_local_path)/kexec-tools/Android.mk
 endif
 
+# Make code aware of the Arch
+ifneq ($(TARGET_ARCH),arm64)
+    LOCAL_CFLAGS += -DMR_NOT_64BIT
+endif
+
 # adbd
 include $(multirom_local_path)/adbd/Android.mk
 
