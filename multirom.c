@@ -1442,6 +1442,7 @@ int multirom_has_kexec(void)
     {
         if(access("/proc/config.gz", F_OK) >= 0)
         {
+            mr_system("%s mount -o rw,remount /",busybox_path);
             char *cmd_cp[] = { busybox_path, "cp", "/proc/config.gz", "/ikconfig.gz", NULL };
             run_cmd(cmd_cp);
 
@@ -1638,7 +1639,8 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
     }
 
     res = kexec_load_exec(&kexec);
-
+    //mount / before copy /kexec to it
+    mr_system("%s mount -o rw,remount /",busybox_path);
     char *cmd_cp[] = { busybox_path, "cp", kexec_path, "/kexec", NULL };
     run_cmd(cmd_cp);
     chmod("/kexec", 0755);
