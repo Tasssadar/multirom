@@ -51,6 +51,10 @@ endif
 ifeq ($(MR_QCOM_OVERLAY_USE_VSYNC),true)
     common_C_FLAGS += -DMR_QCOM_OVERLAY_USE_VSYNC
 endif
+
+ifeq ($(TARGET_DEVICE),aries)
+   common_C_FLAGS += -DMR_TARGET_XIAOMI_ARIES
+endif
 endif
 
 
@@ -76,6 +80,7 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := libmultirom
 LOCAL_MODULE_TAGS := eng
 LOCAL_SHARED_LIBRARIES := libcutils libc libm libpng libz libft2
+LOCAL_STATIC_LIBRARIES :=  libbootimg
 LOCAL_CFLAGS += $(common_C_FLAGS)
 LOCAL_SRC_FILES := $(common_SRC_FILES)
 LOCAL_C_INCLUDES += $(common_C_INCLUDES)
