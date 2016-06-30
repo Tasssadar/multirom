@@ -306,6 +306,7 @@ int main(int argc, char *argv[])
     mount("devpts", "/dev/pts", "devpts", 0, NULL);
     mount("proc", "/proc", "proc", 0, NULL);
     mount("sysfs", "/sys", "sysfs", 0, NULL);
+    mount("selinuxfs", "/sys/fs/selinux", "selinuxfs", 0, NULL);
     mount("pstore", "/sys/fs/pstore", "pstore", 0, NULL);
 
     klog_init();
@@ -377,6 +378,7 @@ run_main_init:
     encryption_cleanup();
 
     umount("/proc");
+    umount("/sys/fs/selinux");
     umount("/sys/fs/pstore");
     umount("/sys");
 
