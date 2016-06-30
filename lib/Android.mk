@@ -51,6 +51,10 @@ endif
 ifeq ($(MR_QCOM_OVERLAY_USE_VSYNC),true)
     common_C_FLAGS += -DMR_QCOM_OVERLAY_USE_VSYNC
 endif
+
+ifeq ($(TARGET_DEVICE),aries)
+   common_C_FLAGS += -DMR_TARGET_XIAOMI_ARIES
+endif
 endif
 
 

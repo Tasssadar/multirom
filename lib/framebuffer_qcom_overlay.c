@@ -295,9 +295,13 @@ static int alloc_ion_mem(struct fb_qcom_overlay_data *data, unsigned int size)
     ionAllocData.len = size;
     ionAllocData.align = sysconf(_SC_PAGESIZE);
 
+#if  !defined (MR_TARGET_XIAOMI_ARIES)
 // are you kidding me -.-
 #if (PLATFORM_SDK_VERSION >= 21)
     ionAllocData.heap_id_mask =
+#else
+    ionAllocData.heap_mask =
+#endif
 #else
     ionAllocData.heap_mask =
 #endif
