@@ -258,6 +258,16 @@ void fb_set_brightness(int val)
     fprintf(f, "%d", val);
     fclose(f);
 #endif
+#ifdef TW_SECONDARY_BRIGHTNESS_PATH
+    FILE *f2 = fopen(TW_SECONDARY_BRIGHTNESS_PATH, "we");
+    if(!f2)
+    {
+        ERROR("Failed to set secondary brightness: %s!\n", strerror(errno));
+        return;
+    }
+    fprintf(f2, "%d", val);
+    fclose(f2);
+#endif
 }
 
 int fb_get_vi_xres(void)
