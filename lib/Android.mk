@@ -51,6 +51,9 @@ endif
 ifeq ($(MR_QCOM_OVERLAY_USE_VSYNC),true)
     common_C_FLAGS += -DMR_QCOM_OVERLAY_USE_VSYNC
 endif
+ifneq ($(MR_QCOM_OVERLAY_HEAP_ID_MASK),)
+    common_C_FLAGS += -DMR_QCOM_OVERLAY_HEAP_ID_MASK=$(MR_QCOM_OVERLAY_HEAP_ID_MASK)
+endif
 endif
 
 
