@@ -295,11 +295,22 @@ static int alloc_ion_mem(struct fb_qcom_overlay_data *data, unsigned int size)
     ionAllocData.len = size;
     ionAllocData.align = sysconf(_SC_PAGESIZE);
 
-// are you kidding me -.-
-#if (PLATFORM_SDK_VERSION >= 21)
-    ionAllocData.heap_id_mask =
+// Ability to explicitely set if heap_id_mask or heap_mask should be used.
+#ifdef MR_QCOM_OVERLAY_HEAP_ID_MASK
+    #if MR_QCOM_OVERLAY_HEAP_ID_MASK == 1
+        ionAllocData.heap_id_mask =
+    #elif MR_QCOM_OVERLAY_HEAP_ID_MASK == 2
+        ionAllocData.heap_mask =
+    #else
+        #error Please set MR_QCOM_OVERLAY_HEAP_ID_MASK to either 1 or 2, see source for details.
+    #endif
 #else
-    ionAllocData.heap_mask =
+    // are you kidding me -.-
+    #if (PLATFORM_SDK_VERSION >= 21)
+        ionAllocData.heap_id_mask =
+    #else
+        ionAllocData.heap_mask =
+    #endif
 #endif
             ION_HEAP(ION_IOMMU_HEAP_ID) |
             ION_HEAP(21); // ION_SYSTEM_CONTIG_HEAP_ID
