@@ -18,6 +18,8 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "pw_ui.h"
 #include "encmnt_defines.h"
