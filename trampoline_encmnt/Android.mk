@@ -28,13 +28,17 @@ include $(multirom_local_path)/device_defines.mk
 
 include $(BUILD_EXECUTABLE)
 
-include $(CLEAR_VARS)
 
-LOCAL_MODULE := libmultirom_fake_properties
-LOCAL_MODULE_TAGS := eng
-LOCAL_C_INCLUDES += $(multirom_local_path)
+ifeq ($(MR_ENCRYPTION_FAKE_PROPERTIES),true)
+    include $(CLEAR_VARS)
 
-LOCAL_SRC_FILES := fake_properties.c
+    LOCAL_MODULE := libmultirom_fake_properties
+    LOCAL_MODULE_TAGS := eng
+    LOCAL_C_INCLUDES += $(multirom_local_path)
 
-include $(multirom_local_path)/device_defines.mk
-include $(BUILD_SHARED_LIBRARY)
+    LOCAL_SRC_FILES := fake_properties.c
+
+    include $(multirom_local_path)/device_defines.mk
+
+    include $(BUILD_SHARED_LIBRARY)
+endif
