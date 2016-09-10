@@ -23,10 +23,26 @@
  * so we hardcode it here
  */
 
+#ifdef MR_ENCRYPTION_FAKE_PROPERTIES_EXTRAS
+extern const char *mr_fake_properties[][2];
+#endif
+
 int property_get(const char *key, char *value, const char *default_value)
 {
     if (!strcmp(key, "sys.listeners.registered"))
         default_value = "true";
+
+#ifdef MR_ENCRYPTION_FAKE_PROPERTIES_EXTRAS
+    int i;
+    for(i = 0; mr_fake_properties[i][0]; ++i)
+    {
+        if (!strcmp(key, mr_fake_properties[i][0])) {
+            default_value = mr_fake_properties[i][1];
+            break;
+        }
+    }
+#endif
+
     if (default_value)
         strncpy(value, default_value, PROP_VALUE_MAX);
     return strlen(value);

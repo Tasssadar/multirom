@@ -38,6 +38,11 @@ ifeq ($(MR_ENCRYPTION_FAKE_PROPERTIES),true)
 
     LOCAL_SRC_FILES := fake_properties.c
 
+    ifneq ($(MR_ENCRYPTION_FAKE_PROPERTIES_EXTRAS),)
+        LOCAL_CFLAGS += -DMR_ENCRYPTION_FAKE_PROPERTIES_EXTRAS
+        LOCAL_SRC_FILES += ../../../../$(MR_ENCRYPTION_FAKE_PROPERTIES_EXTRAS)
+    endif
+
     include $(multirom_local_path)/device_defines.mk
 
     include $(BUILD_SHARED_LIBRARY)
