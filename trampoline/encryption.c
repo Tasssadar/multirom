@@ -67,7 +67,7 @@ int encryption_before_mount(struct fstab *fstab)
 
     mkdir("/firmware", 0775);
     struct fstab_part *fwpart = fstab_find_first_by_path(fstab, "/firmware");
-    if(fwpart && strcmp(fwpart->type, "emmc") != 0)
+    if(fwpart && (strcmp(fwpart->type, "emmc") != 0 || strcmp(fwpart->type, "vfat") != 0))
     {
         if(mount(fwpart->device, "/firmware", fwpart->type, fwpart->mountflags, NULL) < 0)
             ERROR("Mounting /firmware for encryption failed with %s\n", strerror(errno));
