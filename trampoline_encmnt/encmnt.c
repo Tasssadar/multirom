@@ -37,14 +37,22 @@
 #define CMD_REMOVE 2
 #define CMD_PWTYPE 3
 
-static int get_footer_from_opts(char *output, size_t output_size, const char *opts2)
+#define FSTAB_FLAGS "flags="
+
+static int get_footer_from_opts(char *output, size_t output_size, const char *options)
 {
     char *r, *saveptr;
-    char *dup = strdup(opts2);
+    char *dup;
     int res = -1;
     int i;
 
-    r = strtok_r(dup, ",", &saveptr);
+    if (strstr(options, FSTAB_FLAGS) != NULL) {
+        dup = strdup(options + strlen(FSTAB_FLAGS));
+        r = strtok_r(dup, ";", &saveptr);
+    } else {
+        dup = strdup(options);
+        r = strtok_r(dup, ",", &saveptr);
+    }
 
     static const char *names[] = {
         "encryptable=",
@@ -256,7 +264,15 @@ int main(int argc, char *argv[])
         goto exit;
     }
 
-    if(get_footer_from_opts(footer_location, sizeof(footer_location), p->options2) < 0)
+    strcpy(footer_location, "");
+
+    if(p->options != NULL && get_footer_from_opts(footer_location,
+            sizeof(footer_location), p->options) < 0)
+        goto exit;
+
+    if(p->options2 != NULL && strcmp(footer_location, "") == 0 &&
+            get_footer_from_opts(footer_location, sizeof(footer_location),
+            p->options2) < 0)
         goto exit;
 
     INFO("Setting encrypted partition data to %s %s %s\n", p->device, footer_location, p->type);
