@@ -27,6 +27,8 @@
 #include <errno.h>
 #include <sys/mount.h>
 #include <sys/klog.h>
+#include <sys/vfs.h>
+#include <sys/statvfs.h>
 #include <linux/loop.h>
 #include <ctype.h>
 #include <unistd.h>
@@ -1321,6 +1323,26 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
             if(mount_image(from, to, "ext4", flags[img][i], NULL) < 0)
                 goto exit;
         }
+    }
+
+    // make sure /system is ro, otherwise remount it ro
+    // if it's not ro, then the dir permissions may get changed to disallow 'x' (eg HTC 10)
+    struct statfs statfs_buf;
+    snprintf(to, sizeof(to), "/%s", folders[0][0]); // we could just use "/system", but this looks more sophisticated :P
+    INFO("Checking if system is ro\n");
+    if(statfs(to, &statfs_buf) < 0)
+    {
+        ERROR("Couldn't statfs %s (%d: %s)\n", to, errno, strerror(errno));
+    }
+    else if(!(statfs_buf.f_flags & ST_RDONLY))
+    {
+        INFO("system seems rw, attempting ro remount\n");
+        if(mount(NULL, to, NULL, MS_REMOUNT | MS_RDONLY | flags[img][0], NULL) < 0) // MS_RDONLY is redundant, but just in case it's changed/not in flags[][]
+        {
+            ERROR("Failed to remount ro %s (%d: %s)\n", to, errno, strerror(errno));
+            goto exit;
+        }
+        INFO("Remounted system as ro\n");
     }
 
     if(has_fw && fw_part)
