@@ -357,7 +357,7 @@ struct fstab *fstab_auto_load(void)
 
             // For some reason, CM includes goldfish's fstab, ignore it
             // (goldfish is the virtual device for emulator)
-            if(strcmp(dt->d_name, "fstab.goldfish") == 0)
+            if(strcmp(dt->d_name, "fstab.goldfish") == 0 || strcmp(dt->d_name, "fstab.ranchu") == 0)
                 continue;
 
             if(strncmp(dt->d_name, "fstab.", sizeof("fstab.")-1) == 0)
