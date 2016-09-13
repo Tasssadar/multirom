@@ -235,208 +235,6 @@ void multirom_kmsg_logging(int kmsg_backup_type)
     }
 }
 
-#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
-struct struct_nokexec nokexec_s;
-
-struct struct_nokexec * nokexec(void)
-{
-    return &nokexec_s;
-}
-
-// functions used by workaround
-int nokexec_set_struct(struct multirom_status *s)
-{
-    char path[256];
-    int has_kexec;
-
-    memset(&nokexec_s, 0, sizeof(struct struct_nokexec));
-
-    // primary boot.img backup
-    sprintf(path, "%s/%s", mrom_dir(), "primary_boot.img");
-    nokexec()->path_primary_bootimg = strdup(path);
-    INFO("nkk71: primary_boot.img location will be=%s\n", nokexec()->path_primary_bootimg);
-
-    // find boot mmcblk
-    nokexec()->path_boot_mmcblk = nokexec_find_boot_mmcblk_path(s);
-
-    // set flags
-    nokexec()->is_allowed     = s->allow_nkk71_nokexec & NO_KEXEC_ALLOWED;
-    nokexec()->is_ask_confirm = s->allow_nkk71_nokexec & NO_KEXEC_CONFIRM;
-    nokexec()->is_ask_choice  = s->allow_nkk71_nokexec & NO_KEXEC_CHOICE;
-    nokexec()->is_forced      = s->allow_nkk71_nokexec & NO_KEXEC_FORCED;
-
-    nokexec()->is_disabled    = !(nokexec()->is_allowed || nokexec()->is_ask_confirm || nokexec()->is_ask_choice || nokexec()->is_forced);
-
-    has_kexec = multirom_has_kexec();
-
-    if (!has_kexec)
-        nokexec()->selected_method = NO_KEXEC_BOOT_NOKEXEC;
-    else if (nokexec()->is_forced)
-        nokexec()->selected_method = NO_KEXEC_BOOT_NOKEXEC;
-    else
-        nokexec()->selected_method = NO_KEXEC_BOOT_KEXEC;
-
-
-    // not implemented
-    nokexec()->is_allow_kexec_primary = s->allow_nkk71_nokexec & NO_KEXEC_PRIMARY;
-    nokexec()->is_always_restore_primary = s->allow_nkk71_nokexec & NO_KEXEC_RESTORE;
-
-    return 1;
-}
-
-void nokexec_free_struct(void)
-{
-    if (nokexec()->path_primary_bootimg) free(nokexec()->path_primary_bootimg);
-    if (nokexec()->path_boot_mmcblk) free(nokexec()->path_boot_mmcblk);
-
-    //if (nokexec_s) free(nokexec_s);
-}
-
-char *nokexec_find_boot_mmcblk_path(struct multirom_status *s)
-{
-    struct fstab_part *boot;
-
-    INFO("nkk71: locating boot partition...\n");
-    boot = fstab_find_first_by_path(s->fstab, "/boot");
-    if (boot)
-        INFO("nkk71: found boot at '%s'\n", boot->device);
-    else
-    {
-        INFO("nkk71: not found in fstab, try looking at mrom.fstab...\n");
-
-        struct fstab *mrom_fstab;
-        char path_mrom_fstab[256];
-
-        sprintf(path_mrom_fstab, "%s/%s", mrom_dir(), "mrom.fstab");
-        mrom_fstab = fstab_load(path_mrom_fstab, 1);
-        if (!mrom_fstab)
-        {
-            ERROR("nkk71: couldn't load mrom.fstab '%s'\n", path_mrom_fstab);
-            return NULL;
-        }
-
-        boot = fstab_find_first_by_path(mrom_fstab, "/boot");
-        if (boot)
-            INFO("nkk71: found boot (using mrom.fstab) at '%s'\n", boot->device);
-        else
-            return NULL;
-    }
-    return strdup(boot->device);
-}
-
-int nokexec_cleanup(void)
-{
-    int res = 0;
-
-    if (access(nokexec()->path_primary_bootimg, R_OK) == 0)
-        INFO("nkk71: deleting primary boot.img, the backup is no longer needed; res=%d\n", res |= remove(nokexec()->path_primary_bootimg));
-
-    // legacy
-    char path_last2nd_bootimg[256];
-    sprintf(path_last2nd_bootimg, "%s/%s", mrom_dir(), "last_rom_was_2nd");
-    if (access(path_last2nd_bootimg, R_OK) == 0)
-        INFO("nkk71: deleting info 'last_rom_was_2nd'; res=%d\n", res |= remove(path_last2nd_bootimg));
-
-    return res;
-}
-
-int nokexec_set_secondary_flag(void)
-{
-    int res = -1;
-    struct bootimg img;
-
-    // make note that the primary slot now contains a secondary boot.img
-    // by tagging the BOOT_NAME at the very end, even after a null terminated "tr_verNN" string
-    INFO("nkk71: Going to tag the bootimg in primary slot as a secondary\n");
-
-    if (libbootimg_init_load(&img, nokexec()->path_boot_mmcblk, LIBBOOTIMG_LOAD_ALL) < 0)
-    {
-        ERROR("nkk71: Could not open boot image (%s)!\n", nokexec()->path_boot_mmcblk);
-        return -1;
-    }
-
-    // Update the boot.img
-    img.hdr.name[BOOT_NAME_SIZE-1] = 0x71;
-
-    INFO("nkk71: Writing boot.img updated with secondary flag set\n");
-    if (libbootimg_write_img(&img, nokexec()->path_boot_mmcblk) < 0)
-    {
-        ERROR("Failed to libbootimg_write_img!\n");
-    }
-    else
-        res = 0;
-
-    libbootimg_destroy(&img);
-    return res;
-}
-
-int nokexec_backup_primary(void)
-{
-    int res;
-
-    INFO("nkk71: backing up primary boot.img; res=%d\n", res = copy_file(nokexec()->path_boot_mmcblk, nokexec()->path_primary_bootimg));
-
-    return res;
-}
-
-int nokexec_flash_to_primary(const char * source)
-{
-    int res;
-
-    INFO("nkk71: flashing '%s' to boot partition; res=%d\n", source, res = copy_file(source, nokexec()->path_boot_mmcblk));
-
-    if (res == 0)
-    {
-        // Trampolines in ROM boot images may get out of sync, so we need to check it and
-        // update if needed. I can't do that during ZIP installation because of USB drives.
-        if(inject_bootimg(nokexec()->path_boot_mmcblk, 0) < 0)
-        {
-            ERROR("nkk71: Failed to inject bootimg!\n");
-            res = -1;
-        }
-    }
-    return res;
-}
-
-int nokexec_is_secondary_in_primary(void)
-{
-    int res = 0;
-    struct bootimg img;
-
-    if (libbootimg_init_load(&img, nokexec()->path_boot_mmcblk, LIBBOOTIMG_LOAD_ALL) < 0)
-    {
-        ERROR("nkk71: Could not open boot image (%s)!\n", nokexec()->path_boot_mmcblk);
-    }
-    else
-    {
-        if (img.hdr.name[BOOT_NAME_SIZE-1] == 0x71)
-            res = 1;
-
-        libbootimg_destroy(&img);
-    }
-    INFO("nkk71: Checking the primary slot bootimg for the secondary tag; res=%d\n", res);
-
-    return res;
-}
-
-int nokexec_is_new_primary(void)
-{
-    int is_new = 0;
-
-    // check if it even exists, otherwise it's "new" (1)
-    if (access(nokexec()->path_primary_bootimg, R_OK) != 0)
-        is_new = 1;
-
-    // if the current bootimg is not tagged, then it's new (2)
-    else if (!nokexec_is_secondary_in_primary())
-        is_new = 2;
-
-    INFO("nkk71: Checking if primary is new; is_new=%d\n", is_new);
-
-    return is_new;
-}
-#endif //MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
-
 int multirom(const char *rom_to_boot)
 {
     if(multirom_find_base_dir() == -1)
@@ -460,43 +258,25 @@ int multirom(const char *rom_to_boot)
     struct multirom_rom *to_boot = NULL;
     int exit = (EXIT_REBOOT | EXIT_UMOUNT);
 
-#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
-    // setup global variables here
-    nokexec_set_struct(&s);
-#endif
-
     if(rom_to_boot != NULL)
     {
         struct multirom_rom *rom = multirom_get_rom(&s, rom_to_boot, NULL);
         if(rom)
         {
-
-#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
-            // nkk71: check for kexec support, otherwise use workaround
-            if ((nokexec()->selected_method == NO_KEXEC_BOOT_NOKEXEC) || (nokexec()->selected_method == NO_KEXEC_BOOT_PRIMARY))
+            // Two possible scenarios: this ROM has kexec-hardboot and target
+            // ROM has boot image, so kexec it immediatelly or
+            // reboot and then proceed as usuall
+            if(((M(rom->type) & MASK_KEXEC) || rom->has_bootimg) && rom->type != ROM_DEFAULT && multirom_has_kexec())
             {
                 to_boot = rom;
                 s.is_second_boot = 0;
-                INFO("nkk71: Re-Booting ROM %s...\n", rom_to_boot);
+                INFO("Booting ROM %s...\n", rom_to_boot);
             }
             else
-#endif
             {
-                // Two possible scenarios: this ROM has kexec-hardboot and target
-                // ROM has boot image, so kexec it immediatelly or
-                // reboot and then proceed as usuall
-                if(((M(rom->type) & MASK_KEXEC) || rom->has_bootimg) && rom->type != ROM_DEFAULT && multirom_has_kexec())
-                {
-                    to_boot = rom;
-                    s.is_second_boot = 0;
-                    INFO("Booting ROM %s...\n", rom_to_boot);
-                }
-                else
-                {
-                    s.current_rom = rom;
-                    s.auto_boot_type |= AUTOBOOT_FORCE_CURRENT;
-                    INFO("Setting ROM %s to force autoboot\n", rom_to_boot);
-                }
+                s.current_rom = rom;
+                s.auto_boot_type |= AUTOBOOT_FORCE_CURRENT;
+                INFO("Setting ROM %s to force autoboot\n", rom_to_boot);
             }
         }
         else
@@ -541,73 +321,6 @@ int multirom(const char *rom_to_boot)
         if(rom_to_boot == NULL)
             multirom_run_scripts("run-on-boot", to_boot);
 
-#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
-        //==========================================================================================================================
-        // nkk71: check for kexec support, otherwise use workaround
-        if ((nokexec()->selected_method == NO_KEXEC_BOOT_NOKEXEC) || (nokexec()->selected_method == NO_KEXEC_BOOT_PRIMARY))
-        {
-            // nkk71: workaround for lack of kexec-hb support:
-            // flash correct boot.img to primary slot,
-            // initiate a reboot, and autoboot the ROM
-            #define NKK71_ABORT { \
-                        ERROR("nkk71: ERROR occurred in the above, aborting to recovery\n"); \
-                        exit = (EXIT_REBOOT_RECOVERY | EXIT_UMOUNT);  goto finish; \
-                    }
-
-            // now the real workaround
-            if (s.is_second_boot == 0)
-            {
-                // make sure all the paths are set up, otherwise abort
-                if (!nokexec()->path_boot_mmcblk || !nokexec()->path_primary_bootimg) NKK71_ABORT
-
-
-                if (to_boot->type != ROM_DEFAULT)
-                {
-                    char path_bootimg[256];
-
-                    if (nokexec_is_new_primary()) nokexec_backup_primary();
-
-                    // now flash the secondary boot.img to primary slot
-                    sprintf(path_bootimg, "%s/%s", to_boot->base_path, "boot.img");
-                    if (nokexec_flash_to_primary(path_bootimg)) NKK71_ABORT
-
-                    // make note that the primary slot now contains a secondary boot.img
-                    if (nokexec_set_secondary_flag()) NKK71_ABORT
-                }
-                else
-                {
-                    // we're booting into primary
-                    if (nokexec_is_secondary_in_primary())
-                    {
-                        // check if primary_boot.img exits , if it does then restore it
-                        if (access(nokexec()->path_primary_bootimg, R_OK) == 0)
-                        {
-                            if (nokexec_flash_to_primary(nokexec()->path_primary_bootimg)) NKK71_ABORT
-                        }
-                        else
-                        {
-                            ERROR("nkk71: no primary boot.img was found, so cannot restore it\n");
-                            // NOTE: theoretically we could try booting into primary, even with a secondary
-                            //       boot.img installed, if it's compatible it will boot, but we're not going to
-                            NKK71_ABORT
-                        }
-                    }
-
-                    // remove no longer needed files, in case of error, just log it
-                    if(nokexec_cleanup())
-                        ERROR("nkk71: WARNING: error in no_kexec_cleanup\n");
-                }
-            }
-        }
-        else if (s.is_second_boot == 0)
-        {
-            INFO("nkk71: kexec support is present so delete files used by workaround if they are there (thx CPTB)\n");
-            if(nokexec_cleanup())
-                ERROR("nkk71: WARNING: error in no_kexec_cleanup\n");
-        }
-        //==========================================================================================================================
-#endif
-
         exit = multirom_prepare_for_boot(&s, to_boot);
 
         // Something went wrong, exit/reboot
@@ -638,31 +351,11 @@ int multirom(const char *rom_to_boot)
             // mrom_kexecd=1 param might be lost if kernel does not have kexec patches
             ERROR(SECOND_BOOT_KMESG);
         }
-
-#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
-        // nkk71: check for kexec support, otherwise use workaround
-        else if ((nokexec()->selected_method == NO_KEXEC_BOOT_NOKEXEC) || (nokexec()->selected_method == NO_KEXEC_BOOT_PRIMARY))
-        {
-            if (s.is_second_boot == 0 && ((M(to_boot->type) & MASK_ANDROID) || (to_boot->type == ROM_DEFAULT)))
-            {
-                // nkk71: force a full reboot (due to boot.img flashing from above), then autoboot the ROM
-                s.is_second_boot = 1;
-                exit = (EXIT_REBOOT | EXIT_UMOUNT);
-                INFO("nkk71: go for reboot second_boot!\n");
-                ERROR(SECOND_BOOT_KMESG); // go for second_boot = 1
-            }
-        }
-#endif
-
         else
             s.is_second_boot = 0;
     }
 
 finish:
-#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
-    // release stuff
-    nokexec_free_struct();
-#endif
     if (s.enable_kmsg_logging != 0)
         multirom_kmsg_logging(BACKUP_LATE_KLOG);
     multirom_save_status(&s);
@@ -820,9 +513,6 @@ int multirom_default_status(struct multirom_status *s)
     s->is_second_boot = 0;
     s->current_rom = NULL;
     s->roms = NULL;
-#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
-    s->allow_nkk71_nokexec = NO_KEXEC_DISABLED;
-#endif
     s->colors = 0;
     s->brightness = MULTIROM_DEFAULT_BRIGHTNESS;
     s->enable_adb = 0;
@@ -965,10 +655,6 @@ int multirom_load_status(struct multirom_status *s)
             s->auto_boot_type = atoi(arg);
         else if(strstr(name, "curr_rom_part"))
             s->curr_rom_part = strdup(arg);
-#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
-        else if(strstr(name, "allow_nkk71_nokexec"))
-            s->allow_nkk71_nokexec = atoi(arg);
-#endif
         else if(strstr(name, "colors_v2"))
             s->colors = atoi(arg);
         else if(strstr(name, "brightness"))
@@ -1076,9 +762,6 @@ int multirom_save_status(struct multirom_status *s)
     fprintf(f, "auto_boot_rom=%s\n", auto_boot_name);
     fprintf(f, "auto_boot_type=%d\n", s->auto_boot_type);
     fprintf(f, "curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "");
-#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
-    fprintf(f, "allow_nkk71_nokexec=%d\n", s->allow_nkk71_nokexec);
-#endif
     fprintf(f, "colors_v2=%d\n", s->colors);
     fprintf(f, "brightness=%d\n", s->brightness);
     fprintf(f, "enable_adb=%d\n", s->enable_adb);
@@ -1114,9 +797,6 @@ void multirom_dump_status(struct multirom_status *s)
     INFO("  is_second_boot=%d\n", s->is_second_boot);
     INFO("  is_running_in_primary_rom=%d\n", s->is_running_in_primary_rom);
     INFO("  current_rom=%s\n", s->current_rom ? s->current_rom->name : "NULL");
-#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
-    INFO("  allow_nkk71_nokexec=%d\n", s->allow_nkk71_nokexec);
-#endif
     INFO("  colors_v2=%d\n", s->colors);
     INFO("  brightness=%d\n", s->brightness);
     INFO("  enable_adb=%d\n", s->enable_adb);
@@ -1423,12 +1103,7 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     int exit = EXIT_UMOUNT;
     int type = to_boot->type;
 
-
-#ifndef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
     if(((M(type) & MASK_KEXEC) || to_boot->has_bootimg) && type != ROM_DEFAULT && s->is_second_boot == 0)
-#else
-    if(((M(type) & MASK_KEXEC) || (to_boot->has_bootimg && (nokexec()->selected_method == NO_KEXEC_BOOT_KEXEC))) && type != ROM_DEFAULT && s->is_second_boot == 0)
-#endif
     {
         if(multirom_load_kexec(s, to_boot) != 0)
             return -1;
@@ -1989,12 +1664,7 @@ int multirom_get_bootloader_cmdline(struct multirom_status *s, char *str, size_t
             *c = ' ';
 
     // Remove the part from boot.img
-#ifndef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
     if(s->is_running_in_primary_rom || !s->current_rom || !s->current_rom->has_bootimg)
-#else
-    // probably not needed, but for consistency
-    if(s->is_running_in_primary_rom || !s->current_rom || !(s->current_rom->has_bootimg && (nokexec()->selected_method == NO_KEXEC_BOOT_KEXEC)))
-#endif
     {
         boot = fstab_find_first_by_path(s->fstab, "/boot");
         if(boot && libbootimg_load_header(&hdr, boot->device) >= 0)

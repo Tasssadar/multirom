@@ -101,9 +101,6 @@ struct multirom_status
     int is_running_in_primary_rom;
     int auto_boot_seconds;
     int auto_boot_type;
-#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
-    int allow_nkk71_nokexec;
-#endif
     int colors;
     int brightness;
     int enable_adb;
@@ -121,62 +118,6 @@ struct multirom_status
     struct fstab *fstab;
     struct rcadditions rc;
 };
-
-#ifdef MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
-enum
-{
-    // enabled/disbaled
-    NO_KEXEC_DISABLED    =  0x00,   // no-kexec workaround disabled
-
-    NO_KEXEC_ALLOWED     =  0x01,   // "Use no-kexec only when needed"
-    NO_KEXEC_CONFIRM     =  0x02,   // "..... but also ask for confirmation"
-    NO_KEXEC_CHOICE      =  0x04,   // "Ask whether to kexec or use no-kexec"
-    NO_KEXEC_FORCED      =  0x08,   // "Always force using no-kexec workaround"
-
-    // options
-    NO_KEXEC_PRIMARY     =  0x40,   // Allow kexec'ing into primary
-    NO_KEXEC_RESTORE     =  0x80    // Always restore primary if a secondary is in primary
-};
-
-enum
-{
-    NO_KEXEC_BOOT_NONE      = 0,
-    NO_KEXEC_BOOT_KEXEC     = 1,
-    NO_KEXEC_BOOT_NOKEXEC   = 2,
-    NO_KEXEC_BOOT_PRIMARY   = 3
-};
-
-struct struct_nokexec
-{
-    int is_disabled;
-
-    int is_allowed;
-    int is_ask_confirm;
-    int is_ask_choice;
-    int is_forced;
-
-    int selected_method;
-
-    int is_allow_kexec_primary;
-    int is_always_restore_primary;
-
-    char * path_boot_mmcblk;
-    char * path_primary_bootimg;
-};
-
-// functions used by workaround
-struct struct_nokexec * nokexec(void);
-
-int nokexec_set_struct(struct multirom_status *s);
-void nokexec_free_struct(void);
-char *nokexec_find_boot_mmcblk_path(struct multirom_status *s);
-int nokexec_cleanup(void);
-int nokexec_set_secondary_flag(void);
-int nokexec_backup_primary(void);
-int nokexec_flash_to_primary(const char * source);
-int nokexec_is_secondary_in_primary(void);
-int nokexec_is_new_primary(void);
-#endif //MR_ALLOW_NKK71_NOKEXEC_WORKAROUND
 
 int multirom(const char *rom_to_boot);
 int multirom_find_base_dir(void);
