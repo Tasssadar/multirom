@@ -62,7 +62,9 @@ int encryption_before_mount(struct fstab *fstab)
     symlink("/mrom_enc/res/Roboto-Regular.ttf", "/mrom_enc/res/Roboto-Italic.ttf");
     symlink("/mrom_enc/res/Roboto-Regular.ttf", "/mrom_enc/res/Roboto-Medium.ttf");
 
-    remove("/vendor");
+    if (access("/vendor", F_OK) >= 0) {
+        rename("/vendor", "/vendor_boot");
+    }
     symlink("/mrom_enc/vendor", "/vendor");
 
     mkdir("/firmware", 0775);
@@ -157,6 +159,9 @@ int encryption_cleanup(void)
     tramp_hook_encryption_cleanup();
 #endif
     remove("/vendor");
+    if (access("/vendor_boot", F_OK) >= 0) {
+        rename("/vendor_boot", "/vendor");
+    }
 
     if(access("/firmware", R_OK) >= 0 && umount("/firmware") < 0)
         ERROR("encryption_cleanup: failed to unmount /firmware: %s\n", strerror(errno));
