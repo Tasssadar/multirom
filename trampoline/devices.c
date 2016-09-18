@@ -660,6 +660,9 @@ static char **parse_platform_block_device(struct uevent *uevent)
         links[link_num] = NULL;
 #endif
 
+#ifdef MR_DEVICE_BOOTDEVICE
+    symlink(MR_DEVICE_BOOTDEVICE, "/dev/block/bootdevice");
+#endif
     return links;
 }
 
