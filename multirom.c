@@ -748,7 +748,7 @@ int multirom_load_status(struct multirom_status *s)
     fclose(f);
 
     // find USB drive if we're booting from it
-    if(s->curr_rom_part && s->is_second_boot)
+    if(s->curr_rom_part) // && s->is_second_boot)
     {
         struct usb_partition *p = NULL;
         int tries = 0;
@@ -781,7 +781,7 @@ int multirom_load_status(struct multirom_status *s)
         }
     }
 
-    if((s->auto_boot_type & AUTOBOOT_LAST) && !s->curr_rom_part)
+    if((s->auto_boot_type & AUTOBOOT_LAST)) // && !s->curr_rom_part)
     {
         s->auto_boot_rom = s->current_rom;
     }
@@ -920,6 +920,11 @@ void multirom_free_rom(void *rom)
 
 void multirom_find_usb_roms(struct multirom_status *s)
 {
+    char auto_boot_name[MAX_ROM_NAME_LEN+1];
+    char current_name[MAX_ROM_NAME_LEN+1];
+    multirom_fixup_rom_name(s->auto_boot_rom, auto_boot_name, "");
+    multirom_fixup_rom_name(s->current_rom, current_name, INTERNAL_ROM_NAME);
+
     // remove USB roms
     int i;
     for(i = 0; s->roms && s->roms[i];)
@@ -939,6 +944,9 @@ void multirom_find_usb_roms(struct multirom_status *s)
     for(i = 0; s->partitions && s->partitions[i]; ++i)
         multirom_scan_partition_for_roms(s, s->partitions[i]);
     pthread_mutex_unlock(&parts_mutex);
+
+    s->current_rom = multirom_get_rom(s, current_name, s->curr_rom_part);
+    s->auto_boot_rom = multirom_get_rom(s, auto_boot_name, s->curr_rom_part);
 
     multirom_dump_status(s);
 }
