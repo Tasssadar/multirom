@@ -158,9 +158,9 @@ void multirom_kmsg_rename_logs(const char *path_logs_dir, const char *base_name,
                 sprintf(tmp, "_%i_", i+1);
                 strncpy(pos, tmp, strlen(tmp));
                 if (i == max_count)
-                    INFO("Deleting oldest log '%s' res=%d\n", path_file_1, remove(path_file_1));
+                    remove(path_file_1); //INFO("Deleting oldest log '%s' res=%d\n", path_file_1, remove(path_file_1));
                 else
-                    INFO("Renaming older log '%s' to '%s' res=%d\n", path_file_1, path_file_2, rename(path_file_1, path_file_2));
+                    rename(path_file_1, path_file_2); //INFO("Renaming older log '%s' to '%s' res=%d\n", path_file_1, path_file_2, rename(path_file_1, path_file_2));
             }
         }
     }
