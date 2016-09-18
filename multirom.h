@@ -101,6 +101,9 @@ struct multirom_status
     int is_running_in_primary_rom;
     int auto_boot_seconds;
     int auto_boot_type;
+#ifdef MR_NO_KEXEC
+    int no_kexec;
+#endif
     int colors;
     int brightness;
     int enable_adb;

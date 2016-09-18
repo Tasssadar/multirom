@@ -7,6 +7,12 @@ LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT)
 LOCAL_UNSTRIPPED_PATH := $(TARGET_ROOT_OUT_UNSTRIPPED)
 LOCAL_SHARED_LIBRARIES := libcryptfslollipop libcutils
 LOCAL_STATIC_LIBRARIES := libmultirom_static
+
+MR_NO_KEXEC_MK_OPTIONS := true 1 allowed 2 enabled 3 ui_confirm 4 ui_choice 5 forced
+ifneq (,$(filter $(MR_NO_KEXEC), $(MR_NO_KEXEC_MK_OPTIONS)))
+    LOCAL_STATIC_LIBRARIES +=libbootimg
+endif
+
 LOCAL_WHOLE_STATIC_LIBRARIES := libm libpng libz libft2_mrom_static
 
 ifneq ($(wildcard bootable/recovery/crypto/lollipop/cryptfs.h),)

@@ -55,6 +55,11 @@
 #include "rom_quirks.h"
 #include "kexec.h"
 
+#ifdef MR_NO_KEXEC
+#include "no_kexec.h"
+#endif
+
+
 #define REALDATA "/realdata"
 #define BUSYBOX_BIN "busybox"
 #define KEXEC_BIN "kexec"
@@ -260,6 +265,23 @@ int multirom(const char *rom_to_boot)
     struct multirom_rom *to_boot = NULL;
     int exit = (EXIT_REBOOT | EXIT_UMOUNT);
 
+#ifdef MR_NO_KEXEC
+    // setup global variables here
+    nokexec_set_struct(&s);
+
+
+    // check if a partition mount failed, in which case multirom usually just boots internal
+    if (s.current_rom->type == ROM_DEFAULT && nokexec_is_second_boot())
+    {
+        ERROR("NO_KEXEC: Something went wrong in mounting the needed partition, so falling back...");
+        nokexec()->selected_method = NO_KEXEC_BOOT_NORMAL;
+        s.is_second_boot = 0; 
+        //ERROR("NO_KEXEC:    to Internal\n");     s.auto_boot_type = AUTOBOOT_FORCE_CURRENT;                // force reboot to Internal (this would be mrom default behaviour)
+        //ERROR("NO_KEXEC:    to MultiROM GUI\n"); s.auto_boot_type = AUTOBOOT_NAME;                         // bring up the gui instead
+        ERROR("NO_KEXEC:    to Recovery\n"); exit = (EXIT_REBOOT_RECOVERY | EXIT_UMOUNT);  goto finish;      // reboot to recovery
+    }
+#endif
+
     if(rom_to_boot != NULL)
     {
         struct multirom_rom *rom = multirom_get_rom(&s, rom_to_boot, NULL);
@@ -320,6 +342,42 @@ int multirom(const char *rom_to_boot)
     {
         s.auto_boot_type &= ~(AUTOBOOT_FORCE_CURRENT);
 
+#ifdef MR_NO_KEXEC
+        #define MR_NO_KEXEC_ABORT { \
+                    ERROR("NO_KEXEC: ERROR occurred in the above, aborting to recovery\n"); \
+                    exit = (EXIT_REBOOT_RECOVERY | EXIT_UMOUNT);  goto finish; \
+                }
+
+        if (s.is_second_boot != 0)
+        {
+            // Restore primary boot.img, and continue
+            if (nokexec_restore_primary_and_cleanup() < 0)
+                MR_NO_KEXEC_ABORT;
+        }
+        else
+        {
+            if ((to_boot->type != ROM_DEFAULT) && to_boot->has_bootimg)
+            {
+                // Flash secondary boot.img, and reboot
+                // note: a secondary boot.img in primary slot will trigger second_boot=1
+                //       so we don't need to worry about that any more
+                if (nokexec_flash_secondary_bootimg(to_boot) < 0)
+                    MR_NO_KEXEC_ABORT;
+
+                s.current_rom = to_boot;
+
+                free(s.curr_rom_part);
+                s.curr_rom_part = NULL;
+
+                if(to_boot->partition)
+                    s.curr_rom_part = strdup(to_boot->partition->uuid);
+
+                exit = (EXIT_REBOOT | EXIT_UMOUNT);
+                goto finish;
+            }
+        }
+#endif
+
         if(rom_to_boot == NULL)
             multirom_run_scripts("run-on-boot", to_boot);
 
@@ -358,6 +416,9 @@ int multirom(const char *rom_to_boot)
     }
 
 finish:
+#ifdef MR_NO_KEXEC
+    nokexec_free_struct();
+#endif
     if (s.enable_kmsg_logging != 0)
         multirom_kmsg_logging(BACKUP_LATE_KLOG);
     multirom_save_status(&s);
@@ -515,6 +576,9 @@ int multirom_default_status(struct multirom_status *s)
     s->is_second_boot = 0;
     s->current_rom = NULL;
     s->roms = NULL;
+#ifdef MR_NO_KEXEC
+    s->no_kexec = MR_NO_KEXEC;
+#endif
     s->colors = 0;
     s->brightness = MULTIROM_DEFAULT_BRIGHTNESS;
     s->enable_adb = 0;
@@ -657,6 +721,10 @@ int multirom_load_status(struct multirom_status *s)
             s->auto_boot_type = atoi(arg);
         else if(strstr(name, "curr_rom_part"))
             s->curr_rom_part = strdup(arg);
+#ifdef MR_NO_KEXEC
+        else if(strstr(name, "no_kexec"))
+            s->no_kexec = atoi(arg);
+#endif
         else if(strstr(name, "colors_v2"))
             s->colors = atoi(arg);
         else if(strstr(name, "brightness"))
@@ -764,6 +832,9 @@ int multirom_save_status(struct multirom_status *s)
     fprintf(f, "auto_boot_rom=%s\n", auto_boot_name);
     fprintf(f, "auto_boot_type=%d\n", s->auto_boot_type);
     fprintf(f, "curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "");
+#ifdef MR_NO_KEXEC
+    fprintf(f, "no_kexec=%d\n", s->no_kexec);
+#endif
     fprintf(f, "colors_v2=%d\n", s->colors);
     fprintf(f, "brightness=%d\n", s->brightness);
     fprintf(f, "enable_adb=%d\n", s->enable_adb);
@@ -799,6 +870,9 @@ void multirom_dump_status(struct multirom_status *s)
     INFO("  is_second_boot=%d\n", s->is_second_boot);
     INFO("  is_running_in_primary_rom=%d\n", s->is_running_in_primary_rom);
     INFO("  current_rom=%s\n", s->current_rom ? s->current_rom->name : "NULL");
+#ifdef MR_NO_KEXEC
+    INFO("  no_kexec=%d\n", s->no_kexec);
+#endif
     INFO("  colors_v2=%d\n", s->colors);
     INFO("  brightness=%d\n", s->brightness);
     INFO("  enable_adb=%d\n", s->enable_adb);
@@ -1105,7 +1179,12 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     int exit = EXIT_UMOUNT;
     int type = to_boot->type;
 
+
+#ifndef MR_NO_KEXEC
     if(((M(type) & MASK_KEXEC) || to_boot->has_bootimg) && type != ROM_DEFAULT && s->is_second_boot == 0)
+#else
+    if(((M(type) & MASK_KEXEC) || (to_boot->has_bootimg && (nokexec()->selected_method == NO_KEXEC_BOOT_NORMAL))) && type != ROM_DEFAULT && s->is_second_boot == 0)
+#endif
     {
         if(multirom_load_kexec(s, to_boot) != 0)
             return -1;
@@ -1686,7 +1765,12 @@ int multirom_get_bootloader_cmdline(struct multirom_status *s, char *str, size_t
             *c = ' ';
 
     // Remove the part from boot.img
+//#ifndef MR_NO_KEXEC
     if(s->is_running_in_primary_rom || !s->current_rom || !s->current_rom->has_bootimg)
+//#else
+//    // probably not needed, but for consistency
+//    if(s->is_running_in_primary_rom || !s->current_rom || !(s->current_rom->has_bootimg && (nokexec()->selected_method == NO_KEXEC_BOOT_KEXEC)))
+//#endif
     {
         boot = fstab_find_first_by_path(s->fstab, "/boot");
         if(boot && libbootimg_load_header(&hdr, boot->device) >= 0)

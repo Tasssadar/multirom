@@ -65,6 +65,15 @@ LOCAL_CFLAGS += $(common_C_FLAGS)
 LOCAL_C_INCLUDES += $(common_C_INCLUDES)
 LOCAL_SRC_FILES := $(common_SRC_FILES)
 
+MR_NO_KEXEC_MK_OPTIONS := true 1 allowed 2 enabled 3 ui_confirm 4 ui_choice 5 forced
+ifneq (,$(filter $(MR_NO_KEXEC), $(MR_NO_KEXEC_MK_OPTIONS)))
+    # clone libbootimg to /system/extras/ from
+    # https://github.com/Tasssadar/libbootimg.git
+    LOCAL_STATIC_LIBRARIES += libbootimg
+    LOCAL_C_INCLUDES += system/extras/libbootimg/include
+    LOCAL_SRC_FILES += ../no_kexec.c
+endif
+
 include $(multirom_local_path)/device_defines.mk
 
 include $(BUILD_STATIC_LIBRARY)
@@ -79,6 +88,15 @@ LOCAL_SHARED_LIBRARIES := libcutils libc libm libpng libz libft2
 LOCAL_CFLAGS += $(common_C_FLAGS)
 LOCAL_SRC_FILES := $(common_SRC_FILES)
 LOCAL_C_INCLUDES += $(common_C_INCLUDES)
+
+MR_NO_KEXEC_MK_OPTIONS := true 1 allowed 2 enabled 3 ui_confirm 4 ui_choice 5 forced
+ifneq (,$(filter $(MR_NO_KEXEC), $(MR_NO_KEXEC_MK_OPTIONS)))
+    # clone libbootimg to /system/extras/ from
+    # https://github.com/Tasssadar/libbootimg.git
+    LOCAL_STATIC_LIBRARIES += libbootimg
+    LOCAL_C_INCLUDES += system/extras/libbootimg/include
+    LOCAL_SRC_FILES += ../no_kexec.c
+endif
 
 include $(multirom_local_path)/device_defines.mk
 

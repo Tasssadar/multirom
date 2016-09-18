@@ -18,6 +18,10 @@
 #include <string.h>
 #include <stdio.h>
 
+#ifdef MR_NO_KEXEC
+#include "../no_kexec.h"
+#endif
+
 #include "mrom_data.h"
 
 static char multirom_dir[128] = { 0 };
@@ -83,6 +87,12 @@ int mrom_is_second_boot(void)
             goto exit;
         }
     }
+
+#ifdef MR_NO_KEXEC
+    res = nokexec_is_second_boot();
+    if (res < 0)
+        res = 0;
+#endif
 
 exit:
     fclose(f);
