@@ -774,6 +774,7 @@ int multirom_load_status(struct multirom_status *s)
     {
         ERROR("Failed to select current rom (%s, part %s), using Internal!\n", current_rom, s->curr_rom_part);
         s->current_rom = multirom_get_internal(s);
+        s->curr_rom_part = NULL;
         if(!s->current_rom)
         {
             ERROR("No internal rom found!\n");
@@ -947,6 +948,12 @@ void multirom_find_usb_roms(struct multirom_status *s)
 
     s->current_rom = multirom_get_rom(s, current_name, s->curr_rom_part);
     s->auto_boot_rom = multirom_get_rom(s, auto_boot_name, s->curr_rom_part);
+
+    if (!s->current_rom)
+         s->current_rom = multirom_get_internal(s);
+
+    if (!s->auto_boot_rom)
+        s->auto_boot_rom = multirom_get_internal(s);
 
     multirom_dump_status(s);
 }
