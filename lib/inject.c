@@ -175,6 +175,14 @@ int inject_bootimg(const char *img_path, int force)
     char initrd_path[256];
     static const char *initrd_tmp_name = "/inject-initrd.img";
 
+#ifdef BOARD_BOOTIMAGE_PARTITION_SIZE
+    if(access(img_path, F_OK) == 0)
+    {
+        INFO("Truncating fake boot.img to %d bytes\n", BOARD_BOOTIMAGE_PARTITION_SIZE);
+        truncate(img_path, BOARD_BOOTIMAGE_PARTITION_SIZE);
+    }
+#endif
+
     if(libbootimg_init_load(&img, img_path, LIBBOOTIMG_LOAD_ALL) < 0)
     {
         ERROR("Could not open boot image (%s)!\n", img_path);
