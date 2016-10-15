@@ -26,6 +26,9 @@
 #include "log.h"
 #include "util.h"
 #include "../version.h"
+#ifdef MR_NO_KEXEC
+#include "../no_kexec.h"
+#endif
 
 // clone libbootimg to /system/extras/ from
 // https://github.com/Tasssadar/libbootimg.git
@@ -190,7 +193,11 @@ int inject_bootimg(const char *img_path, int force)
     }
 
     img_ver = get_img_trampoline_ver(&img);
+#ifndef MR_NO_KEXEC
     if(!force && img_ver == VERSION_TRAMPOLINE)
+#else
+    if(!force && img_ver == VERSION_TRAMPOLINE && img.hdr.name[BOOT_NAME_SIZE-2] == VERSION_NO_KEXEC)
+#endif
     {
         INFO("No need to update trampoline.\n");
         res = 0;
@@ -209,6 +216,9 @@ int inject_bootimg(const char *img_path, int force)
     {
         // Update the boot.img
         snprintf((char*)img.hdr.name, BOOT_NAME_SIZE, "tr_ver%d", VERSION_TRAMPOLINE);
+#ifdef MR_NO_KEXEC
+        img.hdr.name[BOOT_NAME_SIZE-2] = VERSION_NO_KEXEC;
+#endif
 #ifdef MR_RD_ADDR
         img.hdr.ramdisk_addr = MR_RD_ADDR;
 #endif

@@ -271,14 +271,14 @@ int multirom(const char *rom_to_boot)
 
 
     // check if a partition mount failed, in which case multirom usually just boots internal
-    if (s.current_rom->type == ROM_DEFAULT && nokexec_is_second_boot())
+    if (s.current_rom && s.current_rom->type == ROM_DEFAULT && nokexec_is_second_boot())
     {
-        ERROR("NO_KEXEC: Something went wrong in mounting the needed partition, so falling back...");
+        ERROR(NO_KEXEC_LOG_TEXT ": Something went wrong in mounting the needed partition, so falling back...");
         nokexec()->selected_method = NO_KEXEC_BOOT_NORMAL;
         s.is_second_boot = 0; 
-        //ERROR("NO_KEXEC:    to Internal\n");     s.auto_boot_type = AUTOBOOT_FORCE_CURRENT;                // force reboot to Internal (this would be mrom default behaviour)
-        //ERROR("NO_KEXEC:    to MultiROM GUI\n"); s.auto_boot_type = AUTOBOOT_NAME;                         // bring up the gui instead
-        ERROR("NO_KEXEC:    to Recovery\n"); exit = (EXIT_REBOOT_RECOVERY | EXIT_UMOUNT);  goto finish;      // reboot to recovery
+        //ERROR(NO_KEXEC_LOG_TEXT ":    to Internal\n");     s.auto_boot_type = AUTOBOOT_FORCE_CURRENT;                // force reboot to Internal (this would be mrom default behaviour)
+        //ERROR(NO_KEXEC_LOG_TEXT ":    to MultiROM GUI\n"); s.auto_boot_type = AUTOBOOT_NAME;                         // bring up the gui instead
+        ERROR(NO_KEXEC_LOG_TEXT ":    to Recovery\n"); exit = (EXIT_REBOOT_RECOVERY | EXIT_UMOUNT);  goto finish;      // reboot to recovery
     }
 #endif
 

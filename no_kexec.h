@@ -61,6 +61,16 @@ struct struct_nokexec
 };
 
 
+// The below version number only needs to get bumped if there is a trampoline
+// related change, ie a change in "nokexec_is_second_boot()" function.
+// Do NOT bump it for any other reason, because it will force re-injection
+// on secondary ROMs even when not needed.
+#define VERSION_NO_KEXEC '\x02'
+
+// This text will be prepended to all INFO and ERROR logs for no_kexec functions
+// it also contains a version number for informative purposes.
+#define NO_KEXEC_LOG_TEXT "NO_KEXEC(4.1)"
+
 
 // public functions, the rest are private so not included here on purpose
 struct struct_nokexec * nokexec(void);
