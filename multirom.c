@@ -299,6 +299,13 @@ int multirom(const char *rom_to_boot)
             else
             {
                 s.current_rom = rom;
+
+                free(s.curr_rom_part);
+                s.curr_rom_part = NULL;
+
+                if(rom->partition)
+                    s.curr_rom_part = strdup(rom->partition->uuid);
+
                 s.auto_boot_type |= AUTOBOOT_FORCE_CURRENT;
                 INFO("Setting ROM %s to force autoboot\n", rom_to_boot);
             }
