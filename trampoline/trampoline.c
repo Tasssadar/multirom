@@ -186,6 +186,13 @@ static int mount_and_run(struct fstab *fstab)
                 return -1;
             case ENC_RES_BOOT_INTERNAL:
                 return 0;
+            case ENC_RES_BOOT_RECOVERY:
+                sync();
+                android_reboot(ANDROID_RB_RESTART2, 0, "recovery"); // REBOOT_RECOVERY
+                while (1)
+                    sleep(1);
+                // we're never returning
+                return 0;
             default:
             case ENC_RES_OK:
             {

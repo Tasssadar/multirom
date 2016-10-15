@@ -149,6 +149,11 @@ static int handle_decrypt(int stdout_fd, const char *password)
                 write(stdout_fd, ENCMNT_BOOT_INTERNAL_OUTPUT, strlen(ENCMNT_BOOT_INTERNAL_OUTPUT));
                 fsync(stdout_fd);
                 return 0;
+            case ENCMNT_UIRES_BOOT_RECOVERY:
+                INFO("Wants to boot recoveryl!\n");
+                write(stdout_fd, ENCMNT_BOOT_RECOVERY_OUTPUT, strlen(ENCMNT_BOOT_RECOVERY_OUTPUT));
+                fsync(stdout_fd);
+                return 0;
             case ENCMNT_UIRES_PASS_OK:
                 break;
         }

@@ -85,6 +85,24 @@ static void boot_internal_clicked(UNUSED void *data)
     pthread_mutex_unlock(&exit_code_mutex);
 }
 
+static void boot_reboot_to_recovery(UNUSED void *data)
+{
+    ncard_builder *b = ncard_create_builder();
+    ncard_set_pos(b, NCARD_POS_CENTER);
+    ncard_set_text(b, "Booting to recovery...");
+    ncard_show(b, 1);
+
+    // We need to run quirks for primary ROM to prevent
+    // restorecon breaking everything
+
+    // not when going back to recovery
+    // rom_quirks_on_initrd_finalized();
+
+    pthread_mutex_lock(&exit_code_mutex);
+    exit_code = ENCMNT_UIRES_BOOT_RECOVERY;
+    pthread_mutex_unlock(&exit_code_mutex);
+}
+
 static void fade_rect_alpha_step(void *data, float interpolated)
 {
     fb_rect *r = data;
@@ -413,6 +431,17 @@ static void init_ui(int pwtype)
         boot_primary_btn->level_off = 101;
         boot_primary_btn->clicked = &boot_internal_clicked;
         button_init_ui(boot_primary_btn, "BOOT PRIMARY ROM", SIZE_SMALL);
+    }
+    else
+    {
+        boot_primary_btn = mzalloc(sizeof(button));
+        boot_primary_btn->w = fb_width*0.30;
+        boot_primary_btn->h = HEADER_HEIGHT;
+        boot_primary_btn->x = fb_width - boot_primary_btn->w;
+        boot_primary_btn->y = 0;
+        boot_primary_btn->level_off = 101;
+        boot_primary_btn->clicked = &boot_reboot_to_recovery;
+        button_init_ui(boot_primary_btn, "Reboot to Recovery", SIZE_SMALL);
     }
 
     switch(pwtype)

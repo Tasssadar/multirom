@@ -98,6 +98,13 @@ int encryption_before_mount(struct fstab *fstab)
         goto exit;
     }
 
+    if(strcmp(output, ENCMNT_BOOT_RECOVERY_OUTPUT) == 0)
+    {
+        INFO("trampoline_encmnt requested to boot recovery.\n");
+        res = ENC_RES_BOOT_RECOVERY;
+        goto exit;
+    }
+
     if(!strstartswith(output, "/dev"))
     {
         ERROR("Invalid trampoline_encmnt output: %s\n", output);
