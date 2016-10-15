@@ -908,7 +908,7 @@ void multirom_free_status(struct multirom_status *s)
     list_clear(&s->roms, &multirom_free_rom);
     free(s->curr_rom_part);
     free(s->int_display_name);
-    fstab_destroy(s->fstab);
+    if (s->fstab) fstab_destroy(s->fstab);
 }
 
 void multirom_free_rom(void *rom)
