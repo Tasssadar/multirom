@@ -365,7 +365,8 @@ int main(int argc, char *argv[])
     {
         ERROR("This is second boot and we couldn't mount /data, reboot!\n");
         sync();
-        android_reboot(ANDROID_RB_RESTART, 0, 0);
+        //android_reboot(ANDROID_RB_RESTART, 0, 0);
+        android_reboot(ANDROID_RB_RESTART2, 0, "recovery"); // favour reboot to recovery, to avoid possible bootlooping
         while(1)
             sleep(1);
     }
