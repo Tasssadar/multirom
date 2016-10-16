@@ -6,4 +6,4 @@
 	url = https://github.com/multirom-nexus6p/multirom_adbd.git
 [submodule "kexec-tools-arm64"]
 	path = kexec-tools-arm64
-	url = https://github.com/multirom-nexus6p/kexec-tools.git
+	url = https://github.com/npjohnson/kexec-tools-arm64.git
