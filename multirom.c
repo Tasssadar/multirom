@@ -1501,6 +1501,8 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
     if(multirom_process_android_fstab(fstab_name, has_fw, &fw_part) != 0)
         goto exit;
 
+    unlink("/cache");
+
     mkdir_with_perms("/system", 0755, NULL, NULL);
     mkdir_with_perms("/data", 0771, "system", "system");
     mkdir_with_perms("/cache", 0770, "system", "cache");
