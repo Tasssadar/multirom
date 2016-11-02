@@ -56,8 +56,43 @@ int main(int argc, const char *argv[])
     {
         if(strcmp(argv[i], "-v") == 0)
         {
-            printf("%d%s\n", VERSION_MULTIROM, VERSION_DEV_FIX);
+            printf("%d%s\napkL%d\n", VERSION_MULTIROM, VERSION_DEV_FIX, VERSION_APKL);
             fflush(stdout);
+            return 0;
+        }
+        else if(strcmp(argv[i], "-apkL") == 0)
+        {
+            // Return all (internal and external) installed ROMs needed for the MultiROM Manager app
+
+            // external partitions will be mounted to /mnt/mrom/ and kept mounted so the app
+            // can manipulate them
+
+            int i;
+            struct multirom_status s;
+            memset(&s, 0, sizeof(struct multirom_status));
+
+            multirom_apk_get_roms(&s);
+
+            for(i = 0; s.roms && s.roms[i]; ++i)
+            {
+                if (!s.roms[i]->partition)
+                {
+                    // Internal ROMs
+                    printf("ROM: name=%s base=%s icon=%s\n",
+                        s.roms[i]->name, s.roms[i]->base_path, s.roms[i]->icon_path);
+                }
+                else
+                {
+                    // External ROMs
+                    printf("ROM: name=%s base=%s icon=%s part_name=%s part_mount=%s part_uuid=%s part_fs=%s\n",
+                        s.roms[i]->name, s.roms[i]->base_path, s.roms[i]->icon_path,
+                        s.roms[i]->partition->name, s.roms[i]->partition->mount_path, s.roms[i]->partition->uuid, s.roms[i]->partition->fs);
+                }
+            }
+            fflush(stdout);
+
+            multirom_free_status(&s);
+
             return 0;
         }
         else if(strncmp(argv[i], "--boot-rom=", sizeof("--boot-rom")) == 0)

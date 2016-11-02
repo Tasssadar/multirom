@@ -578,6 +578,99 @@ static int compare_rom_names(const void *a, const void *b)
     return 0;
 }
 
+int multirom_apk_get_roms(struct multirom_status *s)
+{
+    if(multirom_find_base_dir() == -1)
+    {
+        printf("Could not find multirom dir\n");
+        return -1;
+    }
+
+    /* Get Internal ROM */
+    char roms_path[256];
+    sprintf(roms_path, "%s/roms/"INTERNAL_ROM_NAME, mrom_dir());
+    DIR *d = opendir(roms_path);
+    if(!d)
+    {
+        printf("Failed to open Internal ROM's folder, creating one with ROM from internal memory...\n");
+        multirom_import_internal();
+    }
+    else
+        closedir(d);
+
+    /* Get Internal Storage ROMs */
+    sprintf(roms_path, "%s/roms", mrom_dir());
+    d = opendir(roms_path);
+    if(!d)
+    {
+        printf("Failed to open roms dir!\n");
+        //return -1;
+    }
+    else
+    {
+        struct dirent *dr;
+        char path[256];
+        struct multirom_rom **add_roms = NULL;
+        while((dr = readdir(d)))
+        {
+            if(dr->d_name[0] == '.')
+                continue;
+
+            if(dr->d_type != DT_DIR)
+                continue;
+
+            if(strlen(dr->d_name) > MAX_ROM_NAME_LEN)
+            {
+                printf("Skipping ROM %s, name is too long (max %d chars allowed)\n", dr->d_name, MAX_ROM_NAME_LEN);
+                continue;
+            }
+
+            //printf("Adding ROM %s\n", dr->d_name);
+
+            struct multirom_rom *rom = malloc(sizeof(struct multirom_rom));
+            memset(rom, 0, sizeof(struct multirom_rom));
+
+            rom->id = multirom_generate_rom_id();
+            rom->name = strdup(dr->d_name);
+
+            snprintf(path, sizeof(path), "%s/%s", roms_path, rom->name);
+            rom->base_path = strdup(path);
+
+            rom->type = multirom_get_rom_type(rom);
+
+            snprintf(path, sizeof(path), "%s/boot.img", rom->base_path);
+            rom->has_bootimg = access(path, R_OK) == 0 ? 1 : 0;
+
+            multirom_find_rom_icon(rom);
+
+            list_add(&add_roms, rom);
+        }
+
+        closedir(d);
+
+        if(add_roms)
+        {
+            // sort roms
+            qsort(add_roms, list_item_count(add_roms), sizeof(struct multirom_rom*), compare_rom_names);
+
+            // add them to main list
+            list_swap(&add_roms, &s->roms);
+        }
+    }
+
+    /* Get External ROMs */
+    multirom_update_partitions(s);
+
+    int i;
+    for(i = 0; s->partitions && s->partitions[i]; ++i) {
+        //printf("part=%s\n", s->partitions[i]->mount_path);
+        s->partitions[i]->keep_mounted = 1; // don't unmount on exit, the APK will need access to the folders
+        multirom_scan_partition_for_roms(s, s->partitions[i]);
+    }
+
+    return 0;
+}
+
 int multirom_default_status(struct multirom_status *s)
 {
     s->is_second_boot = 0;
