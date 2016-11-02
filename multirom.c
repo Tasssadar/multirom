@@ -275,7 +275,7 @@ int multirom(const char *rom_to_boot)
     {
         ERROR(NO_KEXEC_LOG_TEXT ": Something went wrong in mounting the needed partition, so falling back...");
         nokexec()->selected_method = NO_KEXEC_BOOT_NORMAL;
-        s.is_second_boot = 0; 
+        s.is_second_boot = 0;
         //ERROR(NO_KEXEC_LOG_TEXT ":    to Internal\n");     s.auto_boot_type = AUTOBOOT_FORCE_CURRENT;                // force reboot to Internal (this would be mrom default behaviour)
         //ERROR(NO_KEXEC_LOG_TEXT ":    to MultiROM GUI\n"); s.auto_boot_type = AUTOBOOT_NAME;                         // bring up the gui instead
         ERROR(NO_KEXEC_LOG_TEXT ":    to Recovery\n"); exit = (EXIT_REBOOT_RECOVERY | EXIT_UMOUNT);  goto finish;      // reboot to recovery
@@ -757,23 +757,7 @@ int multirom_load_status(struct multirom_status *s)
     // find USB drive if we're booting from it
     if(s->curr_rom_part) // && s->is_second_boot)
     {
-        struct usb_partition *p = NULL;
-        int tries = 0;
-        while(!p && tries < 10)
-        {
-            multirom_update_partitions(s);
-            p = multirom_get_partition(s, s->curr_rom_part);
-
-            if(p)
-            {
-                multirom_scan_partition_for_roms(s, p);
-                break;
-            }
-
-            ++tries;
-            ERROR("part %s not found, waiting 1s (%d)\n", s->curr_rom_part, tries);
-            sleep(1);
-        }
+        multirom_update_and_scan_for_external_roms(s, s->curr_rom_part);
     }
 
     s->current_rom = multirom_get_rom(s, current_rom, s->curr_rom_part);
@@ -781,6 +765,7 @@ int multirom_load_status(struct multirom_status *s)
     {
         ERROR("Failed to select current rom (%s, part %s), using Internal!\n", current_rom, s->curr_rom_part);
         s->current_rom = multirom_get_internal(s);
+        free(s->curr_rom_part);
         s->curr_rom_part = NULL;
         if(!s->current_rom)
         {
@@ -2515,6 +2500,12 @@ int multirom_update_partitions(struct multirom_status *s)
             goto next_itr;
         }
 
+        if(strncmp(name, "loop", 4) == 0) // ignore loop devices
+        {
+            free(name);
+            goto next_itr;
+        }
+
         part = mzalloc(sizeof(struct usb_partition));
         part->name = name;
 
@@ -2558,8 +2549,48 @@ next_itr:
     return 0;
 }
 
+int is_mounted_properly(const char *src, const char *mnt_path)
+{
+    int res = 0;
+
+    FILE *f;
+
+    f = fopen("/proc/mounts", "re");
+    if (f)
+    {
+        char mount_dev[256];
+        char mount_dir[256];
+        char mount_type[256];
+        char mount_opts[256];
+        int mount_freq;
+        int mount_passno;
+        int match;
+
+        do {
+            match = fscanf(f, "%255s %255s %255s %255s %d %d\n",
+                           mount_dev, mount_dir, mount_type,
+                           mount_opts, &mount_freq, &mount_passno);
+            mount_dev[255] = 0;
+            mount_dir[255] = 0;
+            mount_type[255] = 0;
+            mount_opts[255] = 0;
+            if ((match == 6) && (strcmp(src, mount_dev) == 0) && (strcmp(mnt_path, mount_dir) == 0)) {
+                res = 1;
+                break;
+            }
+        } while (match != EOF);
+
+        fclose(f);
+    }
+
+    return res;
+}
+
 int multirom_mount_usb(struct usb_partition *part)
 {
+    int res = 0;
+    part->mount_path = NULL;
+
     mkdir("/mnt", 0777);
     mkdir("/mnt/mrom", 0777);
 
@@ -2574,13 +2605,18 @@ int multirom_mount_usb(struct usb_partition *part)
     char src[256];
     snprintf(src, sizeof(src), "/dev/block/%s", part->name);
 
-    if(strncmp(part->fs, "ntfs", 4) == 0)
+    if(is_mounted_properly(src, path))
+    {
+        INFO("Partition %s already mounted on %s\n", src, path);
+        res = 0;
+    }
+    else if(strncmp(part->fs, "ntfs", 4) == 0)
     {
         char *cmd[] = { ntfs_path, src, path, NULL };
         if(run_cmd(cmd) != 0)
         {
             ERROR("Failed to mount %s with ntfs-3g\n", src);
-            return -1;
+            res = -1;
         }
     }
     else if(strcmp(part->fs, "exfat") == 0)
@@ -2589,17 +2625,41 @@ int multirom_mount_usb(struct usb_partition *part)
         if(run_cmd(cmd) != 0)
         {
             ERROR("Failed to mount %s with exfat\n", src);
-            return -1;
+            res = -1;
         }
     }
     else if(mount(src, path, part->fs, MS_NOATIME, "") < 0)
     {
         ERROR("Failed to mount %s (%d: %s)\n", src, errno, strerror(errno));
-        return -1;
+        res = -1;
     }
 
     part->mount_path = strdup(path);
-    return 0;
+    return res;
+}
+
+void multirom_update_and_scan_for_external_roms(struct multirom_status *s, char *part_uuid)
+{
+    struct usb_partition *p = NULL;
+    int tries = 0;
+    while(!p && tries < 10) // is 10seconds enough for USB-OTG
+    {
+        multirom_update_partitions(s);
+        p = multirom_get_partition(s, part_uuid);
+
+        if(p)
+        {
+            multirom_scan_partition_for_roms(s, p);
+            break;
+        }
+
+        ++tries;
+        ERROR("part %s not found, waiting 1s (%d)\n", s->curr_rom_part, tries);
+        sleep(1);
+    }
+
+    if(p)
+        multirom_dump_status(s);
 }
 
 void *multirom_usb_refresh_thread_work(void *status)
@@ -2710,6 +2770,9 @@ int multirom_copy_log(char *klog, const char *dest_path_relative)
 
 struct usb_partition *multirom_get_partition(struct multirom_status *s, char *uuid)
 {
+    // FIXME: This may need to be reconsidered, it is possible for 2 different partitions
+    //        to have the same uuid which will lead to a false positive.
+    //        Probably a good idea, to add mount point and uuid
     int i;
     for(i = 0; s->partitions && s->partitions[i]; ++i)
         if(strcmp(s->partitions[i]->uuid, uuid) == 0)
