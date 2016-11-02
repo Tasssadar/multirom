@@ -1654,6 +1654,26 @@ int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_pa
         }
     }
 
+    // Android N needs a /data entry in fstab otherwise Developer Options won't work
+    // because of a segmentation fault in cryptfs.c, detailed information can be
+    // found here: http://forum.xda-developers.com/showpost.php?p=69224932&postcount=1706
+    //
+    // Possible option is to use a remount in fstab:
+    //      fstab_add_part(tab, "/data", "/data", "auto", "remount", "defaults");
+    // however this will actually execute, and the mount options may get changed, in my case
+    // from     /dev/block/mmcblk0p47 /data ext4 rw,seclabel,nodev,relatime,discard,noauto_da_alloc,data=ordered 0 0
+    // to       /dev/block/mmcblk0p47 /data ext4 rw,seclabel,relatime,discard,noauto_da_alloc,data=ordered 0 0
+    // we could do
+    //      fstab_add_part(tab, "/data", "/data", "auto", "remount,nodev", "defaults");
+    //
+    // A better solution is actually creating an entry that will be skipped, and fs_mgr will skip the
+    // following types of partitions during mount_all:
+    // 1) Partitions marked with fs_mgr_flags "recoveryonly", eg:    fstab_add_part(tab, "/data", "/data", "auto", "remount", "recoveryonly");
+    // 2) Partitions having fs_type "swap" or "emmc" or "mtd", eg:   fstab_add_part(tab, "/data", "/data", "swap", "defaults", "defaults");
+    //
+    // opt for recoveryonly at this time
+    fstab_add_part(tab, "/data", "/data", "auto", "remount", "recoveryonly");
+
     // Android considers empty fstab invalid
     if(tab->count <= 3 + has_fw)
     {
