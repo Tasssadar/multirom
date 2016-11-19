@@ -65,7 +65,7 @@ struct struct_nokexec
 // related change, ie a change in "nokexec_is_second_boot()" function.
 // Do NOT bump it for any other reason, because it will force re-injection
 // on secondary ROMs even when not needed.
-#define VERSION_NO_KEXEC '\x02'
+#define VERSION_NO_KEXEC '\x04'
 
 // This text will be prepended to all INFO and ERROR logs for no_kexec functions
 // it also contains a version number for informative purposes.
