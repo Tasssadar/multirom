@@ -19,7 +19,7 @@
 #define VERSION_H
     #define VERSION_MULTIROM 33
     #define VERSION_TRAMPOLINE 27
-    #define VERSION_APKL 2
+    #define VERSION_APKL 3
 
     // For device-specific fixes. Use letters, the version will then be like "12a"
     #ifdef MR_DEVICE_SPECIFIC_VERSION

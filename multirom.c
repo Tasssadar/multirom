@@ -626,6 +626,45 @@ int multirom_apk_get_roms(struct multirom_status *s)
         return -1;
     }
 
+    char current_rom[256] = { 0 };
+    s->curr_rom_part = NULL;
+
+    /* Read multirom.ini to find current_rom */
+    char arg[256];
+    sprintf(arg, "%s/multirom.ini", mrom_dir());
+
+    FILE *f = fopen(arg, "re");
+    if(f)
+    {
+        char line[1024];
+
+        char name[64];
+        char *pch;
+
+        while((fgets(line, sizeof(line), f)))
+        {
+            pch = strtok (line, "=\n");
+            if(!pch) continue;
+            strcpy(name, pch);
+            pch = strtok (NULL, "=\n");
+            if(!pch) continue;
+            strcpy(arg, pch);
+
+            if(strstr(name, "current_rom"))
+                strcpy(current_rom, arg);
+            else if(strstr(name, "curr_rom_part"))
+                s->curr_rom_part = strdup(arg);
+        }
+
+        printf("current_rom='%s' curr_rom_part='%s'\n", current_rom, (s->curr_rom_part ? s->curr_rom_part : ""));
+
+        fclose(f);
+    }
+    else
+    {
+        printf("Failed to open config file, setting current_rom to null!\n");
+    }
+
     /* Get Internal ROM */
     char roms_path[256];
     sprintf(roms_path, "%s/roms/"INTERNAL_ROM_NAME, mrom_dir());
@@ -702,10 +741,21 @@ int multirom_apk_get_roms(struct multirom_status *s)
     multirom_update_partitions(s);
 
     int i;
-    for(i = 0; s->partitions && s->partitions[i]; ++i) {
-        //printf("part=%s\n", s->partitions[i]->mount_path);
+    pthread_mutex_lock(&parts_mutex);
+    for(i = 0; s->partitions && s->partitions[i]; ++i)
+    {
         s->partitions[i]->keep_mounted = 1; // don't unmount on exit, the APK will need access to the folders
         multirom_scan_partition_for_roms(s, s->partitions[i]);
+    }
+    pthread_mutex_unlock(&parts_mutex);
+
+
+    s->current_rom = multirom_get_rom(s, current_rom, s->curr_rom_part);
+    if(!s->current_rom)
+    {
+        printf("Failed to find current rom (%s, part %s)!\n", current_rom, (s->curr_rom_part) ? s->curr_rom_part : "");
+        free(s->curr_rom_part);
+        s->curr_rom_part = NULL;
     }
 
     return 0;
