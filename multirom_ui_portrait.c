@@ -100,7 +100,11 @@ static void init_header(multirom_theme_data *t)
     button **tab_btns = t->tab_btns;
     fb_text **tab_texts = t->tab_texts;
     int i, x;
+#ifdef MR_UNIFIED_TABS
+    static const char *str[] = { "ROMS", "MISC" };
+#else
     static const char *str[] = { "INTERNAL", "EXTERNAL", "MISC" };
+#endif
     char buff[64];
 
     fb_add_rect_lvl(100, 0, 0, fb_width, HEADER_HEIGHT, C_HIGHLIGHT_BG);
