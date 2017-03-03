@@ -624,11 +624,6 @@ int imax(int a, int b)
     return (a > b) ? a : b;
 }
 
-inline int iabs(int a)
-{
-    return a >= 0 ? a : -a;
-}
-
 int in_rect(int x, int y, int rx, int ry, int rw, int rh)
 {
     if(x < rx || y < ry)

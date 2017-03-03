@@ -711,7 +711,7 @@ char *fb_text_get_content(fb_img *img)
     return ex->text;
 }
 
-inline void center_text(fb_img *text, int targetX, int targetY, int targetW, int targetH)
+void center_text(fb_img *text, int targetX, int targetY, int targetW, int targetH)
 {
     text_extra *ex = text->extra;
 
