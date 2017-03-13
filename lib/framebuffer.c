@@ -258,6 +258,16 @@ void fb_set_brightness(int val)
     fprintf(f, "%d", val);
     fclose(f);
 #endif
+#ifdef TW_SECONDARY_BRIGHTNESS_PATH
+    FILE *f2 = fopen(TW_SECONDARY_BRIGHTNESS_PATH, "we");
+    if(!f2)
+    {
+        ERROR("Failed to set secondary brightness: %s!\n", strerror(errno));
+        return;
+    }
+    fprintf(f2, "%d", val);
+    fclose(f2);
+#endif
 }
 
 int fb_get_vi_xres(void)
@@ -1093,7 +1103,11 @@ void *fb_draw_thread_work(UNUSED void *cookie)
         clock_gettime(CLOCK_MONOTONIC, &curr);
         diff = timespec_diff(&last, &curr);
 
+#if (PLATFORM_SDK_VERSION >= 25)
+        expected = 1; // might be reseted by atomic_compare_exchange_strong
+#else
         expected.__val = 1; // might be reseted by atomic_compare_exchange_strong
+#endif
         pthread_mutex_lock(&fb_draw_mutex);
         if(atomic_compare_exchange_strong(&fb_draw_requested, &expected, 0))
         {

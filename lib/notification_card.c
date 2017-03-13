@@ -143,6 +143,7 @@ struct ncard
     int top_offset;
     int last_y;
     int hiding;
+    int moving;
     int touch_handler_registered;
     int touch_id;
     int hover_btn;
@@ -284,6 +285,7 @@ static void ncard_reveal_finished(UNUSED void *data)
     pthread_mutex_lock(&ncard.mutex);
     ncard.bg->h = ncard.targetH;
     ncard.shadow->h = ncard.targetH;
+    ncard.moving = 0;
     pthread_mutex_unlock(&ncard.mutex);
 }
 
@@ -295,6 +297,7 @@ static void ncard_hide_finished(void *data)
     fb_rm_rect(c->alpha_bg);
     fb_rm_rect(c->hover_rect);
     free(c);
+    ncard.moving = 0;
 }
 
 void ncard_set_top_offset(int top_offset)
@@ -480,6 +483,7 @@ void ncard_show(ncard_builder *b, int destroy_builder)
     a->on_step_data = &ncard;
     a->on_finished_call = ncard_reveal_finished;
     item_anim_add(a);
+    ncard.moving = 1;
 
     pthread_mutex_unlock(&ncard.mutex);
 
@@ -503,6 +507,7 @@ void ncard_hide(void)
     c->last_y = c->bg->y;
     c->alpha_bg = ncard.alpha_bg;
     c->hiding = 1;
+    ncard.moving = 1;
     ncard.shadow = NULL;
     ncard.hover_rect = NULL;
     ncard.bg = NULL;
@@ -566,4 +571,9 @@ int ncard_try_cancel(void)
 int ncard_is_visible(void)
 {
     return ncard.bg != NULL;
+}
+
+int ncard_is_moving(void)
+{
+    return ncard.moving == 1;
 }
