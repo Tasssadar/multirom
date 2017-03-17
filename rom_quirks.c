@@ -57,6 +57,11 @@ static void workaround_mount_in_sh(const char *path)
 
     fclose(f_in);
     fclose(f_out);
+
+    struct stat info;
+    stat(path, &info);
+    chmod(tmp_name, info.st_mode);
+
     rename(tmp_name, path);
     free(tmp_name);
 }
