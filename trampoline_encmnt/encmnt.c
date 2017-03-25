@@ -209,6 +209,7 @@ int main(int argc, char *argv[])
     int cmd = CMD_NONE;
     int stdout_fd;
     char footer_location[256];
+    int found_footer_location;
     struct fstab *fstab;
     struct fstab_part *p;
     char *argument = NULL;
@@ -264,16 +265,19 @@ int main(int argc, char *argv[])
         goto exit;
     }
 
-    strcpy(footer_location, "");
+    found_footer_location = 0;
 
-    if(p->options != NULL && get_footer_from_opts(footer_location,
-            sizeof(footer_location), p->options) < 0)
-        goto exit;
+    if(p->options)
+        found_footer_location = get_footer_from_opts(footer_location, sizeof(footer_location), p->options) == 0;
 
-    if(p->options2 != NULL && strcmp(footer_location, "") == 0 &&
-            get_footer_from_opts(footer_location, sizeof(footer_location),
-            p->options2) < 0)
+    if(!found_footer_location && p->options2)
+        found_footer_location = get_footer_from_opts(footer_location, sizeof(footer_location), p->options2) == 0;
+
+    if(!found_footer_location)
+    {
+        ERROR("Failed to find footer location\n");
         goto exit;
+    }
 
     INFO("Setting encrypted partition data to %s %s %s\n", p->device, footer_location, p->type);
     set_partition_data(p->device, footer_location, p->type);
