@@ -222,15 +222,24 @@ static int mount_and_run(struct fstab *fstab)
 static int is_charger_mode(void)
 {
     char buff[2048] = { 0 };
+    int charger_mode = 0;
 
     FILE *f = fopen("/proc/cmdline", "re");
     if(!f)
         return 0;
 
-    fgets(buff, sizeof(buff), f);
+    while (fgets(buff, sizeof(buff), f) != NULL)
+    {
+        if (strstr(buff, "androidboot.mode=charger") != NULL)
+        {
+            charger_mode = 1;
+            break;
+        }
+    }
+
     fclose(f);
 
-    return (strstr(buff, "androidboot.mode=charger") != NULL);
+    return charger_mode;
 }
 
 static void fixup_symlinks(void)
