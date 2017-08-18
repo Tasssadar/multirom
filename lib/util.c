@@ -697,7 +697,7 @@ int create_loop_device(const char *dev_path, const char *img_path, int loop_num,
         return -1;
     }
 
-    INFO("create_loop_device: loop_num = %d", loop_num);
+    INFO("create_loop_device: loop_num = %d\n", loop_num);
 
     if(mknod(dev_path, S_IFBLK | loop_chmod, makedev(7, loop_num)) < 0)
     {
@@ -761,7 +761,7 @@ int mount_image(const char *src, const char *dst, const char *fs, int flags, con
 
     if(loop_num == MAX_LOOP_NUM)
     {
-        ERROR("mount_image: failed to find suitable loop device number!");
+        ERROR("mount_image: failed to find suitable loop device number!\n");
         return -1;
     }
 
@@ -772,6 +772,62 @@ int mount_image(const char *src, const char *dst, const char *fs, int flags, con
         ERROR("Failed to mount loop (%d: %s)\n", errno, strerror(errno));
     else
         res = 0;
+
+    return res;
+}
+
+#define MULTIROM_LOOP_NUM_START   231
+#define MULTIROM_DEV_PATH "/multirom/dev"
+int multirom_mount_image(const char *src, const char *dst, const char *fs, int flags, const void *data)
+{
+    static int next_loop_num = MULTIROM_LOOP_NUM_START;
+    char path[64];
+    int device_fd;
+    int loop_num = 0;
+    int res = -1;
+    struct stat info;
+    struct loop_info64 lo_info;
+
+    for(loop_num = next_loop_num; loop_num < MAX_LOOP_NUM; ++loop_num)
+    {
+        sprintf(path, "/dev/block/loop%d", loop_num);
+        if(stat(path, &info) < 0)
+        {
+            if(errno == ENOENT)
+                break;
+        }
+        else if(S_ISBLK(info.st_mode) && (device_fd = open(path, O_RDWR | O_CLOEXEC)) >= 0)
+        {
+            int ioctl_res = ioctl(device_fd, LOOP_GET_STATUS64, &lo_info);
+            close(device_fd);
+
+            if (ioctl_res < 0 && errno == ENXIO)
+                break;
+        }
+    }
+
+    if(loop_num == MAX_LOOP_NUM)
+    {
+        ERROR("mount_image: failed to find suitable loop device number!\n");
+        return -1;
+    }
+
+    // now change to /multirom/dev/<partition name>
+    mkdir_recursive_with_perms(MULTIROM_DEV_PATH, 0777, NULL, NULL);
+    sprintf(path, MULTIROM_DEV_PATH "/%s", dst);
+
+    if(create_loop_device(path, src, loop_num, 0777) < 0)
+        return -1;
+
+    // never reuse an existing loop
+    next_loop_num = loop_num + 1;
+
+    if(mount(path, dst, fs, flags, data) < 0)
+        ERROR("Failed to mount loop (%d: %s)\n", errno, strerror(errno));
+    else
+        res = 0;
+
+    sync();
 
     return res;
 }

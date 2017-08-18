@@ -1229,11 +1229,18 @@ int multirom_get_rom_type(struct multirom_rom *rom)
     // Handle android ROMs
     if(!multirom_path_exists(b, "boot"))
     {
-        if (!multirom_path_exists(b, "system") && !multirom_path_exists(b, "data") &&
+        if(!multirom_path_exists(b, "system") && !multirom_path_exists(b, "data") &&
             !multirom_path_exists(b, "cache"))
         {
             if(!rom->partition) return ROM_ANDROID_INTERNAL;
             else                return ROM_ANDROID_USB_DIR;
+        }
+        else if(!multirom_path_exists(b, "system.sparse.img") &&
+                (!multirom_path_exists(b, "data") || !multirom_path_exists(b, "data.sparse.img")) &&
+                (!multirom_path_exists(b, "cache") || !multirom_path_exists(b, "cache.sparse.img")))
+        {
+            if(!rom->partition) return ROM_ANDROID_INTERNAL_HYBRID;
+            else                return ROM_ANDROID_USB_HYBRID;
         }
         else if(!multirom_path_exists(b, "system.img") && !multirom_path_exists(b, "data.img") &&
                 !multirom_path_exists(b, "cache.img"))
@@ -1394,6 +1401,8 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
         case ROM_ANDROID_USB_IMG:
         case ROM_ANDROID_USB_DIR:
         case ROM_ANDROID_INTERNAL:
+        case ROM_ANDROID_INTERNAL_HYBRID:
+        case ROM_ANDROID_USB_HYBRID:
         {
             if(!(exit & (EXIT_REBOOT | EXIT_KEXEC)))
             {
@@ -1561,59 +1570,75 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
     if(has_fw)
         mkdir_with_perms("/firmware", 0771, "system", "system");
 
-    static const char *folders[2][3] =
-    {
-        { "system", "data", "cache" },
-        { "system.img", "data.img", "cache.img" },
-    };
-
-    unsigned long flags[2][3] = {
-        { MS_BIND | MS_RDONLY, MS_BIND, MS_BIND },
-        { MS_RDONLY | MS_NOATIME, MS_NOATIME, MS_NOATIME },
-    };
+    static const char *folders[3] = { "system"   , "data"                 , "cache"               };
+    unsigned long flags[3]        = { MS_RDONLY  ,  MS_NOSUID | MS_NODEV  ,  MS_NOSUID | MS_NODEV };
 
     uint32_t i;
     char from[256];
     char to[256];
-    int img = (int)(rom->type == ROM_ANDROID_USB_IMG);
-    for(i = 0; i < ARRAY_SIZE(folders[0]); ++i)
-    {
-        snprintf(from, sizeof(from), "%s/%s", rom->base_path, folders[img][i]);
-        snprintf(to, sizeof(to), "/%s", folders[0][i]);
 
-        if(img == 0)
-        {
-            if(mount(from, to, "ext4", flags[img][i], "discard,nomblk_io_submit") < 0)
-            {
+    for (i = 0; i < ARRAY_SIZE(folders); ++i) {
+        snprintf(to, sizeof(to), "/%s", folders[i]);
+
+        snprintf(from, sizeof(from), "%s/%s", rom->base_path, folders[i]);
+        if (!access(from, R_OK)) {
+            if(mount(from, to, "ext4", MS_BIND | flags[i], "discard,nomblk_io_submit") < 0) {
                 ERROR("Failed to mount %s to %s (%d: %s)\n", from, to, errno, strerror(errno));
                 goto exit;
-            }
+            } else
+                INFO("Bind mounted %s on %s\n", from, to);
+            continue;
         }
-        else
-        {
-            if(mount_image(from, to, "ext4", flags[img][i], NULL) < 0)
+
+        snprintf(from, sizeof(from), "%s/%s.img", rom->base_path, folders[i]);
+        if (!access(from, R_OK)) {
+            if(mount_image(from, to, "ext4", flags[i], NULL) < 0)
                 goto exit;
+            else
+                INFO("Loop mounted %s on %s\n", from, to);
+            continue;
         }
+
+        snprintf(from, sizeof(from), "%s/%s.sparse.img", rom->base_path, folders[i]);
+        if (!access(from, R_OK)) {
+            if(multirom_mount_image(from, to, "ext4", flags[i], NULL) < 0)
+                goto exit;
+            else
+                INFO("MultiROM Loop mounted %s on %s\n", from, to);
+            continue;
+        }
+
+        // Neither directory nor .img nor .sparse.img was found, panic
+        goto exit;
     }
 
-    // make sure /system is ro, otherwise remount it ro
-    // if it's not ro, then the dir permissions may get changed to disallow 'x' (eg HTC 10)
+
+    // mount() does not necessarily obey the mount options (eg, ro on system or nosuid on data)
+    // so attempt a remount on the partitions, but don't abort if the remount in unsuccessful,
+    // unless MR_PANIC_ON_FAILED_REMOUNT is set: eg on the HTC 10 if system is not ro, then the
+    // dir permissions may get changed to disallow 'x'
     struct statfs statfs_buf;
-    snprintf(to, sizeof(to), "/%s", folders[0][0]); // we could just use "/system", but this looks more sophisticated :P
-    INFO("Checking if system is ro\n");
-    if(statfs(to, &statfs_buf) < 0)
-    {
-        ERROR("Couldn't statfs %s (%d: %s)\n", to, errno, strerror(errno));
-    }
-    else if(!(statfs_buf.f_flags & ST_RDONLY))
-    {
-        INFO("system seems rw, attempting ro remount\n");
-        if(mount(NULL, to, NULL, MS_REMOUNT | MS_RDONLY | flags[img][0], NULL) < 0) // MS_RDONLY is redundant, but just in case it's changed/not in flags[][]
-        {
-            ERROR("Failed to remount ro %s (%d: %s)\n", to, errno, strerror(errno));
-            goto exit;
+    for (i = 0; i < ARRAY_SIZE(folders); ++i) {
+        snprintf(to, sizeof(to), "/%s", folders[i]);
+        if(statfs(to, &statfs_buf) < 0)
+            ERROR("Couldn't statfs %s (%d: %s)\n", to, errno, strerror(errno));
+        else if((flags[i] & ~statfs_buf.f_flags)) {
+            INFO("Mount flags of %s are 0x%08lX but should include 0x%08lX, attempting remount\n",
+                 to, (unsigned long) statfs_buf.f_flags, flags[i]);
+
+            if(mount(NULL, to, NULL, MS_REMOUNT | flags[i], NULL) < 0) {
+                ERROR("Failed to remount %s (%d: %s)\n", to, errno, strerror(errno));
+#ifdef MR_PANIC_ON_FAILED_REMOUNT
+                goto exit;
+#endif
+            }
+            else {
+                if(statfs(to, &statfs_buf) < 0)
+                    INFO("Remounted %s\n", to);
+                else
+                    INFO("Remounted %s flags=0x%08lX\n", to, (unsigned long) statfs_buf.f_flags);
+            }
         }
-        INFO("Remounted system as ro\n");
     }
 
     if(has_fw && fw_part)
@@ -2080,6 +2105,8 @@ int multirom_load_kexec(struct multirom_status *s, struct multirom_rom *rom)
         case ROM_ANDROID_INTERNAL:
         case ROM_ANDROID_USB_DIR:
         case ROM_ANDROID_USB_IMG:
+        case ROM_ANDROID_INTERNAL_HYBRID:
+        case ROM_ANDROID_USB_HYBRID:
             if(multirom_fill_kexec_android(s, rom, &kexec) != 0)
                 goto exit;
             break;
