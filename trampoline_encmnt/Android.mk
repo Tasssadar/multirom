@@ -8,6 +8,12 @@ LOCAL_UNSTRIPPED_PATH := $(TARGET_ROOT_OUT_UNSTRIPPED)
 LOCAL_SHARED_LIBRARIES := libcryptfslollipop libcutils
 LOCAL_STATIC_LIBRARIES := libmultirom_static
 
+LOCAL_ADDITIONAL_DEPENDENCIES += libstdc++
+
+ifeq ($(TARGET_HW_DISK_ENCRYPTION),true)
+    LOCAL_ADDITIONAL_DEPENDENCIES += libcryptfs_hw
+endif
+
 MR_NO_KEXEC_MK_OPTIONS := true 1 allowed 2 enabled 3 ui_confirm 4 ui_choice 5 forced
 ifneq (,$(filter $(MR_NO_KEXEC), $(MR_NO_KEXEC_MK_OPTIONS)))
     LOCAL_STATIC_LIBRARIES +=libbootimg
