@@ -108,18 +108,16 @@ static void init_header(multirom_theme_data *t)
     fb_add_rect(0, HEADER_HEIGHT, fb_width, (3*DPI_MUL), C_BTN_FAKE_SHADOW);
     ncard_set_top_offset(HEADER_HEIGHT);
 
-    int maxW = 0;
+    x = 10*DPI_MUL + MIRI_W + 10*DPI_MUL;
+    int maxW = (fb_width - x) / TAB_COUNT;
+
     for(i = 0; i < TAB_COUNT; ++i)
     {
         fb_text_proto *p = fb_text_create(0, 0, C_HIGHLIGHT_TEXT, SIZE_NORMAL, str[i]);
         p->level = 110;
         p->style = STYLE_MEDIUM;
         tab_texts[i] = fb_text_finalize(p);
-        maxW = imax(maxW, tab_texts[i]->w);
     }
-
-    maxW += (30*DPI_MUL);
-    x = fb_width/2 - (maxW*TAB_COUNT)/2;
 
     snprintf(buff, sizeof(buff), ":/miri_%dx%d.png", (int)MIRI_W, (int)MIRI_W);
     fb_add_png_img_lvl(110, 10*DPI_MUL, HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, buff);
