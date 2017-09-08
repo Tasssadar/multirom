@@ -58,7 +58,7 @@ endif
 include $(CLEAR_VARS)
 
 LOCAL_MODULE := libmultirom_static
-LOCAL_MODULE_TAGS := eng
+LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT)
 LOCAL_UNSTRIPPED_PATH := $(TARGET_ROOT_OUT_UNSTRIPPED)
 LOCAL_CFLAGS += $(common_C_FLAGS)
@@ -83,7 +83,7 @@ include $(BUILD_STATIC_LIBRARY)
 include $(CLEAR_VARS)
 
 LOCAL_MODULE := libmultirom
-LOCAL_MODULE_TAGS := eng
+LOCAL_MODULE_TAGS := optional
 LOCAL_SHARED_LIBRARIES := libcutils libc libm libpng libz libft2
 LOCAL_CFLAGS += $(common_C_FLAGS)
 LOCAL_SRC_FILES := $(common_SRC_FILES)

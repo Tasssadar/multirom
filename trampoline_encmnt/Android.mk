@@ -2,7 +2,7 @@ LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_MODULE:= trampoline_encmnt
-LOCAL_MODULE_TAGS := eng
+LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT)
 LOCAL_UNSTRIPPED_PATH := $(TARGET_ROOT_OUT_UNSTRIPPED)
 LOCAL_SHARED_LIBRARIES := libcryptfslollipop libcutils
@@ -45,7 +45,7 @@ ifeq ($(MR_ENCRYPTION_FAKE_PROPERTIES),true)
     include $(CLEAR_VARS)
 
     LOCAL_MODULE := libmultirom_fake_properties
-    LOCAL_MODULE_TAGS := eng
+    LOCAL_MODULE_TAGS := optional
     LOCAL_C_INCLUDES += $(multirom_local_path)
 
     LOCAL_SRC_FILES := fake_properties.c
