@@ -3074,6 +3074,8 @@ int multirom_run_scripts(const char *type, struct multirom_rom *rom)
 #define USER_IC_PATH_LEN 46
 #define DEFAULT_ICON "/icons/romic_default.png"
 #define DEFAULT_ICON_LEN 24
+#define DEFAULT_ANDROID_ICON "/icons/romic_android_default.png"
+#define DEFAULT_ANDROID_ICON_LEN 32
 
 void multirom_find_rom_icon(struct multirom_rom *rom)
 {
@@ -3138,7 +3140,14 @@ fail:
     if(f)
         fclose(f);
 
-    len = strlen(mrom_dir()) + DEFAULT_ICON_LEN + 1;
-    rom->icon_path = realloc(rom->icon_path, len);
-    snprintf(rom->icon_path, len, "%s%s", mrom_dir(), DEFAULT_ICON);
+    if (rom->type & MASK_ANDROID) {
+        len = strlen(mrom_dir()) + DEFAULT_ANDROID_ICON_LEN + 1;
+        rom->icon_path = realloc(rom->icon_path, len);
+        snprintf(rom->icon_path, len, "%s%s", mrom_dir(), DEFAULT_ANDROID_ICON);
+    }
+    else {
+        len = strlen(mrom_dir()) + DEFAULT_ICON_LEN + 1;
+        rom->icon_path = realloc(rom->icon_path, len);
+        snprintf(rom->icon_path, len, "%s%s", mrom_dir(), DEFAULT_ICON);
+    }
 }
