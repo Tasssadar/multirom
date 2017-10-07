@@ -35,6 +35,7 @@ LOCAL_SRC_FILES := \
     encmnt.c \
     pw_ui.c \
     ../rom_quirks.c \
+    ../rq_inject_file_contexts.c \
 
 include $(multirom_local_path)/device_defines.mk
 

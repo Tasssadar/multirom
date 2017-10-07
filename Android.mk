@@ -22,6 +22,7 @@ LOCAL_SRC_FILES:= \
     pong.c \
     rcadditions.c \
     rom_quirks.c \
+    rq_inject_file_contexts.c \
 
 # With these, GCC optimizes aggressively enough so full-screen alpha blending
 # is quick enough to be done in an animation
