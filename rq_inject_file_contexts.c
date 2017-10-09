@@ -24,8 +24,22 @@
 #include <sys/types.h>
 
 #include "rq_inject_file_contexts.h"
-#include "lib/log.h"
-#include "lib/util.h"
+
+#ifndef TARGET_RECOVERY_IS_MULTIROM
+    #include "lib/log.h"
+#else
+    #include "twcommon.h"
+    #define INFO(...)    LOGINFO("MultiROM " __VA_ARGS__)
+    #define ERROR(...)   LOGINFO("MultiROM " __VA_ARGS__)
+#endif
+
+#ifndef UNUSED
+#define UNUSED __attribute__((unused))
+#endif
+
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
+#endif
 
 
 // NOTE: stems are still hardcoded to 3 possibilities:
@@ -57,7 +71,7 @@ static int inject_file_contexts_text(const char *path)
     }
 
     while (fgets(line, sizeof(line), f)) {
-        if (strstartswith(line, multirom_exclusion_path[0])) {
+        if (strncmp(line, multirom_exclusion_path[0], strlen(multirom_exclusion_path[0])) == 0) {
             INFO("/file_contexts has been already injected.\n");
             fclose(f);
             return 0;
