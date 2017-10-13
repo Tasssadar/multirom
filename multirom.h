@@ -101,9 +101,13 @@ struct multirom_status
     int is_running_in_primary_rom;
     int auto_boot_seconds;
     int auto_boot_type;
+#ifdef MR_NO_KEXEC
+    int no_kexec;
+#endif
     int colors;
     int brightness;
     int enable_adb;
+    int enable_kmsg_logging;
     int hide_internal;
     char *int_display_name;
     int rotation;
@@ -169,5 +173,6 @@ int multirom_run_scripts(const char *type, struct multirom_rom *rom);
 int multirom_update_rd_trampoline(const char *path);
 char *multirom_find_fstab_in_rc(const char *rcfile);
 void multirom_find_rom_icon(struct multirom_rom *rom);
-
+void multirom_update_and_scan_for_external_roms(struct multirom_status *s, char *part_uuid);
+int multirom_apk_get_roms(struct multirom_status *s);
 #endif

@@ -23,6 +23,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <errno.h>
 #include <sys/mount.h>
 #include <sys/klog.h>
@@ -148,7 +149,7 @@ void adb_init_usb(void)
     write_file("/sys/class/android_usb/android0/iSerial", serial);
 
     write_file("/sys/class/android_usb/android0/enable", "1");
-    write_file("/sys/devices/platform/android_usb/usb_function_switch", "3");
+    write_file("/sys/devices/platform/android_usb/usb_function_switch", "130");
 }
 
 int adb_init_busybox(void)

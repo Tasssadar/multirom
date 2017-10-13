@@ -16,6 +16,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -36,18 +37,27 @@
 #define CMD_REMOVE 2
 #define CMD_PWTYPE 3
 
-static int get_footer_from_opts(char *output, size_t output_size, const char *opts2)
+#define FSTAB_FLAGS "flags="
+
+static int get_footer_from_opts(char *output, size_t output_size, const char *options)
 {
     char *r, *saveptr;
-    char *dup = strdup(opts2);
+    char *dup;
     int res = -1;
     int i;
 
-    r = strtok_r(dup, ",", &saveptr);
+    if (strstr(options, FSTAB_FLAGS) != NULL) {
+        dup = strdup(options + strlen(FSTAB_FLAGS));
+        r = strtok_r(dup, ";", &saveptr);
+    } else {
+        dup = strdup(options);
+        r = strtok_r(dup, ",", &saveptr);
+    }
 
     static const char *names[] = {
         "encryptable=",
         "forceencrypt=",
+        "forcefdeorfbe=",
         NULL
     };
 
@@ -147,6 +157,11 @@ static int handle_decrypt(int stdout_fd, const char *password)
                 write(stdout_fd, ENCMNT_BOOT_INTERNAL_OUTPUT, strlen(ENCMNT_BOOT_INTERNAL_OUTPUT));
                 fsync(stdout_fd);
                 return 0;
+            case ENCMNT_UIRES_BOOT_RECOVERY:
+                INFO("Wants to boot recoveryl!\n");
+                write(stdout_fd, ENCMNT_BOOT_RECOVERY_OUTPUT, strlen(ENCMNT_BOOT_RECOVERY_OUTPUT));
+                fsync(stdout_fd);
+                return 0;
             case ENCMNT_UIRES_PASS_OK:
                 break;
         }
@@ -194,6 +209,7 @@ int main(int argc, char *argv[])
     int cmd = CMD_NONE;
     int stdout_fd;
     char footer_location[256];
+    int found_footer_location;
     struct fstab *fstab;
     struct fstab_part *p;
     char *argument = NULL;
@@ -249,8 +265,19 @@ int main(int argc, char *argv[])
         goto exit;
     }
 
-    if(get_footer_from_opts(footer_location, sizeof(footer_location), p->options2) < 0)
+    found_footer_location = 0;
+
+    if(p->options)
+        found_footer_location = get_footer_from_opts(footer_location, sizeof(footer_location), p->options) == 0;
+
+    if(!found_footer_location && p->options2)
+        found_footer_location = get_footer_from_opts(footer_location, sizeof(footer_location), p->options2) == 0;
+
+    if(!found_footer_location)
+    {
+        ERROR("Failed to find footer location\n");
         goto exit;
+    }
 
     INFO("Setting encrypted partition data to %s %s %s\n", p->device, footer_location, p->type);
     set_partition_data(p->device, footer_location, p->type);

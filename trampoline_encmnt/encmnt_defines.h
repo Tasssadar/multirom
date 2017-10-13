@@ -19,8 +19,10 @@
 #define ENCMNT_DEFINES_H
 
 #define ENCMNT_BOOT_INTERNAL_OUTPUT "boot-internal-requested"
+#define ENCMNT_BOOT_RECOVERY_OUTPUT "boot-recovery-requested"
 
 #define ENCMNT_UIRES_BOOT_INTERNAL 1
+#define ENCMNT_UIRES_BOOT_RECOVERY 2
 #define ENCMNT_UIRES_PASS_OK 0
 #define ENCMNT_UIRES_ERROR -1
 

@@ -15,6 +15,8 @@
  * along with MultiROM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <stdlib.h>
+
 #include "multirom_ui.h"
 #include "multirom_ui_themes.h"
 #include "multirom.h"
@@ -100,25 +102,27 @@ static void init_header(multirom_theme_data *t)
     button **tab_btns = t->tab_btns;
     fb_text **tab_texts = t->tab_texts;
     int i, x;
+#ifdef MR_UNIFIED_TABS
+    static const char *str[] = { "ROMS", "MISC" };
+#else
     static const char *str[] = { "INTERNAL", "EXTERNAL", "MISC" };
+#endif
     char buff[64];
 
     fb_add_rect_lvl(100, 0, 0, fb_width, HEADER_HEIGHT, C_HIGHLIGHT_BG);
     fb_add_rect(0, HEADER_HEIGHT, fb_width, (3*DPI_MUL), C_BTN_FAKE_SHADOW);
     ncard_set_top_offset(HEADER_HEIGHT);
 
-    int maxW = 0;
+    x = 10*DPI_MUL + MIRI_W + 10*DPI_MUL;
+    int maxW = (fb_width - x) / TAB_COUNT;
+
     for(i = 0; i < TAB_COUNT; ++i)
     {
         fb_text_proto *p = fb_text_create(0, 0, C_HIGHLIGHT_TEXT, SIZE_NORMAL, str[i]);
         p->level = 110;
         p->style = STYLE_MEDIUM;
         tab_texts[i] = fb_text_finalize(p);
-        maxW = imax(maxW, tab_texts[i]->w);
     }
-
-    maxW += (20*DPI_MUL);
-    x = fb_width/2 - (maxW*TAB_COUNT)/2;
 
     snprintf(buff, sizeof(buff), ":/miri_%dx%d.png", (int)MIRI_W, (int)MIRI_W);
     fb_img *logo = fb_add_png_img_lvl(110, 10*DPI_MUL, HEADER_HEIGHT/2 - MIRI_W/2, MIRI_W, MIRI_W, buff);

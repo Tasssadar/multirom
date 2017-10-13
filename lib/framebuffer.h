@@ -22,7 +22,7 @@
 #include <stdarg.h>
 #include <pthread.h>
 
-#if defined(RECOVERY_BGRA) || defined(RECOVERY_RGBX) || defined(RECOVERY_ABGR)
+#if defined(RECOVERY_BGRA) || defined(RECOVERY_RGBX) || defined(RECOVERY_RGBA) || defined(RECOVERY_ABGR)
 #define PIXEL_SIZE 4
 typedef uint32_t px_type;
 #else
@@ -43,6 +43,15 @@ typedef uint16_t px_type;
 #define PX_GET_B(px) ((px & 0xFF))
 #define PX_GET_A(px) ((px & 0xFF000000) >> 24)
 #elif defined(RECOVERY_RGBX)
+#define PX_IDX_A 3
+#define PX_IDX_R 0
+#define PX_IDX_G 1
+#define PX_IDX_B 2
+#define PX_GET_R(px) (px & 0xFF)
+#define PX_GET_G(px) ((px & 0xFF00) >> 8)
+#define PX_GET_B(px) ((px & 0xFF0000) >> 16)
+#define PX_GET_A(px) ((px & 0xFF000000) >> 24)
+#elif defined(RECOVERY_RGBA)
 #define PX_IDX_A 3
 #define PX_IDX_R 0
 #define PX_IDX_G 1

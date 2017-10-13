@@ -21,6 +21,7 @@
 #define ENC_RES_ERR -1
 #define ENC_RES_OK 0
 #define ENC_RES_BOOT_INTERNAL 1
+#define ENC_RES_BOOT_RECOVERY 2
 
 #ifdef MR_ENCRYPTION
 int encryption_before_mount(struct fstab *fstab);

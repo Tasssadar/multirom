@@ -36,6 +36,10 @@
 #include "../hooks.h"
 #include "encryption.h"
 
+#ifdef MR_POPULATE_BY_NAME_PATH
+	#include "Populate_ByName_using_emmc.c"
+#endif
+
 #define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
 #define REALDATA "/realdata"
 #define MULTIROM_BIN "multirom"
@@ -130,7 +134,7 @@ static int try_mount_all_entries(struct fstab *fstab, struct fstab_part *first_d
     const char *fs_types[] = { "ext4", "f2fs", "ext3", "ext2" };
     const char *fs_opts [] = {
         "barrier=1,data=ordered,nomblk_io_submit,noauto_da_alloc,errors=panic", // ext4
-        "inline_xattr,flush_merge,errors=recover", // f2fs
+        "inline_xattr,flush_merge", // f2fs
         "", // ext3
         "" // ext2
     };
@@ -182,6 +186,13 @@ static int mount_and_run(struct fstab *fstab)
                 return -1;
             case ENC_RES_BOOT_INTERNAL:
                 return 0;
+            case ENC_RES_BOOT_RECOVERY:
+                sync();
+                android_reboot(ANDROID_RB_RESTART2, 0, "recovery"); // REBOOT_RECOVERY
+                while (1)
+                    sleep(1);
+                // we're never returning
+                return 0;
             default:
             case ENC_RES_OK:
             {
@@ -211,15 +222,24 @@ static int mount_and_run(struct fstab *fstab)
 static int is_charger_mode(void)
 {
     char buff[2048] = { 0 };
+    int charger_mode = 0;
 
     FILE *f = fopen("/proc/cmdline", "re");
     if(!f)
         return 0;
 
-    fgets(buff, sizeof(buff), f);
+    while (fgets(buff, sizeof(buff), f) != NULL)
+    {
+        if (strstr(buff, "androidboot.mode=charger") != NULL)
+        {
+            charger_mode = 1;
+            break;
+        }
+    }
+
     fclose(f);
 
-    return (strstr(buff, "androidboot.mode=charger") != NULL);
+    return charger_mode;
 }
 
 static void fixup_symlinks(void)
@@ -308,6 +328,12 @@ int main(int argc, char *argv[])
     mount("sysfs", "/sys", "sysfs", 0, NULL);
     mount("pstore", "/sys/fs/pstore", "pstore", 0, NULL);
 
+#if MR_USE_DEBUGFS_MOUNT
+    // Mount the debugfs kernel sysfs
+    mkdir("/sys/kernel/debug", 0755);
+    mount("debugfs", "/sys/kernel/debug", "debugfs", 0, NULL);
+#endif
+
     klog_init();
     // output all messages to dmesg,
     // but it is possible to filter out INFO messages
@@ -336,6 +362,11 @@ int main(int argc, char *argv[])
         goto exit;
     }
 
+#ifdef MR_POPULATE_BY_NAME_PATH
+    //nkk71 M7 hack
+    Populate_ByName_using_emmc();
+#endif
+
     fstab = fstab_auto_load();
     if(!fstab)
         goto exit;
@@ -349,7 +380,8 @@ int main(int argc, char *argv[])
     {
         ERROR("This is second boot and we couldn't mount /data, reboot!\n");
         sync();
-        android_reboot(ANDROID_RB_RESTART, 0, 0);
+        //android_reboot(ANDROID_RB_RESTART, 0, 0);
+        android_reboot(ANDROID_RB_RESTART2, 0, "recovery"); // favour reboot to recovery, to avoid possible bootlooping
         while(1)
             sleep(1);
     }
@@ -375,6 +407,10 @@ run_main_init:
     }
 
     encryption_cleanup();
+
+#if MR_USE_DEBUGFS_MOUNT
+    umount("/sys/kernel/debug");
+#endif
 
     umount("/proc");
     umount("/sys/fs/pstore");

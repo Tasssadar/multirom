@@ -17,6 +17,7 @@
 
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <pthread.h>
 #include <dirent.h>
@@ -42,6 +43,10 @@
 #include "hooks.h"
 #include "version.h"
 #include "pong.h"
+
+#ifdef MR_NO_KEXEC
+#include "no_kexec.h"
+#endif
 
 static struct multirom_status *mrom_status = NULL;
 static struct multirom_rom *selected_rom = NULL;
@@ -108,6 +113,63 @@ static void reveal_rect_alpha_step(void *data, float interpolated)
     r->color = (r->color & ~(0xFF << 24)) | (((int)(0xFF*interpolated)) << 24);
     fb_request_draw();
 }
+
+#ifdef MR_NO_KEXEC
+static void nokexec_multirom_ui_use_kexec(UNUSED void *data)
+{
+    pthread_mutex_lock(&exit_code_mutex);
+    nokexec()->selected_method = NO_KEXEC_BOOT_NORMAL;
+    exit_ui_code = UI_EXIT_BOOT_ROM;
+    pthread_mutex_unlock(&exit_code_mutex);
+}
+
+static void nokexec_multirom_ui_use_nokexec(UNUSED void *data)
+{
+    pthread_mutex_lock(&exit_code_mutex);
+    nokexec()->selected_method = NO_KEXEC_BOOT_NOKEXEC;
+    exit_ui_code = UI_EXIT_BOOT_ROM;
+    pthread_mutex_unlock(&exit_code_mutex);
+}
+
+void nokexec_multirom_ui_ask_confirm(void)
+{
+    ncard_builder *b = ncard_create_builder();
+    char buff[256];
+
+    ncard_set_pos(b, NCARD_POS_CENTER);
+    ncard_set_cancelable(b, 1);
+    ncard_set_title(b, "Confirm boot method");
+    ncard_add_btn(b, BTN_NEGATIVE, "Cancel", ncard_hide_callback, NULL);
+    ncard_add_btn(b, BTN_POSITIVE, "OK", nokexec_multirom_ui_use_nokexec, NULL);
+
+    snprintf(buff, sizeof(buff), "\nYour kernel does not support kexec-hardboot, you can still boot\n\n"
+                                 "<i>%s</i>\n\n"
+                                 "    <b>using no-kexec workaround</b>", selected_rom->name);
+    ncard_set_text(b, buff);
+
+    ncard_show(b, 1);
+}
+
+void nokexec_multirom_ui_ask_choice(void)
+{
+    ncard_builder *b = ncard_create_builder();
+    char buff[256];
+
+    ncard_set_pos(b, NCARD_POS_CENTER);
+    ncard_set_cancelable(b, 1);
+    ncard_set_title(b, "Choose boot method");
+    snprintf(buff, sizeof(buff), "\nYour kernel supports kexec-hardboot, but you have "
+                                 "set the option to ask which boot method to use.\n\n\n"
+                                 "How would you like to boot\n\n"
+                                 "<i>%s</i>\n\n", selected_rom->name);
+    ncard_set_text(b, buff);
+
+    ncard_add_btn(b, BTN_NEGATIVE, "[no-kexec workaround]", nokexec_multirom_ui_use_nokexec, NULL);
+    ncard_add_btn(b, BTN_POSITIVE, "[kexec]", nokexec_multirom_ui_use_kexec, NULL);
+
+    ncard_show(b, 1);
+}
+#endif //MR_NO_KEXEC
 
 int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 {
@@ -178,16 +240,51 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
     fb_request_draw();
 
+#ifdef MR_NO_KEXEC
+        nokexec()->selected_method = NO_KEXEC_BOOT_NONE;    // let multirom_ui return the method
+#endif
+
     while(1)
     {
         pthread_mutex_lock(&exit_code_mutex);
+#ifdef MR_NO_KEXEC
+        if(exit_ui_code == UI_EXIT_BOOT_ROM && nokexec()->selected_method == NO_KEXEC_BOOT_NONE)
+        {
+            if(selected_rom->type == ROM_DEFAULT)
+            {
+                    nokexec()->selected_method = NO_KEXEC_BOOT_NORMAL;      // normal
+            }
+            else if(!multirom_has_kexec())
+            {
+                if(nokexec()->is_ask_confirm || nokexec()->is_ask_choice)
+                {
+                    exit_ui_code = -1;
+                    nokexec_multirom_ui_ask_confirm();                      // also ask for confirmation
+                }
+                else
+                    nokexec()->selected_method = NO_KEXEC_BOOT_NOKEXEC;     // only when needed
+            }
+            else
+            {
+                if(nokexec()->is_ask_choice)
+                {
+                    exit_ui_code = -1;
+                    nokexec_multirom_ui_ask_choice();                       // ask which method to use
+                }
+                else if(nokexec()->is_forced)
+                    nokexec()->selected_method = NO_KEXEC_BOOT_NOKEXEC;     // always use no-kexec
+                else
+                    nokexec()->selected_method = NO_KEXEC_BOOT_NORMAL;      // normal
+            }
+        }
+#endif
         if(exit_ui_code != -1)
         {
             pthread_mutex_unlock(&exit_code_mutex);
             break;
         }
 
-        if(loop_act & LOOP_UPDATE_USB)
+        if(loop_act & LOOP_UPDATE_USB && !ncard_is_moving())
         {
             multirom_find_usb_roms(mrom_status);
             multirom_ui_tab_rom_update_usb();
@@ -246,6 +343,10 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
 
             char buff[64];
             snprintf(buff, sizeof(buff), "<i>%s</i>", selected_rom->name);
+#ifdef MR_NO_KEXEC
+            if (nokexec()->selected_method == NO_KEXEC_BOOT_NOKEXEC)
+                snprintf(buff, sizeof(buff), "<i>%s</i>\n\n(using no-kexec workaround)", selected_rom->name);
+#endif
             ncard_set_text(b, buff);
             break;
         }
@@ -263,7 +364,13 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
             break;
     }
 
+    stop_input_thread();
     ncard_show(b, 1);
+
+#ifdef MR_NO_KEXEC
+    // sleep 2 seconds so we can see the boot notification card
+    sleep(2);
+#endif
     anim_stop(1);
     fb_freeze(1);
     fb_force_draw();
@@ -272,7 +379,6 @@ int multirom_ui(struct multirom_status *s, struct multirom_rom **to_boot)
     multirom_ui_free_themes(themes_info);
     themes_info = NULL;
 
-    stop_input_thread();
     workers_stop();
 
 #if MR_DEVICE_HOOKS >= 2
@@ -299,7 +405,9 @@ void multirom_ui_init_theme(int tab)
         tabview_add_page(themes_info->data->tabs, -1);
         switch(i)
         {
+#ifndef MR_UNIFIED_TABS
             case TAB_USB:
+#endif
             case TAB_INTERNAL:
                 themes_info->data->tab_data[i] = multirom_ui_tab_rom_init(i);
                 break;
@@ -347,7 +455,9 @@ void multirom_ui_destroy_tab(int tab)
     {
         case -1:
             break;
+#ifndef MR_UNIFIED_TABS
         case TAB_USB:
+#endif
         case TAB_INTERNAL:
             multirom_ui_tab_rom_destroy(themes_info->data->tab_data[tab]);
             break;
@@ -376,9 +486,10 @@ void multirom_ui_switch(int tab)
     themes_info->data->selected_tab = tab;
 }
 
-void multirom_ui_fill_rom_list(listview *view, int mask)
+int multirom_ui_fill_rom_list(listview *view, int mask)
 {
     int i;
+    int ret = 0;
     struct multirom_rom *rom;
     void *data;
     char part_desc[64];
@@ -397,7 +508,9 @@ void multirom_ui_fill_rom_list(listview *view, int mask)
 
         data = rom_item_create(rom->name, rom->partition ? part_desc : NULL, rom->icon_path);
         listview_add_item(view, rom->id, data);
+        ret |= M(rom->type);
     }
+    return ret;
 }
 
 static void multirom_ui_destroy_auto_boot_data(void)
@@ -514,17 +627,27 @@ void *multirom_ui_tab_rom_init(int tab_type)
     listview_init_ui(t->list);
     tabview_add_item(themes_info->data->tabs, tab_type, t->list);
 
-    if(tab_type == TAB_INTERNAL)
-        multirom_ui_fill_rom_list(t->list, MASK_INTERNAL);
-    else
-        multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
+    int masks;
+#ifdef MR_UNIFIED_TABS
+    masks = multirom_ui_fill_rom_list(t->list, MASK_INTERNAL | MASK_USB_ROMS);
+#else
+    if (tab_type == TAB_INTERNAL) {
+        masks = multirom_ui_fill_rom_list(t->list, MASK_INTERNAL);
+    } else {
+        masks = multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
+    }
+#endif
 
     listview_update_ui(t->list);
 
+#ifdef MR_UNIFIED_TABS
+    int has_roms = ((masks & MASK_USB_ROMS) == 0);
+#else
     int has_roms = (int)(t->list->items == NULL);
+#endif
     multirom_ui_tab_rom_set_empty((void*)t, has_roms);
 
-    if(tab_type == TAB_USB)
+    if (tab_type == TAB_USB)
     {
         multirom_set_usb_refresh_handler(&multirom_ui_refresh_usb_handler);
         multirom_set_usb_refresh_thread(mrom_status, 1);
@@ -587,9 +710,23 @@ void multirom_ui_tab_rom_boot(void)
     else if (((m & MASK_KEXEC) || ((m & MASK_ANDROID) && rom->has_bootimg)) &&
         !multirom_has_kexec())
     {
+#ifndef MR_NO_KEXEC
         ncard_set_text(b, "Kexec-hardboot support is required to boot this ROM.\n\n"
                 "Install kernel with kexec-hardboot support to your Internal ROM!");
         error = 1;
+#else
+        if (nokexec()->is_disabled)
+        {
+            ncard_set_text(b, "Kexec-hardboot support is required to boot this ROM.\n\n"
+                    "<i>You can either:</i>\n"
+                    "1) Install kernel with kexec-hardboot support to your Internal ROM.\n"
+                    "\n"
+                    "2) Enable No-KEXEC Workaround in TWRP MultiROM Settings.");
+            error = 1;
+        }
+        else
+            error = 0;
+#endif
     }
     else if((m & MASK_KEXEC) && strchr(rom->name, ' '))
     {
@@ -616,10 +753,19 @@ void multirom_ui_tab_rom_update_usb(void)
     tab_data_roms *t = (tab_data_roms*)themes_info->data->tab_data[TAB_USB];
     listview_clear(t->list);
 
-    multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
+    int masks;
+#ifdef MR_UNIFIED_TABS
+    masks = multirom_ui_fill_rom_list(t->list, MASK_INTERNAL | MASK_USB_ROMS);
+#else
+    masks = multirom_ui_fill_rom_list(t->list, MASK_USB_ROMS);
+#endif
     listview_update_ui(t->list);
 
+#ifdef MR_UNIFIED_TABS
+    multirom_ui_tab_rom_set_empty(t, (masks & MASK_USB_ROMS) == 0);
+#else
     multirom_ui_tab_rom_set_empty(t, (int)(t->list->items == NULL));
+#endif
     fb_request_draw();
 }
 
@@ -633,13 +779,14 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
     assert(empty == 0 || empty == 1);
 
     tab_data_roms *t = (tab_data_roms*)data;
+    int it_count;
 
     if(t->boot_btn)
         button_enable(t->boot_btn, !empty);
 
     if(empty && !t->usb_text)
     {
-        fb_text_proto *p = fb_text_create(0, 0, C_TEXT, SIZE_NORMAL, "This list is refreshed automagically, just plug in the USB drive and wait.");
+        fb_text_proto *p = fb_text_create(0, 0, C_TEXT, SIZE_NORMAL, "This list is refreshed automagically, just plug in an external storage and wait.");
         p->wrap_w = t->list->w - 100*DPI_MUL;
         p->justify = JUSTIFY_CENTER;
         t->usb_text = fb_text_finalize(p);
@@ -647,7 +794,13 @@ void multirom_ui_tab_rom_set_empty(void *data, int empty)
         tabview_add_item(themes_info->data->tabs, TAB_USB, t->usb_text);
 
         center_text(t->usb_text, t->list->x, -1, t->list->w, -1);
+
+        it_count = list_item_count(t->list->items);
+#ifdef MR_UNIFIED_TABS
+        t->usb_text->y = t->list->y + (it_count + 0.3) * t->list->item_height(t);
+#else
         t->usb_text->y = t->list->y + t->list->h*0.2;
+#endif
 
         int x = t->list->x + ((t->list->w/2) - (PROGDOTS_W/2));
         t->usb_prog = progdots_create(x, t->usb_text->y+100*DPI_MUL);

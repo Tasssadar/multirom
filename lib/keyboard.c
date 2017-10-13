@@ -82,7 +82,7 @@ static const uint32_t normalKeycodeMapCharset3[] = {
 
 static const uint32_t normalKeycodeMapCharset4[] = {
     '~', '`', '|', '<', '>', '-', '+', '!', '?', ';',
-    OSK_EMPTY | KFLAG_HALF, '^', '\\', '$', '%', '&', '-', '+', '{', '}',
+    OSK_EMPTY | KFLAG_HALF, '^', '\\', '$', '%', '&', '-', '=', '{', '}',
     OSK_CHARSET3 | KFLAG_PLUS_HALF, '*', '"', '\'', ':', ';', '[', ']', OSK_BACKSPACE | KFLAG_PLUS_HALF, OSK_EMPTY,
     OSK_CHARSET1 | KS(2), ',', ' ' | KS(4), '/', OSK_ENTER | KS(2),
     0

@@ -1,0 +1,26 @@
+# Assert check for appropriate device is added during build,
+# see ../make_updater_script.sh and ../Android.mk
+
+show_progress(1.00000, 10);
+
+package_extract_dir("scripts", "/tmp/");
+
+set_perm(0, 0, 0777, "/tmp/kernel_inject.sh");
+set_perm(0, 0, 0777, "/tmp/kernel_inject");
+
+ui_print("Injecting kernel image...");
+assert(run_program("/tmp/kernel_inject.sh") == 0);
+
+ui_print("Installing kernel modules...");
+ifelse(is_mounted("/system"), unmount("/system"));
+mount("ext4", "EMMC", "/dev/block/platform/msm_sdcc.1/by-name/System", "/system");
+package_extract_dir("system", "/system");
+
+ui_print("Cleaning up...");
+delete("/tmp/inject_kernel.sh");
+delete("/tmp/inject_kernel");
+delete("/tmp/bootdev");
+delete("/tmp/kernel");
+unmount("/system");
+
+ui_print("Installation complete!");

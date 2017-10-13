@@ -258,6 +258,16 @@ void fb_set_brightness(int val)
     fprintf(f, "%d", val);
     fclose(f);
 #endif
+#ifdef TW_SECONDARY_BRIGHTNESS_PATH
+    FILE *f2 = fopen(TW_SECONDARY_BRIGHTNESS_PATH, "we");
+    if(!f2)
+    {
+        ERROR("Failed to set secondary brightness: %s!\n", strerror(errno));
+        return;
+    }
+    fprintf(f2, "%d", val);
+    fclose(f2);
+#endif
 }
 
 int fb_get_vi_xres(void)
@@ -382,6 +392,8 @@ px_type fb_convert_color(uint32_t c)
 #ifdef RECOVERY_BGRA
     return c;
 #elif defined(RECOVERY_RGBX)
+    return (c & 0xFF000000) | ((c & 0xFF) << 16) | (c & 0xFF00) | ((c & 0xFF0000) >> 16);
+#elif defined(RECOVERY_RGBA)
     return (c & 0xFF000000) | ((c & 0xFF) << 16) | (c & 0xFF00) | ((c & 0xFF0000) >> 16);
 #elif defined(RECOVERY_ABGR)
     //             A              B                   G                  R
@@ -603,7 +615,7 @@ void fb_draw_rect(fb_rect *r)
     if(alpha == 0)
         return;
 
-#if defined(RECOVERY_RGBX) || defined(RECOVERY_ABGR)
+#if defined(RECOVERY_RGBX) || (RECOVERY_RGBA) || defined(RECOVERY_ABGR)
     const uint32_t premult_color_rb = ((color & 0xFF00FF) * (alpha)) >> 8;
     const uint32_t premult_color_g = ((color & 0x00FF00) * (alpha)) >> 8;
 #elif defined(RECOVERY_BGRA)
@@ -648,7 +660,7 @@ void fb_draw_rect(fb_rect *r)
 #else
             for(x = 0; x < rendered_w; ++x)
             {
-  #ifdef RECOVERY_RGBX || defined(RECOVERY_ABGR)
+  #if defined(RECOVERY_RGBX) || defined(RECOVERY_RGBA) || defined(RECOVERY_ABGR)
                 const uint32_t rb = (premult_color_rb & 0xFF00FF) + ((inv_alpha * (*bits & 0xFF00FF)) >> 8);
                 const uint32_t g = (premult_color_g & 0x00FF00) + ((inv_alpha * (*bits & 0x00FF00)) >> 8);
                 *bits = 0xFF000000 | (rb & 0xFF00FF) | (g & 0x00FF00);
@@ -1091,7 +1103,11 @@ void *fb_draw_thread_work(UNUSED void *cookie)
         clock_gettime(CLOCK_MONOTONIC, &curr);
         diff = timespec_diff(&last, &curr);
 
+#if (PLATFORM_SDK_VERSION >= 25)
+        expected = 1; // might be reseted by atomic_compare_exchange_strong
+#else
         expected.__val = 1; // might be reseted by atomic_compare_exchange_strong
+#endif
         pthread_mutex_lock(&fb_draw_mutex);
         if(atomic_compare_exchange_strong(&fb_draw_requested, &expected, 0))
         {

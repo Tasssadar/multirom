@@ -18,6 +18,10 @@
 #include <string.h>
 #include <stdio.h>
 
+#ifdef MR_NO_KEXEC
+#include "../no_kexec.h"
+#endif
+
 #include "mrom_data.h"
 
 static char multirom_dir[128] = { 0 };
@@ -73,7 +77,11 @@ int mrom_is_second_boot(void)
         f = fopen(kmsg_paths[i], "re");
 
     if(!f)
+#ifndef MR_NO_KEXEC
         return 0;
+#else
+        goto check_no_kexec;
+#endif
 
     while(fgets(buff, sizeof(buff), f))
     {
@@ -86,5 +94,14 @@ int mrom_is_second_boot(void)
 
 exit:
     fclose(f);
+
+#ifdef MR_NO_KEXEC
+check_no_kexec:
+    if (res == 0) {
+        res = nokexec_is_second_boot();
+        if (res < 0)
+            res = 0;
+    }
+#endif
     return res;
 }

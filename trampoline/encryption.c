@@ -17,6 +17,7 @@
 
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <sys/mount.h>
@@ -29,11 +30,22 @@
 #include "../lib/log.h"
 #include "encryption.h"
 #include "../trampoline_encmnt/encmnt_defines.h"
+#include "../hooks.h"
 
 static char encmnt_cmd_arg[64] = { 0 };
 static char *const encmnt_cmd[] = { "/mrom_enc/trampoline_encmnt", encmnt_cmd_arg, NULL };
+#ifdef MR_ENCRYPTION_FAKE_PROPERTIES
+static char *const encmnt_envp[] = { "LD_LIBRARY_PATH=/mrom_enc/", "LD_PRELOAD=/mrom_enc/libmultirom_fake_properties.so", NULL };
+#else
 static char *const encmnt_envp[] = { "LD_LIBRARY_PATH=/mrom_enc/", NULL };
+#endif
 static int g_decrypted = 0;
+
+#ifdef __LP64__
+#define LINKER_PATH "/system/bin/linker64"
+#else
+#define LINKER_PATH "/system/bin/linker"
+#endif
 
 int encryption_before_mount(struct fstab *fstab)
 {
@@ -42,21 +54,30 @@ int encryption_before_mount(struct fstab *fstab)
     int res = ENC_RES_ERR;
 
     mkdir_recursive("/system/bin", 0755);
-    remove("/system/bin/linker");
-    symlink("/mrom_enc/linker", "/system/bin/linker");
+    remove(LINKER_PATH);
+    symlink("/mrom_enc/linker", LINKER_PATH);
     chmod("/mrom_enc/linker", 0775);
     chmod("/mrom_enc/trampoline_encmnt", 0775);
+    // some fonts not in ramdisk to save space, so use regular instead
+    symlink("/mrom_enc/res/Roboto-Regular.ttf", "/mrom_enc/res/Roboto-Italic.ttf");
+    symlink("/mrom_enc/res/Roboto-Regular.ttf", "/mrom_enc/res/Roboto-Medium.ttf");
 
-    remove("/vendor");
+    if (access("/vendor", F_OK) >= 0) {
+        rename("/vendor", "/vendor_boot");
+    }
     symlink("/mrom_enc/vendor", "/vendor");
 
     mkdir("/firmware", 0775);
     struct fstab_part *fwpart = fstab_find_first_by_path(fstab, "/firmware");
-    if(fwpart && strcmp(fwpart->type, "emmc") != 0)
+    if(fwpart && (strcmp(fwpart->type, "emmc") != 0 || strcmp(fwpart->type, "vfat") != 0))
     {
         if(mount(fwpart->device, "/firmware", fwpart->type, fwpart->mountflags, NULL) < 0)
             ERROR("Mounting /firmware for encryption failed with %s\n", strerror(errno));
     }
+
+#if MR_DEVICE_HOOKS >= 6
+    tramp_hook_encryption_setup();
+#endif
 
     INFO("Running trampoline_encmnt\n");
 
@@ -76,6 +97,13 @@ int encryption_before_mount(struct fstab *fstab)
     {
         INFO("trampoline_encmnt requested to boot internal ROM.\n");
         res = ENC_RES_BOOT_INTERNAL;
+        goto exit;
+    }
+
+    if(strcmp(output, ENCMNT_BOOT_RECOVERY_OUTPUT) == 0)
+    {
+        INFO("trampoline_encmnt requested to boot recovery.\n");
+        res = ENC_RES_BOOT_RECOVERY;
         goto exit;
     }
 
@@ -121,13 +149,19 @@ void encryption_destroy(void)
     }
 
     // Make sure we're removing our symlink and not ROM's linker
-    if(lstat("/system/bin/linker", &info) >= 0 && S_ISLNK(info.st_mode))
-        remove("/system/bin/linker");
+    if(lstat(LINKER_PATH, &info) >= 0 && S_ISLNK(info.st_mode))
+        remove(LINKER_PATH);
 }
 
 int encryption_cleanup(void)
 {
+#if MR_DEVICE_HOOKS >= 6
+    tramp_hook_encryption_cleanup();
+#endif
     remove("/vendor");
+    if (access("/vendor_boot", F_OK) >= 0) {
+        rename("/vendor_boot", "/vendor");
+    }
 
     if(access("/firmware", R_OK) >= 0 && umount("/firmware") < 0)
         ERROR("encryption_cleanup: failed to unmount /firmware: %s\n", strerror(errno));
