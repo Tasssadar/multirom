@@ -1,6 +1,10 @@
 #!/sbin/sh
 base=""
-if [ -d "/data/media/multirom" ] ; then
+if [ -d "/data/media/MultiROM" ] ; then
+    base="/data/media/MultiROM"
+elif [ -d "/data/media/0/MultiROM" ] ; then
+    base="/data/media/0/MultiROM"
+elif [ -d "/data/media/multirom" ] ; then
     base="/data/media/multirom"
 elif [ -d "/data/media/0/multirom" ] ; then
     base="/data/media/0/multirom"

@@ -24,6 +24,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <linux/fs.h>
 #include <cutils/android_reboot.h>
 
 #include "devices.h"
@@ -57,17 +60,42 @@ static int find_multirom(void)
     struct stat info;
 
     static const char *paths[] = {
+        REALDATA"/media/0/MultiROM/multirom",
+        REALDATA"/media/MultiROM/multirom",
         REALDATA"/media/0/multirom", // 4.2
         REALDATA"/media/multirom",
         NULL,
     };
 
-    for(i = 0; paths[i]; ++i)
-    {
+    for(i = 0; paths[i]; ++i) {
         if(stat(paths[i], &info) < 0)
             continue;
 
         strcpy(path_multirom, paths[i]);
+
+        if (i < 2) {
+            // Make sure to set the container dir to immutable
+            char main_path[64];
+            strncpy(main_path, path_multirom, strlen(path_multirom) - (sizeof("/multirom") - 1));
+            main_path[strlen(path_multirom) - (sizeof("/multirom") - 1)] = '\0';
+
+            int fd = open(main_path, O_RDONLY | O_NONBLOCK);
+            if (fd >= 0) {
+                long flags;
+                if (ioctl(fd, FS_IOC_GETFLAGS, &flags) >= 0) {
+                    flags |= FS_IMMUTABLE_FL;
+                    if (ioctl(fd, FS_IOC_SETFLAGS, &flags) < 0)
+                        ERROR("Failed FS_IOC_SETFLAGS: %s!\n", strerror(errno));
+                    else
+                        INFO("Set FS_IMMUTABLE_FL on %s.\n", main_path);
+                }
+                else
+                    ERROR("Failed FS_IOC_GETFLAGS: %s!\n", strerror(errno));
+                close(fd);
+            }
+            else
+                ERROR("Failed to open %s: %s!\n", main_path, strerror(errno));
+        }
         return 0;
     }
     return -1;

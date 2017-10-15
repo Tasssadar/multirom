@@ -88,6 +88,10 @@ int multirom_find_base_dir(void)
     struct stat info;
 
     static const char *paths[] = {
+        REALDATA"/media/0/MultiROM/multirom",
+        REALDATA"/media/MultiROM/multirom",
+        "/data/media/0/MultiROM/multirom",
+        "/data/media/MultiROM/multirom",
         REALDATA"/media/0/multirom", // 4.2
         REALDATA"/media/multirom",
         "/data/media/0/multirom",
@@ -3070,12 +3074,9 @@ int multirom_run_scripts(const char *type, struct multirom_rom *rom)
 
 #define IC_TYPE_PREDEF 0
 #define IC_TYPE_USER   1
-#define USER_IC_PATH "../Android/data/com.tassadar.multirommgr/files"
-#define USER_IC_PATH_LEN 46
+#define USER_IC_PATH "../Android/data/com.tassadar.multirommgr/files"  // TODO: just use /realdata/media/[0]
 #define DEFAULT_ICON "/icons/romic_default.png"
-#define DEFAULT_ICON_LEN 24
 #define DEFAULT_ANDROID_ICON "/icons/romic_android_default.png"
-#define DEFAULT_ANDROID_ICON_LEN 32
 
 void multirom_find_rom_icon(struct multirom_rom *rom)
 {
@@ -3125,9 +3126,16 @@ void multirom_find_rom_icon(struct multirom_rom *rom)
         }
         case IC_TYPE_USER:
         {
-            len = strlen(mrom_dir()) + 1 + USER_IC_PATH_LEN + 1 + len + 4 + 1; // + / + / + .png + \0
-            rom->icon_path = malloc(len);
-            snprintf(rom->icon_path, len, "%s/%s/%s.png", mrom_dir(), USER_IC_PATH, buff);
+            if (strstr(mrom_dir(), "MultiROM")) {
+                len = strlen(mrom_dir()) + 1 + 3 + sizeof(USER_IC_PATH) + 1 + len + 4; // + / + / + .png + \0 (sizeof() includes trailing null)
+                rom->icon_path = malloc(len);
+                snprintf(rom->icon_path, len, "%s/../%s/%s.png", mrom_dir(), USER_IC_PATH, buff);
+            }
+            else {
+                len = strlen(mrom_dir()) + 1 + sizeof(USER_IC_PATH) + 1 + len + 4; // + / + / + .png + \0 (sizeof() includes trailing null)
+                rom->icon_path = malloc(len);
+                snprintf(rom->icon_path, len, "%s/%s/%s.png", mrom_dir(), USER_IC_PATH, buff);
+            }
             break;
         }
     }
@@ -3141,12 +3149,12 @@ fail:
         fclose(f);
 
     if (rom->type & MASK_ANDROID) {
-        len = strlen(mrom_dir()) + DEFAULT_ANDROID_ICON_LEN + 1;
+        len = strlen(mrom_dir()) + sizeof(DEFAULT_ANDROID_ICON);  // sizeof() includes trailing null
         rom->icon_path = realloc(rom->icon_path, len);
         snprintf(rom->icon_path, len, "%s%s", mrom_dir(), DEFAULT_ANDROID_ICON);
     }
     else {
-        len = strlen(mrom_dir()) + DEFAULT_ICON_LEN + 1;
+        len = strlen(mrom_dir()) + sizeof(DEFAULT_ICON); // sizeof() includes trailing null
         rom->icon_path = realloc(rom->icon_path, len);
         snprintf(rom->icon_path, len, "%s%s", mrom_dir(), DEFAULT_ICON);
     }
