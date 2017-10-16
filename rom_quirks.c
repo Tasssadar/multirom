@@ -126,7 +126,7 @@ static void disable_restorecon_recursive(void)
 
 void rom_quirks_on_initrd_finalized(void)
 {
-    int file_contexts_injected = 0;
+    int failed_file_contexts_injections = 0;
 
     // walk over all _regular_ files in /
     DIR *d = opendir("/");
@@ -154,6 +154,9 @@ void rom_quirks_on_initrd_finalized(void)
             // Android 8.0 is using text format contexts again, but now has two separate files
             // 'nonplat_file_contexts' and 'plat_file_contexts', we need to patch the latter
             // https://source.android.com/security/selinux/images/SELinux_Treble.pdf
+            //
+            // The possibility of several combinations of file_contexts, file_contexts.bin and
+            // plat_file_contexts seems to exist, so use a fail counter instead.
             if( (strcmp(dt->d_name, "file_contexts") == 0)
                 || (strcmp(dt->d_name, "file_contexts.bin") == 0)
                 || (strcmp(dt->d_name, "plat_file_contexts") == 0)
@@ -161,8 +164,8 @@ void rom_quirks_on_initrd_finalized(void)
 
                 snprintf(buff, sizeof(buff), "/%s", dt->d_name);
 
-                if(inject_file_contexts(buff) == 0)
-                    file_contexts_injected = 1;
+                if (inject_file_contexts(buff) != 0)
+                    failed_file_contexts_injections++;
             }
 
             // franco.Kernel includes script init.fk.sh which remounts /system as read only
@@ -176,6 +179,6 @@ void rom_quirks_on_initrd_finalized(void)
         closedir(d);
     }
 
-    if (!file_contexts_injected)
+    if (failed_file_contexts_injections)
         disable_restorecon_recursive();
 }
