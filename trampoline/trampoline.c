@@ -43,14 +43,7 @@
 	#include "Populate_ByName_using_emmc.c"
 #endif
 
-#define EXEC_MASK (S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
-#define REALDATA "/realdata"
-#define MULTIROM_BIN "multirom"
-#define BUSYBOX_BIN "busybox"
-#define KEEP_REALDATA "/dev/.keep_realdata"
-
-// Not defined in android includes?
-#define MS_RELATIME (1<<21)
+#include "trampoline.h"
 
 static char path_multirom[64] = { 0 };
 
@@ -302,11 +295,9 @@ static void fixup_symlinks(void)
     }
 }
 
-int main(int argc, char *argv[])
+static int do_cmdline(int argc, char *argv[])
 {
-    int i, res;
-    static char *const cmd[] = { "/init", NULL };
-    struct fstab *fstab = NULL;
+    int i;
     char *inject_path = NULL;
     char *mrom_dir = NULL;
     int force_inject = 0;
@@ -340,6 +331,69 @@ int main(int argc, char *argv[])
         mrom_set_log_tag("trampoline_inject");
         return inject_bootimg(inject_path, force_inject);
     }
+
+    printf("Usage: trampoline -v\n");
+    printf("       trampoline --inject=<path to boot.img> --mrom_dir=<path to multirom's data dir> [-f]\n");
+    return 1;
+}
+
+static int run_core(void)
+{
+    int res = -1;
+    struct fstab *fstab = NULL;
+
+    if(wait_for_file("/dev/graphics/fb0", 5) < 0)
+    {
+        ERROR("Waiting too long for fb0");
+        goto exit;
+    }
+
+#ifdef MR_POPULATE_BY_NAME_PATH
+    Populate_ByName_using_emmc();
+#endif
+
+    fstab = fstab_auto_load();
+    if(!fstab)
+        goto exit;
+
+#if 0
+    fstab_dump(fstab); //debug
+#endif
+
+    // mount and run multirom from sdcard
+    res = mount_and_run(fstab);
+    if(res < 0 && mrom_is_second_boot())
+    {
+        ERROR("This is second boot and we couldn't mount /data, reboot!\n");
+        sync();
+        //android_reboot(ANDROID_RB_RESTART, 0, 0);
+        android_reboot(ANDROID_RB_RESTART2, 0, "recovery"); // favour reboot to recovery, to avoid possible bootlooping
+        while(1)
+            sleep(1);
+    }
+
+    if(access(KEEP_REALDATA, F_OK) < 0) {
+        umount(REALDATA);
+        rmdir(REALDATA);
+        encryption_destroy();
+    }
+
+    encryption_cleanup();
+
+exit:
+    if(fstab)
+        fstab_destroy(fstab);
+
+    return res;
+}
+
+int main(int argc, char *argv[])
+{
+    if (argc > 1)
+        return do_cmdline(argc, argv);
+
+    int res;
+    static char *const cmd[] = { "/init", NULL };
 
     umask(000);
 
@@ -384,39 +438,7 @@ int main(int argc, char *argv[])
     devices_init();
     INFO("Done initializing\n");
 
-    if(wait_for_file("/dev/graphics/fb0", 5) < 0)
-    {
-        ERROR("Waiting too long for fb0");
-        goto exit;
-    }
-
-#ifdef MR_POPULATE_BY_NAME_PATH
-    //nkk71 M7 hack
-    Populate_ByName_using_emmc();
-#endif
-
-    fstab = fstab_auto_load();
-    if(!fstab)
-        goto exit;
-
-#if 0
-    fstab_dump(fstab); //debug
-#endif
-
-    // mount and run multirom from sdcard
-    if(mount_and_run(fstab) < 0 && mrom_is_second_boot())
-    {
-        ERROR("This is second boot and we couldn't mount /data, reboot!\n");
-        sync();
-        //android_reboot(ANDROID_RB_RESTART, 0, 0);
-        android_reboot(ANDROID_RB_RESTART2, 0, "recovery"); // favour reboot to recovery, to avoid possible bootlooping
-        while(1)
-            sleep(1);
-    }
-
-exit:
-    if(fstab)
-        fstab_destroy(fstab);
+    run_core();
 
     // close and destroy everything
     devices_close();
@@ -426,15 +448,9 @@ run_main_init:
     rmdir("/dev/pts");
     rmdir("/dev/socket");
 
-    if(access(KEEP_REALDATA, F_OK) < 0)
-    {
-        umount(REALDATA);
+    if(access(KEEP_REALDATA, F_OK) < 0) {
         umount("/dev");
-        rmdir(REALDATA);
-        encryption_destroy();
     }
-
-    encryption_cleanup();
 
 #if MR_USE_DEBUGFS_MOUNT
     umount("/sys/kernel/debug");
