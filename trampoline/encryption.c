@@ -62,6 +62,9 @@ int encryption_before_mount(struct fstab *fstab)
     }
     symlink("/mrom_enc/vendor", "/vendor");
 
+    if (access("/firmware", F_OK) >= 0) {
+        rename("/firmware", "/firmware_boot");
+    }
     mkdir("/firmware", 0775);
     struct fstab_part *fwpart = fstab_find_first_by_path(fstab, "/firmware");
     if(fwpart && (strcmp(fwpart->type, "emmc") != 0 || strcmp(fwpart->type, "vfat") != 0))
@@ -158,5 +161,8 @@ int encryption_cleanup(void)
         ERROR("encryption_cleanup: failed to unmount /firmware: %s\n", strerror(errno));
 
     rmdir("/firmware");
+    if (access("/firmware_boot", F_OK) >= 0) {
+        rename("/firmware_boot", "/firmware");
+    }
     return 0;
 }
