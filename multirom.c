@@ -76,6 +76,7 @@ static char kexec_path[64] = { 0 };
 static char ntfs_path[64] = { 0 };
 static char exfat_path[64] = { 0 };
 static char partition_dir[64] = { 0 };
+static char datamedia_dir[64] = { 0 };
 
 static volatile int run_usb_refresh = 0;
 static pthread_t usb_refresh_thread;
@@ -84,39 +85,45 @@ static void (*usb_refresh_handler)(void) = NULL;
 
 int multirom_find_base_dir(void)
 {
-    int i;
+    int i, j;
+    char path[64];
     struct stat info;
 
-    static const char *paths[] = {
-        REALDATA"/media/0/MultiROM/multirom",
-        REALDATA"/media/MultiROM/multirom",
-        "/data/media/0/MultiROM/multirom",
-        "/data/media/MultiROM/multirom",
-        REALDATA"/media/0/multirom", // 4.2
-        REALDATA"/media/multirom",
-        "/data/media/0/multirom",
-        "/data/media/multirom",
+    static const char *base_dirs[] = {
+        REALDATA"/media/0",
+        REALDATA"/media",
+        "/data/media/0",
+        "/data/media",
+        NULL,
+    };
+    static const char *mrom_dirs[] = {
+        "MultiROM/multirom",
+        "multirom",
         NULL,
     };
 
-    for(i = 0; paths[i]; ++i)
-    {
-        if(stat(paths[i], &info) < 0)
-            continue;
+    for(i = 0; base_dirs[i]; ++i) {
+        for (j = 0; mrom_dirs[j]; ++j) {
+            sprintf(path, "%s/%s", base_dirs[i], mrom_dirs[j]);
+            if(stat(path, &info) < 0)
+                continue;
 
-        mrom_set_dir(paths[i]);
+            mrom_set_dir(path);
 
-        strncpy(partition_dir, paths[i], strchr(paths[i]+1, '/') - paths[i]);
+            strcpy(datamedia_dir, path);
 
-        sprintf(busybox_path, "%s/%s", paths[i], BUSYBOX_BIN);
-        sprintf(kexec_path, "%s/%s", paths[i], KEXEC_BIN);
-        sprintf(ntfs_path, "%s/%s", paths[i], NTFS_BIN);
-        sprintf(exfat_path, "%s/%s", paths[i], EXFAT_BIN);
+            strncpy(partition_dir, path, strchr(path, '/') - path);
 
-        chmod(kexec_path, 0755);
-        chmod(ntfs_path, 0755);
-        chmod(exfat_path, 0755);
-        return 0;
+            sprintf(busybox_path, "%s/%s", path, BUSYBOX_BIN);
+            sprintf(kexec_path, "%s/%s", path, KEXEC_BIN);
+            sprintf(ntfs_path, "%s/%s", path, NTFS_BIN);
+            sprintf(exfat_path, "%s/%s", path, EXFAT_BIN);
+
+            chmod(kexec_path, 0755);
+            chmod(ntfs_path, 0755);
+            chmod(exfat_path, 0755);
+            return 0;
+        }
     }
     return -1;
 }
@@ -130,6 +137,15 @@ enum
     BACKUP_LATE_KLOG    = 2,
     BACKUP_LAST_KEXEC   = 3
 };
+
+static void set_mediarw_perms(const char *path)
+{
+    chmod(path, 0666);
+
+    unsigned int media_rw_id = decode_uid("media_rw");
+    if(media_rw_id != -1U)
+        chown(path, (uid_t)media_rw_id, (gid_t)media_rw_id);
+}
 
 void multirom_kmsg_rename_logs(const char *path_logs_dir, const char *base_name, const int max_count)
 {
@@ -188,7 +204,7 @@ void multirom_kmsg_logging(int kmsg_backup_type)
     };
 
     // make the logs folder visible outside multirom folder
-    static const char log_dir_name[] = "../multirom-klogs";
+    static const char log_dir_name[] = "multirom-klogs";
     static const char ext[] = "txt";
 
     // current date time
@@ -214,36 +230,29 @@ void multirom_kmsg_logging(int kmsg_backup_type)
     else
         return;
 
+    sprintf(path_logs_dir, "%s/%s", datamedia_dir, log_dir_name);
 
-    // set path and create if needed
-    sprintf(path_logs_dir, "%s/%s", mrom_dir(), log_dir_name);
-    mkdir(path_logs_dir, 0777);
+    if (access(path_logs_dir, F_OK) < 0)
+        mkdir(path_logs_dir, 0666);
+    set_mediarw_perms(path_logs_dir);
 
-    if (kmsg_backup_type == BACKUP_LAST_KMSG)
-    {
+    if (kmsg_backup_type == BACKUP_LAST_KMSG) {
         int i;
-
         multirom_kmsg_rename_logs(path_logs_dir, base_name, MAX_LASTKMSG_LOGS);
-
-        // now copy the last kernel msg
         sprintf(path_log_file, "%s/%s_%i_%s.%s", path_logs_dir, base_name, 0, datetime, ext);
-        for(i = 0; kmsg_paths[i]; ++i)
-        {
-            if (access(kmsg_paths[i], R_OK) == 0)
-            {
+        for(i = 0; kmsg_paths[i]; ++i) {
+            if (access(kmsg_paths[i], R_OK) == 0) {
                 INFO("Backing up last kmsg '%s' to '%s' res=%d\n", kmsg_paths[i], path_log_file, copy_file(kmsg_paths[i], path_log_file));
                 break;
             }
         }
     }
-    else
-    {
+    else {
         multirom_kmsg_rename_logs(path_logs_dir, base_name, (kmsg_backup_type == BACKUP_LATE_KLOG) ? MAX_MROMKMSG_LOGS : 0);
-
-        // now copy current klog
         sprintf(path_log_file, "%s/%s_%i_%s.%s", log_dir_name, base_name, 0, datetime, ext);
         INFO("Backing up current klog to '%s' res=%d\n", path_log_file, multirom_copy_log(NULL, path_log_file));
     }
+    set_mediarw_perms(path_log_file);
 }
 
 int multirom(const char *rom_to_boot)
@@ -500,7 +509,7 @@ void multirom_emergency_reboot(void)
     char *tail;
     char *last_end;
     int cur_y;
-    unsigned int media_rw_id;
+    char path_log_file[64];
 
     if(multirom_init_fb(0) < 0)
     {
@@ -549,13 +558,11 @@ void multirom_emergency_reboot(void)
 
     fb_force_draw();
 
-    multirom_copy_log(klog, "../multirom_log.txt");
+    sprintf(path_log_file, "%s/multirom_log.txt", datamedia_dir);
+    multirom_copy_log(klog, path_log_file);
     free(klog);
 
-    media_rw_id = decode_uid("media_rw");
-    if(media_rw_id != -1U)
-        chown("../multirom_log.txt", (uid_t)media_rw_id, (gid_t)media_rw_id);
-    chmod("../multirom_log.txt", 0666);
+    set_mediarw_perms(path_log_file);
 
     // Wait for power key
     start_input_thread();
@@ -3074,9 +3081,9 @@ int multirom_run_scripts(const char *type, struct multirom_rom *rom)
 
 #define IC_TYPE_PREDEF 0
 #define IC_TYPE_USER   1
-#define USER_IC_PATH "../Android/data/com.tassadar.multirommgr/files"  // TODO: just use /realdata/media/[0]
-#define DEFAULT_ICON "/icons/romic_default.png"
-#define DEFAULT_ANDROID_ICON "/icons/romic_android_default.png"
+#define USER_IC_PATH "Android/data/com.tassadar.multirommgr/files"
+#define DEFAULT_ICON "icons/romic_default.png"
+#define DEFAULT_ANDROID_ICON "icons/romic_android_default.png"
 
 void multirom_find_rom_icon(struct multirom_rom *rom)
 {
@@ -3119,23 +3126,16 @@ void multirom_find_rom_icon(struct multirom_rom *rom)
             if(!ic_name)
                 goto fail;
 
-            len = strlen(mrom_dir()) + 6 + strlen(ic_name)+4+1; // + /icons + .png + \0
+            len = strlen(mrom_dir()) + 6 + strlen(ic_name) + 4 + 1; // + /icons + .png + \0
             rom->icon_path = malloc(len);
             snprintf(rom->icon_path, len, "%s/icons%s.png", mrom_dir(), ic_name);
             break;
         }
         case IC_TYPE_USER:
         {
-            if (strstr(mrom_dir(), "MultiROM")) {
-                len = strlen(mrom_dir()) + 1 + 3 + sizeof(USER_IC_PATH) + 1 + len + 4; // + / + / + .png + \0 (sizeof() includes trailing null)
-                rom->icon_path = malloc(len);
-                snprintf(rom->icon_path, len, "%s/../%s/%s.png", mrom_dir(), USER_IC_PATH, buff);
-            }
-            else {
-                len = strlen(mrom_dir()) + 1 + sizeof(USER_IC_PATH) + 1 + len + 4; // + / + / + .png + \0 (sizeof() includes trailing null)
-                rom->icon_path = malloc(len);
-                snprintf(rom->icon_path, len, "%s/%s/%s.png", mrom_dir(), USER_IC_PATH, buff);
-            }
+            len = strlen(datamedia_dir) + 1 + sizeof(USER_IC_PATH) + 1 + len + 4; // + / + / + .png + \0 (sizeof() includes trailing null)
+            rom->icon_path = malloc(len);
+            snprintf(rom->icon_path, len, "%s/%s/%s.png", datamedia_dir, USER_IC_PATH, buff);
             break;
         }
     }
@@ -3149,13 +3149,13 @@ fail:
         fclose(f);
 
     if (rom->type & MASK_ANDROID) {
-        len = strlen(mrom_dir()) + sizeof(DEFAULT_ANDROID_ICON);  // sizeof() includes trailing null
+        len = strlen(mrom_dir()) + 1 + sizeof(DEFAULT_ANDROID_ICON);  // sizeof() includes trailing null
         rom->icon_path = realloc(rom->icon_path, len);
-        snprintf(rom->icon_path, len, "%s%s", mrom_dir(), DEFAULT_ANDROID_ICON);
+        snprintf(rom->icon_path, len, "%s/%s", mrom_dir(), DEFAULT_ANDROID_ICON);
     }
     else {
-        len = strlen(mrom_dir()) + sizeof(DEFAULT_ICON); // sizeof() includes trailing null
+        len = strlen(mrom_dir()) + 1 + sizeof(DEFAULT_ICON); // sizeof() includes trailing null
         rom->icon_path = realloc(rom->icon_path, len);
-        snprintf(rom->icon_path, len, "%s%s", mrom_dir(), DEFAULT_ICON);
+        snprintf(rom->icon_path, len, "%s/%s", mrom_dir(), DEFAULT_ICON);
     }
 }
