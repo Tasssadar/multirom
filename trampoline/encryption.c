@@ -46,6 +46,7 @@ int encryption_before_mount(struct fstab *fstab)
     int exit_code = -1;
     char *output = NULL, *itr;
     int res = ENC_RES_ERR;
+    struct stat stat;
 
 #ifdef __LP64__
     chmod("/mrom_enc/linker64", 0775);
@@ -57,7 +58,7 @@ int encryption_before_mount(struct fstab *fstab)
     symlink("/mrom_enc/res/Roboto-Regular.ttf", "/mrom_enc/res/Roboto-Italic.ttf");
     symlink("/mrom_enc/res/Roboto-Regular.ttf", "/mrom_enc/res/Roboto-Medium.ttf");
 
-    if (access("/vendor", F_OK) >= 0) {
+    if (lstat("/vendor", &stat) == 0) {
         rename("/vendor", "/vendor_boot");
     }
     symlink("/mrom_enc/vendor", "/vendor");
@@ -149,11 +150,12 @@ void encryption_destroy(void)
 
 int encryption_cleanup(void)
 {
+    struct stat stat;
 #if MR_DEVICE_HOOKS >= 6
     tramp_hook_encryption_cleanup();
 #endif
     remove("/vendor");
-    if (access("/vendor_boot", F_OK) >= 0) {
+    if (lstat("/vendor_boot", &stat) == 0) {
         rename("/vendor_boot", "/vendor");
     }
 
