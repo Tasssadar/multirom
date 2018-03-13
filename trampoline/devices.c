@@ -66,6 +66,9 @@
 
 static const char *firmware_dirs[] = { "/etc/firmware",
                                        "/vendor/firmware",
+#ifdef MR_EXTRA_FIRMWARE_DIR
+                                       MR_EXTRA_FIRMWARE_DIR,
+#endif
                                        "/firmware/image" };
 
 #ifdef HAVE_SELINUX
