@@ -416,7 +416,6 @@ int main(int argc, char *argv[])
     mount("debugfs", "/sys/kernel/debug", "debugfs", 0, NULL);
 #endif
 
-    klog_init();
     // output all messages to dmesg,
     // but it is possible to filter out INFO messages
     klog_set_level(6);
