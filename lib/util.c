@@ -26,6 +26,7 @@
 #include <fcntl.h>
 #include <cutils/android_reboot.h>
 #include <unistd.h>
+#include <pwd.h>
 
 #ifdef HAVE_SELINUX
 #include <selinux/label.h>
@@ -37,6 +38,7 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <sys/mount.h>
+#include <sys/sysmacros.h>
 #include <linux/loop.h>
 
 #include <private/android_filesystem_config.h>
@@ -67,6 +69,7 @@ time_t gettime(void)
  * android_name_to_id - returns the integer uid/gid associated with the given
  * name, or -1U on error.
  */
+#if 0
 static unsigned int android_name_to_id(const char *name)
 {
     struct android_id_info const *info = android_ids;
@@ -79,6 +82,7 @@ static unsigned int android_name_to_id(const char *name)
 
     return -1U;
 }
+#endif
 
 /*
  * decode_uid - decodes and returns the given string, which can be either the
@@ -88,16 +92,28 @@ static unsigned int android_name_to_id(const char *name)
 unsigned int decode_uid(const char *s)
 {
     unsigned int v;
+    uid_t uid;
+    struct passwd *pwd = malloc(sizeof(struct passwd));
 
-    if (!s || *s == '\0')
+    if (!s || *s == '\0') {
+        free(pwd);
         return -1U;
-    if (isalpha(s[0]))
-        return android_name_to_id(s);
+    }
+    if (isalpha(s[0])) {
+
+        pwd = getpwnam(s);
+        uid_t uid = pwd->pw_uid;
+        free(pwd);
+        return uid;
+    }
 
     errno = 0;
     v = (unsigned int) strtoul(s, 0, 0);
-    if (errno)
+    if (errno) {
+        free(pwd);
         return -1U;
+    }
+    free(pwd);
     return v;
 }
 
@@ -143,6 +159,7 @@ int mkdir_recursive_with_perms(const char *pathname, mode_t mode, const char *ow
 int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const char *group)
 {
     int ret;
+    struct passwd *pwd = malloc(sizeof(struct passwd));
 
     ret = mkdir(path, mode);
     /* chmod in case the directory already exists */
@@ -150,20 +167,22 @@ int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const cha
         ret = chmod(path, mode);
     }
     if (ret == -1) {
+        free(pwd);
         return -errno;
     }
 
     if(owner)
     {
-        uid_t uid = decode_uid(owner);
-        gid_t gid = -1;
+        pwd = getpwnam(owner);
+        uid_t uid = pwd->pw_uid;
+        gid_t gid = pwd->pw_gid;
 
-        if(group)
-            gid = decode_uid(group);
-
-        if(chown(path, uid, gid) < 0)
+        if(chown(path, uid, gid) < 0) {
+            free(pwd);
             return -errno;
+        }
     }
+    free(pwd);
     return 0;
 }
 
