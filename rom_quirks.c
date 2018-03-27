@@ -22,6 +22,10 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/mount.h>
+#include <errno.h>
 
 #include "rom_quirks.h"
 #include "rq_inject_file_contexts.h"
@@ -105,7 +109,8 @@ static void disable_restorecon_recursive(void)
                 while(fgets(line, sizeof(line), f_in))
                 {
                     if (strstr(line, "restorecon_recursive ") || (strstr(line, "restorecon ") && strstr(line, "--recursive"))) {
-                        if (strstr(line, "/data") || strstr(line, "/system") || strstr(line, "/cache") || strstr(line, "/mnt")) {
+                        if (strstr(line, "/data") || strstr(line, "/system") || strstr(line, "/cache") || strstr(line, "/mnt") ||
+                                strstr(line, "/vendor")) {
                             fputc('#', f_out);
                         }
                     }
@@ -129,6 +134,19 @@ void rom_quirks_on_initrd_finalized(void)
     int failed_file_contexts_injections = 0;
 
     // walk over all _regular_ files in /
+    char* path = "/system/etc/selinux/plat_file_contexts";
+    if (!access(path, F_OK)) {
+        char buf;
+        int sourcefile, destfile, n;
+        sourcefile = open(path, O_RDONLY);
+        destfile = open("/plat_file_contexts", O_WRONLY | O_CREAT, 0644);
+        while((n = read(sourcefile, &buf, 1)))
+        {
+            write(destfile, &buf, 1 );
+        }
+        close(sourcefile);
+        close(destfile);
+    }
     DIR *d = opendir("/");
     if(d)
     {
@@ -177,6 +195,14 @@ void rom_quirks_on_initrd_finalized(void)
             }
         }
         closedir(d);
+    }
+
+    if (!access(path, F_OK)) {
+        if(!mount("/plat_file_contexts", path, "ext4", MS_BIND | MS_RDONLY, "discard,nomblk_io_submit")) {
+            INFO("file_contexts bind mounted in system\n");
+        } else {
+            ERROR("file_contexts bind mount failed! %s\n", strerror(errno));
+        }
     }
 
     if (failed_file_contexts_injections)

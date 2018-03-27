@@ -70,6 +70,7 @@
 #define LAYOUT_VERSION "/data/.layout_version"
 
 #define BATTERY_CAP "/sys/class/power_supply/battery/capacity"
+#define DT_FSTAB_PATH "/proc/device-tree/firmware/android/fstab/"
 
 static char busybox_path[64] = { 0 };
 static char kexec_path[64] = { 0 };
@@ -82,6 +83,56 @@ static volatile int run_usb_refresh = 0;
 static pthread_t usb_refresh_thread;
 static pthread_mutex_t parts_mutex = PTHREAD_MUTEX_INITIALIZER;
 static void (*usb_refresh_handler)(void) = NULL;
+
+char* read_file(char* file) {
+    char* buf = calloc(1, 256);
+    FILE* fp = fopen(file, "r");
+    if (fp) {
+        fread(buf, 1, 256, fp);
+        fclose(fp);
+    } else {
+        ERROR("cannot open %s %s\n", file, strerror(errno));
+    }
+    return buf;
+}
+
+void disable_dtb_fstab(char* partition) {
+    if (access("status", F_OK)) {
+        FILE* fp = fopen("status", "w");
+        fprintf(fp, "disabled");
+        fclose(fp);
+    }
+    char mnt_pt[strlen(DT_FSTAB_PATH) + strlen(partition) + 1];
+    sprintf(mnt_pt, "%s%s/status", DT_FSTAB_PATH, partition);
+    if (!mount("/status", mnt_pt, "ext4", MS_BIND | MS_RDONLY, "discard,nomblk_io_submit")) {
+        INFO("status node bind mounted in procfs\n");
+    } else {
+        ERROR("status node bind mount failed! %s\n", strerror(errno));
+    }
+}
+
+int mount_dtb_fstab(char* partition) {
+    int rc = -1;
+
+    char root_path [strlen(DT_FSTAB_PATH) + 20] = {'\0'};
+    char device[sizeof(root_path) + strlen("dev")] = {'\0'};
+    char type[sizeof(root_path) + strlen("type")] = {'\0'};
+    char mnt_flags[sizeof(root_path) + strlen("mnt_flags")] = {'\0'};
+
+    sprintf(root_path, "%s%s", DT_FSTAB_PATH, partition);
+    sprintf(device, "%s%s", root_path, "/dev");
+    sprintf(type, "%s%s", root_path, "/type");
+    sprintf(mnt_flags, "%s%s", root_path, "/mnt_flags");
+
+    if (!(rc = mount(read_file(device), partition, read_file(type), MS_RDONLY, "barrier=1,discard"))) {
+        INFO("dtb %s mount successful\n", partition);
+        disable_dtb_fstab(partition);
+    } else {
+        INFO("dtb %s mount failed %s\n", partition, strerror(errno));
+    }
+
+    return rc;
+}
 
 int multirom_find_base_dir(void)
 {
@@ -1403,6 +1454,9 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
     {
         case ROM_DEFAULT:
         {
+            if (!access(DT_FSTAB_PATH, F_OK)) {
+                mount_dtb_fstab("system");
+            }
             rom_quirks_on_initrd_finalized();
             break;
         }
@@ -1531,7 +1585,9 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
     char out[128];
     char path[256];
     char *fstab_name = NULL;
+    struct stat stat;
     int has_fw = 0;
+    int found_fstab = 0;
     struct fstab_part *fw_part = NULL;
     int res = -1;
 
@@ -1570,19 +1626,31 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
     }
     closedir(d);
 
-    if(multirom_process_android_fstab(fstab_name, has_fw, &fw_part) != 0)
-        goto exit;
+    if(multirom_process_android_fstab(fstab_name, has_fw, &fw_part, 0) != 0) {
+        INFO("fstab couldnt be found in ramdisk. Rom maybe treble. Retry after vendor mount\n");
+    } else {
+        found_fstab = 1;
+    }
 
     unlink("/cache");
 
     mkdir_with_perms("/system", 0755, NULL, NULL);
     mkdir_with_perms("/data", 0771, "system", "system");
     mkdir_with_perms("/cache", 0770, "system", "cache");
+    mkdir_with_perms("/vendor", 0755, NULL, NULL);
     if(has_fw)
         mkdir_with_perms("/firmware", 0771, "system", "system");
 
-    static const char *folders[3] = { "system"   , "data"                 , "cache"               };
-    unsigned long flags[3]        = { MS_RDONLY  ,  MS_NOSUID | MS_NODEV  ,  MS_NOSUID | MS_NODEV };
+    /* In case device is encrypted, vendor is renamed to vendor_boot
+     * Now that decryption is done and partition is mounted, we dont need multirom's vendor folder.
+     * So we can safely remove it */
+
+    if (lstat("/vendor_boot", &stat) == 0) {
+        remove("/vendor");
+        rename("/vendor_boot", "/vendor");
+    }
+    static const char *folders[4] = { "system"   , "data"                 , "cache"               , "vendor"};
+    unsigned long flags[4]        = { MS_RDONLY  ,  MS_NOSUID | MS_NODEV  ,  MS_NOSUID | MS_NODEV,   MS_RDONLY };
 
     uint32_t i;
     char from[256];
@@ -1590,7 +1658,6 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
 
     for (i = 0; i < ARRAY_SIZE(folders); ++i) {
         snprintf(to, sizeof(to), "/%s", folders[i]);
-
         snprintf(from, sizeof(from), "%s/%s", rom->base_path, folders[i]);
         if (!access(from, R_OK)) {
             if(mount(from, to, "ext4", MS_BIND | flags[i], "discard,nomblk_io_submit") < 0) {
@@ -1598,6 +1665,9 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
                 goto exit;
             } else
                 INFO("Bind mounted %s on %s\n", from, to);
+            continue;
+        } else if (strstr(from, "vendor")) {
+            INFO("vendor not found, skipping\n");
             continue;
         }
 
@@ -1623,6 +1693,19 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
         goto exit;
     }
 
+    if((multirom_path_exists("/", "system/vendor/etc")) != 0 &&
+            (multirom_path_exists(rom->base_path, "vendor")) != 0) {
+        if (!access(DT_FSTAB_PATH, F_OK)) {
+            mount_dtb_fstab("vendor");
+        }
+    }
+    if (!access(DT_FSTAB_PATH, F_OK)) {
+        disable_dtb_fstab("system");
+    }
+    if(!found_fstab && multirom_process_android_fstab(NULL, has_fw, &fw_part, 1) != 0) {
+        INFO("fstab not found even in vendor!\n");
+        goto exit;
+    }
 
     // mount() does not necessarily obey the mount options (eg, ro on system or nosuid on data)
     // so attempt a remount on the partitions, but don't abort if the remount in unsuccessful,
@@ -1677,15 +1760,23 @@ exit:
     return res;
 }
 
-int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_part **fw_part)
+int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_part **fw_part, int treble_fstab)
 {
     int res = -1;
+    char* dirname;
 
     if(fstab_name != NULL)
         INFO("Using fstab %s from rc files\n", fstab_name);
     else
     {
-        DIR *d = opendir("/");
+        DIR *d;
+        if (treble_fstab) {
+            dirname = "/vendor/etc/";
+            d = opendir(dirname);
+        } else {
+            d = opendir("/");
+        }
+
         if(!d)
         {
             ERROR("Failed to open root folder!\n");
@@ -1713,6 +1804,12 @@ int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_pa
         }
     }
 
+    if (treble_fstab) {
+        char name[strlen(fstab_name) + 1];
+        strcpy(name, fstab_name);
+        fstab_name = realloc(fstab_name, strlen(name) + strlen(dirname) + 1);
+        sprintf(fstab_name, "%s%s", dirname, name);
+    }
     ERROR("Modifying fstab: %s\n", fstab_name);
     struct fstab *tab = fstab_load(fstab_name, 0);
     if(!tab)
@@ -1721,8 +1818,9 @@ int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_pa
     int disable_sys = fstab_disable_parts(tab, "/system");
     int disable_data = fstab_disable_parts(tab, "/data");
     int disable_cache = fstab_disable_parts(tab, "/cache");
+    int disable_vendor = fstab_disable_parts(tab, "/vendor");
 
-    if(disable_sys < 0 || disable_data < 0 || disable_cache < 0)
+    if((!treble_fstab) && disable_sys < 0 || disable_data < 0 || disable_cache < 0)
     {
 #if MR_DEVICE_HOOKS >= 4
         if(!mrom_hook_allow_incomplete_fstab())
@@ -1770,8 +1868,19 @@ int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_pa
         mkdir("/dummy_tmpfs", 0644);
     }
 
-    if(fstab_save(tab, fstab_name) == 0)
+    char* fstab_save_path = strstr(fstab_name, "fstab");
+    if(fstab_save(tab, fstab_save_path) == 0)
         res = 0;
+
+    if (treble_fstab) {
+        if(!mount(fstab_save_path, fstab_name, "ext4", MS_BIND | MS_RDONLY, "discard,nomblk_io_submit")) {
+            INFO("fstab bind mounted in vendor\n");
+        } else {
+            ERROR("fstab bind mount failed on %s! %s\n", fstab_name, strerror(errno));
+            res = -1;
+            goto exit;
+        }
+    }
 
 exit:
     if(tab)

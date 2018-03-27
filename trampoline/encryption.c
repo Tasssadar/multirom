@@ -154,8 +154,8 @@ int encryption_cleanup(void)
 #if MR_DEVICE_HOOKS >= 6
     tramp_hook_encryption_cleanup();
 #endif
-    remove("/vendor");
     if (lstat("/vendor_boot", &stat) == 0) {
+        remove("/vendor");
         rename("/vendor_boot", "/vendor");
     }
 
