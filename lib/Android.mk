@@ -21,6 +21,7 @@ common_SRC_FILES := \
     touch_tracker.c \
     util.c \
     workers.c \
+	klog.c \
 
 common_C_INCLUDES := $(multirom_local_path)/lib \
     external/libpng \

@@ -24,10 +24,13 @@
   #define ERROR(fmt, ...) fprintf(stderr, "%s: " fmt "\n", mrom_log_tag(), ##__VA_ARGS__)
   #define INFO(fmt, ...) printf("%s: " fmt "\n", mrom_log_tag(),  ##__VA_ARGS__)
 #else
-  #include <cutils/klog.h>
 
-  #define ERROR(fmt, ...) klog_write(3, "<3>%s: " fmt, mrom_log_tag(), ##__VA_ARGS__)
-  #define INFO(fmt, ...) klog_write(6, "<6>%s: " fmt, mrom_log_tag(), ##__VA_ARGS__)
+void multirom_klog_write(int level, const char* fmt, ...);
+void multirom_klog_set_level(int level);
+
+  #define klog_set_level(n) multirom_klog_set_level(n)
+  #define ERROR(fmt, ...) multirom_klog_write(3, "<3>%s: " fmt, mrom_log_tag(), ##__VA_ARGS__)
+  #define INFO(fmt, ...) multirom_klog_write(6, "<6>%s: " fmt, mrom_log_tag(), ##__VA_ARGS__)
 #endif
 
 #endif
