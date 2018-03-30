@@ -126,7 +126,6 @@ int mount_dtb_fstab(char* partition) {
 
     if (!(rc = mount(read_file(device), partition, read_file(type), MS_RDONLY, "barrier=1,discard"))) {
         INFO("dtb %s mount successful\n", partition);
-        disable_dtb_fstab(partition);
     } else {
         INFO("dtb %s mount failed %s\n", partition, strerror(errno));
     }
@@ -1456,6 +1455,7 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
         {
             if (!access(DT_FSTAB_PATH, F_OK)) {
                 mount_dtb_fstab("system");
+                disable_dtb_fstab("system");
             }
             rom_quirks_on_initrd_finalized();
             break;
@@ -1660,14 +1660,14 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
         snprintf(to, sizeof(to), "/%s", folders[i]);
         snprintf(from, sizeof(from), "%s/%s", rom->base_path, folders[i]);
         if (!access(from, R_OK)) {
+            if (strstr(from, "vendor") && multirom_path_exists(rom->base_path, "vendor/etc")) {
+                continue;
+            }
             if(mount(from, to, "ext4", MS_BIND | flags[i], "discard,nomblk_io_submit") < 0) {
                 ERROR("Failed to mount %s to %s (%d: %s)\n", from, to, errno, strerror(errno));
                 goto exit;
             } else
                 INFO("Bind mounted %s on %s\n", from, to);
-            continue;
-        } else if (strstr(from, "vendor")) {
-            INFO("vendor not found, skipping\n");
             continue;
         }
 
@@ -1689,18 +1689,23 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
             continue;
         }
 
+        if (strstr(from, "vendor")) {
+            INFO("vendor not found, skipping\n");
+            continue;
+        }
         // Neither directory nor .img nor .sparse.img was found, panic
         goto exit;
     }
 
-    if((multirom_path_exists("/", "system/vendor/etc")) != 0 &&
-            (multirom_path_exists(rom->base_path, "vendor")) != 0) {
+    if((multirom_path_exists("/system", "vendor/etc") == -1) &&
+            (multirom_path_exists(rom->base_path, "vendor/etc") == -1)) {
         if (!access(DT_FSTAB_PATH, F_OK)) {
             mount_dtb_fstab("vendor");
         }
     }
     if (!access(DT_FSTAB_PATH, F_OK)) {
         disable_dtb_fstab("system");
+        disable_dtb_fstab("vendor");
     }
     if(!found_fstab && multirom_process_android_fstab(NULL, has_fw, &fw_part, 1) != 0) {
         INFO("fstab not found even in vendor!\n");
@@ -1873,7 +1878,7 @@ int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_pa
         res = 0;
 
     if (treble_fstab) {
-        if(!mount(fstab_save_path, fstab_name, "ext4", MS_BIND | MS_RDONLY, "discard,nomblk_io_submit")) {
+        if(!mount(fstab_save_path, fstab_name, "ext4", MS_BIND, "discard,nomblk_io_submit")) {
             INFO("fstab bind mounted in vendor\n");
         } else {
             ERROR("fstab bind mount failed on %s! %s\n", fstab_name, strerror(errno));
@@ -1926,7 +1931,7 @@ int multirom_create_media_link(struct multirom_status *s)
     ERROR("Making media dir: api %d, media_new %d, %s to %s\n", api_level, media_new, paths[from], paths[to]);
     if(mkdir_recursive(paths[to], 0775) == -1)
     {
-        ERROR("Failed to make media dir\n");
+        ERROR("Failed to make media dir on %s\n", paths[to]);
         return -1;
     }
 
