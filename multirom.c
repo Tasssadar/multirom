@@ -111,6 +111,21 @@ void disable_dtb_fstab(char* partition) {
     }
 }
 
+void remove_dtb_fstab() {
+    if (access("compatible", F_OK)) {
+        FILE* fp = fopen("compatible", "w");
+        fprintf(fp, "android");
+        fclose(fp);
+    }
+    char mnt_pt[strlen(DT_FSTAB_PATH) + strlen("/compatible") + 1];
+    sprintf(mnt_pt, "%s/compatible", DT_FSTAB_PATH);
+    if (!mount("/compatible", mnt_pt, "ext4", MS_BIND | MS_RDONLY, "discard,nomblk_io_submit")) {
+        INFO("compatible node bind mounted in procfs\n");
+    } else {
+        ERROR("compatible node bind mount failed! %s\n", strerror(errno));
+    }
+}
+
 int mount_dtb_fstab(char* partition) {
     int rc = -1;
 
@@ -1704,8 +1719,7 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
         }
     }
     if (!access(DT_FSTAB_PATH, F_OK)) {
-        disable_dtb_fstab("system");
-        disable_dtb_fstab("vendor");
+        remove_dtb_fstab();
     }
     if(!found_fstab && multirom_process_android_fstab(NULL, has_fw, &fw_part, 1) != 0) {
         INFO("fstab not found even in vendor!\n");
