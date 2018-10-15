@@ -102,7 +102,7 @@ void disable_dtb_fstab(char* partition) {
         fprintf(fp, "disabled");
         fclose(fp);
     }
-    char mnt_pt[strlen(DT_FSTAB_PATH) + strlen(partition) + 1];
+    char mnt_pt[100];
     sprintf(mnt_pt, "%s%s/status", DT_FSTAB_PATH, partition);
     if (!mount("/status", mnt_pt, "ext4", MS_BIND | MS_RDONLY, "discard,nomblk_io_submit")) {
         INFO("status node bind mounted in procfs\n");
@@ -114,10 +114,10 @@ void disable_dtb_fstab(char* partition) {
 int mount_dtb_fstab(char* partition) {
     int rc = -1;
 
-    char root_path [strlen(DT_FSTAB_PATH) + 20] = {'\0'};
-    char device[sizeof(root_path) + strlen("dev")] = {'\0'};
-    char type[sizeof(root_path) + strlen("type")] = {'\0'};
-    char mnt_flags[sizeof(root_path) + strlen("mnt_flags")] = {'\0'};
+    char root_path [100] = {'\0'};
+    char device[100] = {'\0'};
+    char type[100] = {'\0'};
+    char mnt_flags[100] = {'\0'};
 
     sprintf(root_path, "%s%s", DT_FSTAB_PATH, partition);
     sprintf(device, "%s%s", root_path, "/dev");
