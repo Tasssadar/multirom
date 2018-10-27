@@ -58,6 +58,8 @@ static int copy_rd_files(UNUSED const char *path, UNUSED const char *busybox_pat
     char path_main[64];
     char path_mrom_enc[64];
     char path_mrom_fstab[64];
+    char path_hwservice_contexts[64];
+    char path_nonplat_hwservice_contexts[64];
     char path_ueventd[64];
     char path_watchdog[64];
 
@@ -68,6 +70,8 @@ static int copy_rd_files(UNUSED const char *path, UNUSED const char *busybox_pat
         snprintf(path_main, sizeof(path_main), TMP_RD2_UNPACKED_DIR "/main_init");
         snprintf(path_mrom_enc, sizeof(path_mrom_enc), TMP_RD2_UNPACKED_DIR "/mrom_enc");
         snprintf(path_mrom_fstab, sizeof(path_mrom_fstab), TMP_RD2_UNPACKED_DIR "/mrom.fstab");
+        snprintf(path_hwservice_contexts, sizeof(path_hwservice_contexts), TMP_RD2_UNPACKED_DIR "/plat_hwservice_contexts");
+        snprintf(path_nonplat_hwservice_contexts, sizeof(path_nonplat_hwservice_contexts), TMP_RD2_UNPACKED_DIR "/nonplat_hwservice_contexts");
         snprintf(path_ueventd, sizeof(path_ueventd), TMP_RD2_UNPACKED_DIR "/sbin/ueventd");
         snprintf(path_watchdog, sizeof(path_watchdog), TMP_RD2_UNPACKED_DIR "/sbin/watchdogd");
     }
@@ -82,6 +86,8 @@ static int copy_rd_files(UNUSED const char *path, UNUSED const char *busybox_pat
         snprintf(path_main, sizeof(path_main), TMP_RD_UNPACKED_DIR "/main_init");
         snprintf(path_mrom_enc, sizeof(path_mrom_enc), TMP_RD_UNPACKED_DIR "/mrom_enc");
         snprintf(path_mrom_fstab, sizeof(path_mrom_fstab), TMP_RD_UNPACKED_DIR "/mrom.fstab");
+        snprintf(path_hwservice_contexts, sizeof(path_hwservice_contexts), TMP_RD_UNPACKED_DIR "/plat_hwservice_contexts");
+        snprintf(path_nonplat_hwservice_contexts, sizeof(path_nonplat_hwservice_contexts), TMP_RD_UNPACKED_DIR "/nonplat_hwservice_contexts");
         snprintf(path_ueventd, sizeof(path_ueventd), TMP_RD_UNPACKED_DIR "/sbin/ueventd");
         snprintf(path_watchdog, sizeof(path_watchdog), TMP_RD_UNPACKED_DIR "/sbin/watchdogd");
     }
@@ -111,6 +117,10 @@ static int copy_rd_files(UNUSED const char *path, UNUSED const char *busybox_pat
 #else
     remove(path_mrom_fstab);
 #endif
+    snprintf(buf, sizeof(buf), "%s/plat_hwservice_contexts", mrom_dir());
+    copy_file(buf, path_hwservice_contexts);
+    snprintf(buf, sizeof(buf), "%s/nonplat_hwservice_contexts", mrom_dir());
+    copy_file(buf, path_nonplat_hwservice_contexts);
 
 #ifdef MR_ENCRYPTION
     remove_dir(path_mrom_enc);
