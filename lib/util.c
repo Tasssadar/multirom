@@ -39,6 +39,8 @@
 #include <sys/wait.h>
 #include <sys/mount.h>
 #include <sys/sysmacros.h>
+#include <sys/syscall.h>
+#include <sys/reboot.h>
 #include <linux/loop.h>
 
 #include <private/android_filesystem_config.h>
@@ -93,27 +95,26 @@ unsigned int decode_uid(const char *s)
 {
     unsigned int v;
     uid_t uid;
-    struct passwd *pwd = malloc(sizeof(struct passwd));
+    struct passwd *pwd = NULL;
 
     if (!s || *s == '\0') {
-        free(pwd);
         return -1U;
     }
     if (isalpha(s[0])) {
 
         pwd = getpwnam(s);
+        if (!pwd) {
+            return -errno;
+        }
         uid_t uid = pwd->pw_uid;
-        free(pwd);
         return uid;
     }
 
     errno = 0;
     v = (unsigned int) strtoul(s, 0, 0);
     if (errno) {
-        free(pwd);
         return -1U;
     }
-    free(pwd);
     return v;
 }
 
@@ -159,7 +160,7 @@ int mkdir_recursive_with_perms(const char *pathname, mode_t mode, const char *ow
 int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const char *group)
 {
     int ret;
-    struct passwd *pwd = malloc(sizeof(struct passwd));
+    struct passwd *pwd = NULL;
 
     ret = mkdir(path, mode);
     /* chmod in case the directory already exists */
@@ -167,22 +168,24 @@ int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const cha
         ret = chmod(path, mode);
     }
     if (ret == -1) {
-        free(pwd);
         return -errno;
     }
 
     if(owner)
     {
         pwd = getpwnam(owner);
+
+        if (!pwd) {
+            return -errno;
+        }
+
         uid_t uid = pwd->pw_uid;
         gid_t gid = pwd->pw_gid;
 
         if(chown(path, uid, gid) < 0) {
-            free(pwd);
             return -errno;
         }
     }
-    free(pwd);
     return 0;
 }
 
@@ -452,6 +455,11 @@ char *run_get_stdout_with_exit_with_env(char **cmd, int *exit_code, char *const 
         close(fd[0]);
 
         waitpid(pid, exit_code, 0);
+
+        if (WIFEXITED(*exit_code)) {
+            INFO("exit code %d", WEXITSTATUS(*exit_code));
+        }
+
 
         if(written == 0)
         {
@@ -860,16 +868,22 @@ void do_reboot(int type)
     {
         default:
         case REBOOT_SYSTEM:
-            android_reboot(ANDROID_RB_RESTART, 0, 0);
+            //android_reboot(ANDROID_RB_RESTART, 0, 0);
+            syscall(__NR_reboot, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2,
+                    LINUX_REBOOT_CMD_RESTART2, "");
             break;
         case REBOOT_RECOVERY:
-            android_reboot(ANDROID_RB_RESTART2, 0, "recovery");
+            //android_reboot(ANDROID_RB_RESTART2, 0, "recovery");
+            syscall(__NR_reboot, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2,
+                    LINUX_REBOOT_CMD_RESTART2, "recovery");
             break;
         case REBOOT_BOOTLOADER:
-            android_reboot(ANDROID_RB_RESTART2, 0, "bootloader");
+            //android_reboot(ANDROID_RB_RESTART2, 0, "bootloader");
+            syscall(__NR_reboot, LINUX_REBOOT_MAGIC1, LINUX_REBOOT_MAGIC2,
+                    LINUX_REBOOT_CMD_RESTART2, "bootloader");
             break;
         case REBOOT_SHUTDOWN:
-            android_reboot(ANDROID_RB_POWEROFF, 0, 0);
+            reboot(RB_POWER_OFF);
             break;
     }
 
