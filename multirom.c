@@ -104,7 +104,7 @@ void disable_dtb_fstab(char* partition) {
     }
     char mnt_pt[100];
     sprintf(mnt_pt, "%s%s/status", DT_FSTAB_PATH, partition);
-    if (!mount("/status", mnt_pt, "ext4", MS_BIND | MS_RDONLY, "discard,nomblk_io_submit")) {
+    if (!mount("/status", mnt_pt, "ext4", MS_BIND, "discard,nomblk_io_submit")) {
         INFO("status node bind mounted in procfs\n");
     } else {
         ERROR("status node bind mount failed! %s\n", strerror(errno));
@@ -119,7 +119,7 @@ void remove_dtb_fstab() {
     }
     char mnt_pt[strlen(DT_FSTAB_PATH) + strlen("/compatible") + 1];
     sprintf(mnt_pt, "%s/compatible", DT_FSTAB_PATH);
-    if (!mount("/compatible", mnt_pt, "ext4", MS_BIND | MS_RDONLY, "discard,nomblk_io_submit")) {
+    if (!mount("/compatible", mnt_pt, "ext4", MS_BIND, "discard,nomblk_io_submit")) {
         INFO("compatible node bind mounted in procfs\n");
     } else {
         ERROR("compatible node bind mount failed! %s\n", strerror(errno));
@@ -507,10 +507,12 @@ int multirom(const char *rom_to_boot)
             multirom_run_scripts("run-on-boot", to_boot);
 
         exit = multirom_prepare_for_boot(&s, to_boot);
+        INFO("prepare for boot returned %d\n", exit);
 
         // Something went wrong, exit/reboot
         if(exit == -1)
         {
+            INFO("SOMETHING HAS GONE WRONG !!");
             if(rom_to_boot == NULL)
             {
                 multirom_emergency_reboot();
@@ -1469,8 +1471,9 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
         case ROM_DEFAULT:
         {
             if (!access(DT_FSTAB_PATH, F_OK)) {
-                mount_dtb_fstab("system");
-                disable_dtb_fstab("system");
+                if (mount_dtb_fstab("system") == 0) {
+                    disable_dtb_fstab("system");
+                }
             }
             rom_quirks_on_initrd_finalized();
             break;
@@ -1664,8 +1667,8 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
         remove("/vendor");
         rename("/vendor_boot", "/vendor");
     }
-    static const char *folders[4] = { "system"   , "data"                 , "cache"               , "vendor"};
-    unsigned long flags[4]        = { MS_RDONLY  ,  MS_NOSUID | MS_NODEV  ,  MS_NOSUID | MS_NODEV,   MS_RDONLY };
+    static const char *folders[4] = { "system"   , "vendor"                 , "data"               , "cache"};
+    unsigned long flags[4]        = { MS_RDONLY  ,  MS_RDONLY, MS_NOSUID | MS_NODEV  ,  MS_NOSUID | MS_NODEV};
 
     uint32_t i;
     char from[256];
@@ -2865,7 +2868,7 @@ int multirom_update_partitions(struct multirom_status *s)
 
         tok = strrchr(line, '/')+1;
         name = strndup(tok, strchr(tok, ':') - tok);
-        if(strncmp(name, "mmcblk0", 7) == 0 || strncmp(name, "dm-", 3) == 0) // ignore internal nand
+        if(strncmp(name, "mmcblk0", 7) == 0 || strncmp(name, "dm-", 3) == 0 || strncmp(name, "sd", 2) == 0) // ignore internal nand
         {
             free(name);
             goto next_itr;

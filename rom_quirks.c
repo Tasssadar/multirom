@@ -198,7 +198,7 @@ void rom_quirks_on_initrd_finalized(void)
     }
 
     if (!access(path, F_OK)) {
-        if(!mount("/plat_file_contexts", path, "ext4", MS_BIND | MS_RDONLY, "discard,nomblk_io_submit")) {
+        if(!mount("/plat_file_contexts", path, "ext4", MS_BIND, "discard,nomblk_io_submit")) {
             INFO("file_contexts bind mounted in system\n");
         } else {
             ERROR("file_contexts bind mount failed! %s\n", strerror(errno));
