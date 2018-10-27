@@ -183,7 +183,7 @@ static int mount_and_run(struct fstab *fstab)
 
     if(access(datap->device, R_OK) < 0)
     {
-        INFO("Waiting for %s\n", datap->device);
+        INFO("Waiting for %s because error %s\n", datap->device, strerror(errno));
         if(wait_for_file(datap->device, 5) < 0)
         {
             ERROR("Waiting too long for dev %s\n", datap->device);
@@ -209,7 +209,7 @@ static int mount_and_run(struct fstab *fstab)
                 return 0;
             case ENC_RES_BOOT_RECOVERY:
                 sync();
-                android_reboot(ANDROID_RB_RESTART2, 0, "recovery"); // REBOOT_RECOVERY
+                do_reboot(REBOOT_RECOVERY); // REBOOT_RECOVERY
                 while (1)
                     sleep(1);
                 // we're never returning
@@ -367,7 +367,7 @@ static int run_core(void)
         ERROR("This is second boot and we couldn't mount /data, reboot!\n");
         sync();
         //android_reboot(ANDROID_RB_RESTART, 0, 0);
-        android_reboot(ANDROID_RB_RESTART2, 0, "recovery"); // favour reboot to recovery, to avoid possible bootlooping
+        do_reboot(REBOOT_RECOVERY); // favour reboot to recovery, to avoid possible bootlooping
         while(1)
             sleep(1);
     }

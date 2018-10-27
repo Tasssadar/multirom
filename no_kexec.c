@@ -34,6 +34,7 @@
 #include "lib/inject.h"
 #include "lib/log.h"
 #include "lib/util.h"
+#include "lib/mrom_data.h"
 
 #include "multirom.h"
 #include "version.h"
