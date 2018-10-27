@@ -32,8 +32,8 @@ endif
 LOCAL_C_INCLUDES += $(multirom_local_path) $(mr_twrp_path) $(mr_twrp_path)/crypto/scrypt/lib/crypto external/openssl/include external/boringssl/include
 
 LOCAL_SRC_FILES := \
-    encmnt.c \
-    pw_ui.c \
+    encmnt.cpp \
+    pw_ui.cpp \
     ../rom_quirks.c \
     ../rq_inject_file_contexts.c \
 
@@ -55,6 +55,18 @@ ifeq ($(MR_ENCRYPTION_FAKE_PROPERTIES),true)
         LOCAL_CFLAGS += -DMR_ENCRYPTION_FAKE_PROPERTIES_EXTRAS
         LOCAL_SRC_FILES += ../../../../$(MR_ENCRYPTION_FAKE_PROPERTIES_EXTRAS)
     endif
+
+    include $(multirom_local_path)/device_defines.mk
+
+    include $(BUILD_SHARED_LIBRARY)
+
+    include $(CLEAR_VARS)
+
+    LOCAL_MODULE := libmultirom_fake_propertywait
+    LOCAL_MODULE_TAGS := optional
+    LOCAL_C_INCLUDES += $(multirom_local_path)
+
+    LOCAL_SRC_FILES := property_wait.cpp
 
     include $(multirom_local_path)/device_defines.mk
 

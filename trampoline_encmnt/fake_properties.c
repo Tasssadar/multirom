@@ -32,13 +32,33 @@ int property_get(const char *key, char *value, const char *default_value)
     if (!strcmp(key, "sys.listeners.registered"))
         default_value = "true";
 
+    /* For Keymaster 3 HAL, we need security patch and build version
+     * to match with the one in bootimg header. Pass the OS version
+     * and security patch version as environment variable OSVER and OSPATCH
+     * respectively to keymaster and qseecom (Make sure they LD_PRELOAD this lib)
+     * process after reading from bootimg in tramp_hook_encryption_setup() function */
+
+    if (!strcmp(key, "ro.build.version.release")) {
+        if (getenv("OSVER")) {
+            strcpy(value, getenv("OSVER"));
+            return strlen(value);
+        }
+    }
+
+    if (!strcmp(key, "ro.build.version.security_patch")) {
+        if (getenv("OSPATCH")) {
+            strcpy(value, getenv("OSPATCH"));
+            return strlen(value);
+        }
+    }
+
 #ifdef MR_ENCRYPTION_FAKE_PROPERTIES_EXTRAS
     int i;
     for(i = 0; mr_fake_properties[i][0]; ++i)
     {
         if (!strcmp(key, mr_fake_properties[i][0])) {
-            default_value = mr_fake_properties[i][1];
-            break;
+            strncpy(value, mr_fake_properties[i][1], PROP_VALUE_MAX);
+            return strlen(value);
         }
     }
 #endif

@@ -35,7 +35,7 @@
 static char encmnt_cmd_arg[64] = { 0 };
 static char *const encmnt_cmd[] = { "/mrom_enc/trampoline_encmnt", encmnt_cmd_arg, NULL };
 #ifdef MR_ENCRYPTION_FAKE_PROPERTIES
-static char *const encmnt_envp[] = { "LD_LIBRARY_PATH=/mrom_enc/", "LD_PRELOAD=/mrom_enc/libmultirom_fake_properties.so", NULL };
+static char *const encmnt_envp[] = { "LD_LIBRARY_PATH=/mrom_enc/", "LD_PRELOAD=/mrom_enc/libmultirom_fake_properties.so /mrom_enc/libmultirom_fake_propertywait.so", NULL };
 #else
 static char *const encmnt_envp[] = { "LD_LIBRARY_PATH=/mrom_enc/", NULL };
 #endif
