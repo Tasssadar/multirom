@@ -112,17 +112,11 @@ void disable_dtb_fstab(char* partition) {
 }
 
 void remove_dtb_fstab() {
-    if (access("compatible", F_OK)) {
-        FILE* fp = fopen("compatible", "w");
-        fprintf(fp, "android");
-        fclose(fp);
-    }
-    char mnt_pt[strlen(DT_FSTAB_PATH) + strlen("/compatible") + 1];
-    sprintf(mnt_pt, "%s/compatible", DT_FSTAB_PATH);
-    if (!mount("/compatible", mnt_pt, "ext4", MS_BIND, "discard,nomblk_io_submit")) {
-        INFO("compatible node bind mounted in procfs\n");
+    mkdir("/dummy_fw", S_IFDIR);
+    if (!mount("/dummy_fw", "/proc/device-tree/firmware", "ext4", MS_BIND, "discard,nomblk_io_submit")) {
+        INFO("dummy dtb node bind mounted in procfs\n");
     } else {
-        ERROR("compatible node bind mount failed! %s\n", strerror(errno));
+        ERROR("dummy dtb node bind mount failed! %s\n", strerror(errno));
     }
 }
 
@@ -1615,6 +1609,7 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
     sprintf(path, "%s/boot", rom->base_path);
 
     DIR *d = opendir(path);
+    char* prefix = NULL;
     if(!d)
     {
         ERROR("Failed to open rom path %s\n", path);
@@ -1625,11 +1620,23 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
 
     while((dp = readdir(d)))
     {
-        if(dp->d_name[0] == '.' && (dp->d_name[1] == '.' || dp->d_name[1] == 0))
+        if((dp->d_name[0] == '.' && strlen(dp->d_name) == 1) || (dp->d_name[0] == '.' && (dp->d_name[1] == '.') || dp->d_name[1] == 0))
             continue;
 
-        sprintf(in, "%s/%s", path, dp->d_name);
-        sprintf(out, "/%s", dp->d_name);
+        if (dp->d_type == DT_DIR) {
+            sprintf(in, "%s/%s", path, dp->d_name);
+            d = opendir(in);
+            prefix = dp->d_name;
+            continue;
+        }
+
+        if (prefix) {
+            sprintf(out, "/%s/%s", prefix, dp->d_name);
+            sprintf(in, "%s/%s/%s", path, prefix, dp->d_name);
+        } else {
+            sprintf(in, "%s/%s", path, dp->d_name);
+            sprintf(out, "/%s", dp->d_name);
+        }
 
         copy_file(in, out);
 
@@ -1716,7 +1723,8 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
     }
 
     if((multirom_path_exists("/system", "vendor/etc") == -1) &&
-            (multirom_path_exists(rom->base_path, "vendor/etc") == -1)) {
+            (multirom_path_exists(rom->base_path, "vendor/etc") == -1) &&
+            (multirom_path_exists("/", "vendor/etc") == -1)) {
         if (!access(DT_FSTAB_PATH, F_OK)) {
             mount_dtb_fstab("vendor");
         }
