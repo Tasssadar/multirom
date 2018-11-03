@@ -102,6 +102,9 @@ enum
 #ifdef MR_USE_QCOM_OVERLAY
     FB_IMPL_QCOM_OVERLAY,
 #endif
+#ifdef MR_DEVICE_HAS_DRM_GRAPHICS
+    FB_IMPL_DRM,
+#endif
 
     FB_IMPL_GENERIC, // must be last
 

@@ -95,9 +95,13 @@ int fb_open_impl(void)
     extern struct fb_impl fb_impl_ ## N; \
     impls[ID] = &fb_impl_ ## N;
 
+#ifdef MR_DEVICE_HAS_DRM_GRAPHICS
+    ADD_IMPL(FB_IMPL_DRM, drm);
+#else
     ADD_IMPL(FB_IMPL_GENERIC, generic);
 #ifdef MR_USE_QCOM_OVERLAY
     ADD_IMPL(FB_IMPL_QCOM_OVERLAY, qcom_overlay);
+#endif
 #endif
 
     if(fb_force_generic)
@@ -123,6 +127,7 @@ int fb_open(int rotation)
 {
     memset(&fb, 0, sizeof(struct framebuffer));
 
+#ifndef MR_DEVICE_HAS_DRM_GRAPHICS
     fb.fd = open("/dev/graphics/fb0", O_RDWR | O_CLOEXEC);
     if (fb.fd < 0)
         return -1;
@@ -174,6 +179,11 @@ int fb_open(int rotation)
 
     fb.stride = (fb_rotation%180 == 0) ? fb.vi.xres_virtual : fb.vi.yres;
     fb.size = fb.vi.xres_virtual*fb.vi.yres*PIXEL_SIZE;
+#else
+    if(fb_open_impl() < 0)
+        goto fail;
+#endif
+
     fb.buffer = malloc(fb.size);
     fb_memset(fb.buffer, fb_convert_color(BLACK), fb.size);
 
@@ -615,12 +625,9 @@ void fb_draw_rect(fb_rect *r)
     if(alpha == 0)
         return;
 
-#if defined(RECOVERY_RGBX) || (RECOVERY_RGBA) || defined(RECOVERY_ABGR)
+#if defined(RECOVERY_RGBX) || (RECOVERY_RGBA) || defined(RECOVERY_ABGR) || defined(RECOVERY_BGRA)
     const uint32_t premult_color_rb = ((color & 0xFF00FF) * (alpha)) >> 8;
     const uint32_t premult_color_g = ((color & 0x00FF00) * (alpha)) >> 8;
-#elif defined(RECOVERY_BGRA)
-    const uint32_t premult_color_rb = (((color >> 8) & 0xFF00FF) * (alpha)) >> 8;
-    const uint32_t premult_color_g = (((color >> 8) & 0x00FF00) * (alpha)) >> 8;
 #elif defined(RECOVERY_RGB_565)
     const uint8_t alpha5b = (alpha >> 3) + 1;
     const uint8_t alpha6b = (alpha >> 2) + 1;
@@ -660,13 +667,9 @@ void fb_draw_rect(fb_rect *r)
 #else
             for(x = 0; x < rendered_w; ++x)
             {
-  #if defined(RECOVERY_RGBX) || defined(RECOVERY_RGBA) || defined(RECOVERY_ABGR)
+  #if defined(RECOVERY_RGBX) || defined(RECOVERY_RGBA) || defined(RECOVERY_ABGR) || defined(RECOVERY_BGRA)
                 const uint32_t rb = (premult_color_rb & 0xFF00FF) + ((inv_alpha * (*bits & 0xFF00FF)) >> 8);
                 const uint32_t g = (premult_color_g & 0x00FF00) + ((inv_alpha * (*bits & 0x00FF00)) >> 8);
-                *bits = 0xFF000000 | (rb & 0xFF00FF) | (g & 0x00FF00);
-  #elif defined(RECOVERY_BGRA)
-                const uint32_t rb = (premult_color_rb & 0xFF00FF) + ((inv_alpha * ((*bits >> 8) & 0xFF00FF)) >> 8);
-                const uint32_t g = (premult_color_g & 0x00FF00) + ((inv_alpha * ((*bits >> 8) & 0x00FF00)) >> 8);
                 *bits = 0xFF000000 | (rb & 0xFF00FF) | (g & 0x00FF00);
   #elif defined(RECOVERY_RGB_565)
                 const uint16_t rb = (premult_color_rb & 0xF81F) + ((inv_alpha5b * (*bits & 0xF81F)) >> 5);
