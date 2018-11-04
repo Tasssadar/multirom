@@ -17,7 +17,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/system_properties.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include <utils/Log.h>
 
+#define PROPERTY_SOCKET "/property_socket"
 /* MultiROM doesn't initialize the property service,
  * but decryption on Nexus 6P waits for one property to become true
  * so we hardcode it here
@@ -66,4 +72,40 @@ int property_get(const char *key, char *value, const char *default_value)
     if (default_value)
         strncpy(value, default_value, PROP_VALUE_MAX);
     return strlen(value);
+}
+
+int property_set(char* property, char* value) {
+
+    char* property_value;
+    int i, s, len;
+    struct sockaddr_un saun;
+
+    ALOGE("property_set called for %s:%s\n", property, value);
+    property_value = calloc(strlen(property) + strlen(value) + 1, 1);
+
+    sprintf(property_value, "%s:%s", property, value);
+    /*
+     * Get a socket to work with.  This socket will
+     * be in the UNIX domain, and will be a
+     * datagram socket.
+     */
+    if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0) {
+        ALOGE("client: socket");
+    }
+
+    /*
+     * Create the address we will be connecting to.
+     */
+    saun.sun_family = AF_UNIX;
+    strcpy(saun.sun_path, PROPERTY_SOCKET);
+    len = sizeof(saun.sun_family) + strlen(saun.sun_path);
+
+    if (sendto(s, property_value, strlen(property_value), 0, &saun, sizeof(struct sockaddr_un)) < 0) {
+        ALOGE("sendto failed %s\n", strerror(errno));
+    }
+
+    free(property_value);
+
+    close(s);
+    return 0;
 }

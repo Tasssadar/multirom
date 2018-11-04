@@ -50,6 +50,7 @@ ifeq ($(MR_ENCRYPTION_FAKE_PROPERTIES),true)
     LOCAL_C_INCLUDES += $(multirom_local_path)
 
     LOCAL_SRC_FILES := fake_properties.c
+    LOCAL_SHARED_LIBRARIES := liblog
 
     ifneq ($(MR_ENCRYPTION_FAKE_PROPERTIES_EXTRAS),)
         LOCAL_CFLAGS += -DMR_ENCRYPTION_FAKE_PROPERTIES_EXTRAS
