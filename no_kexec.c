@@ -197,11 +197,13 @@ int nokexec_backup_primary(void)
 int nokexec_flash_to_primary(const char * source)
 {
     int res = 0;
+    char* temp_boot = "/secondary_boot.img";
 
     // check trampoline no_kexec version and update if needed
+    copy_file(source, temp_boot);
     struct boot_img_hdr hdr;
 
-    if (libbootimg_load_header(&hdr, source) < 0)
+    if (libbootimg_load_header(&hdr, temp_boot) < 0)
     {
         ERROR(NO_KEXEC_LOG_TEXT ": Could not open boot image (%s)!\n", nokexec_s.path_boot_mmcblk);
         res = -1;
@@ -216,7 +218,7 @@ int nokexec_flash_to_primary(const char * source)
         {
             // Trampolines in ROM boot images may get out of sync, so we need to check it and
             // update if needed. I can't do that during ZIP installation because of USB drives.
-            if(inject_bootimg(source, 1) < 0)
+            if(inject_bootimg(temp_boot, 1) < 0)
             {
                 ERROR(NO_KEXEC_LOG_TEXT ": Failed to inject bootimg!\n");
                 res = -1;
@@ -227,7 +229,7 @@ int nokexec_flash_to_primary(const char * source)
     }
 
     if (res == 0)
-        INFO(NO_KEXEC_LOG_TEXT ": flashing '%s' to boot partition; res=%d\n", source, res = copy_file(source, nokexec_s.path_boot_mmcblk));
+        INFO(NO_KEXEC_LOG_TEXT ": flashing '%s' to boot partition; res=%d\n", temp_boot, res = copy_file(temp_boot, nokexec_s.path_boot_mmcblk));
 
     return res;
 }
