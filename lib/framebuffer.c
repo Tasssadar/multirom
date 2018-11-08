@@ -258,6 +258,7 @@ void fb_dump_info(void)
 
 void fb_set_brightness(int val)
 {
+    val = (val/255) * atoi(TW_MAX_BRIGHTNESS);
 #ifdef TW_BRIGHTNESS_PATH
     FILE *f = fopen(TW_BRIGHTNESS_PATH, "we");
     if(!f)
