@@ -1862,7 +1862,7 @@ int multirom_process_android_fstab(char *fstab_name, int has_fw, struct fstab_pa
 
     if(has_fw)
     {
-        struct fstab_part *p = fstab_find_first_by_path(tab, "/firmware");
+        struct fstab_part *p = fstab_find_first_by_path(tab, MR_FIRMWARE_DIR);
         if(p)
         {
             *fw_part = fstab_clone_part(p);
