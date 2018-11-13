@@ -843,8 +843,9 @@ int multirom_mount_image(const char *src, const char *dst, const char *fs, int f
     mkdir_recursive_with_perms(MULTIROM_DEV_PATH, 0777, NULL, NULL);
     sprintf(path, MULTIROM_DEV_PATH "/%s", dst);
 
+create_loop:
     if(create_loop_device(path, src, loop_num, 0777) < 0)
-        return -1;
+        res = -1;
 
     // never reuse an existing loop
     next_loop_num = loop_num + 1;
@@ -853,6 +854,13 @@ int multirom_mount_image(const char *src, const char *dst, const char *fs, int f
         ERROR("Failed to mount loop (%d: %s)\n", errno, strerror(errno));
     else
         res = 0;
+
+    if(res) {
+        if (loop_num == MULTIROM_LOOP_NUM_START)
+            loop_num = 0;
+        sprintf(path, "/dev/block/loop%d", loop_num);
+        goto create_loop;
+    }
 
     sync();
 
