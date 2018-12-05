@@ -553,10 +553,6 @@ static int drm_init(struct framebuffer *fb) {
 
     drm_enable_crtc(drm_fd, main_monitor_crtc, drm_surfaces[1]);
 
-#ifdef TW_SCREEN_BLANK_ON_BOOT
-    drm_blank(true, 1);
-    drm_blank(false, 1);
-#endif
     current_buffer = 0;
 
     return 0;
