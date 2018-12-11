@@ -20,6 +20,8 @@
 #include <string.h>
 #include <dirent.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include <ctype.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -31,6 +33,7 @@
 #include "rq_inject_file_contexts.h"
 #include "lib/log.h"
 #include "lib/util.h"
+#include "libbootimg.h"
 
 static void workaround_mount_in_sh(const char *path)
 {
@@ -207,4 +210,123 @@ void rom_quirks_on_initrd_finalized(void)
 
     if (failed_file_contexts_injections)
         disable_restorecon_recursive();
+}
+
+char* convert_to_raw(char* str) {
+    char* temp = malloc(strlen(str));
+    char* temp2 = temp;
+    char* out = calloc(1, strlen(str));
+    int i = 0, j = 0;
+
+    while (str[j] != '\n') {
+        j++;
+    }
+
+    char* token;
+    strcpy(temp, str);
+    temp[j] = '\0';
+    if (strstr(temp, ".")) {
+        while (token = strsep(&temp, ".")) {
+            strcpy(out + i, token);
+            i += strlen(token);
+        }
+    } else if(strstr(temp, "-")) {
+        while (token = strsep(&temp, "-")) {
+            strcpy(out + i, token);
+            i += strlen(token);
+        }
+    } else {
+        strcpy(out, temp);
+    }
+    free(temp2);
+    return out;
+}
+
+void rom_quirks_change_patch_and_osver() {
+
+    char* path = "/system/build.prop";
+    struct bootimg primary_img;
+    char* patchstring = NULL, *stringtoappend = NULL;
+    char* existing_ver = NULL;
+    char* existing_level = NULL;
+    int sourcefile, destfile, n;
+
+    if (libbootimg_init_load(&primary_img, "/dev/block/bootdevice/by-name/boot", LIBBOOTIMG_LOAD_ALL) < 0)
+    {
+        return;
+    }
+    libbootimg_destroy(&primary_img);
+
+    char* primary_os_version = libbootimg_get_osversion(&primary_img.hdr, false);
+    char* primary_os_level = libbootimg_get_oslevel(&primary_img.hdr, false);
+
+    char* primary_os_ver_raw = libbootimg_get_osversion(&primary_img.hdr, true);
+    char* primary_os_level_raw = libbootimg_get_oslevel(&primary_img.hdr, true);
+
+    sourcefile = open(path, O_RDONLY, 0644);
+
+    if (sourcefile == -1) {
+        ERROR("open failed! %s\n", strerror(errno));
+    }
+
+    struct stat stats;
+    int         status;
+    int size;
+
+    status = stat(path, &stats);
+    if(status == 0) {
+        size = stats.st_size;
+    }
+
+    asprintf(&patchstring, "%s=%s\n%s=%s", "ro.build.version.security_patch", primary_os_level, "ro.build.version.release", primary_os_version);
+    char* filebuf = calloc(1, size + strlen(patchstring));
+
+
+    n = read(sourcefile, filebuf, size);
+    if (n == -1) {
+        ERROR("read failed! %s\n", strerror(errno));
+    }
+    close(sourcefile);
+
+    existing_level = strstr(filebuf, "ro.build.version.security_patch");
+    existing_level += strlen("ro.build.version.security_patch=");
+
+    existing_ver = strstr(filebuf, "ro.build.version.release");
+    existing_ver += strlen("ro.build.version.release=");
+
+    char* existing_level_raw = convert_to_raw(existing_level);
+    char* existing_ver_raw = convert_to_raw(existing_ver);
+
+    if (strtol(primary_os_ver_raw, NULL, 10) > strtol(existing_ver_raw, NULL, 10) || strtol(primary_os_level_raw, NULL, 10) > strtol(existing_level_raw, NULL, 10)) {
+
+        existing_level = strstr(filebuf, "ro.build.version.security_patch");
+
+        int i = 0;
+        while (existing_level[i] != '\n') {
+            i++;
+        }
+        existing_level += i;
+        asprintf(&stringtoappend, "%s%s", patchstring, existing_level);
+
+        existing_ver = strstr(filebuf, "ro.build.version.release");
+        memcpy(existing_ver, stringtoappend, strlen(stringtoappend));
+
+        destfile = open("/build.prop", O_RDWR | O_CREAT, 0644);
+        write(destfile, filebuf, strlen(filebuf));
+        close(destfile);
+
+
+        if (!access(path, F_OK)) {
+            if(!mount("/build.prop", path, "ext4", MS_BIND, "discard,nomblk_io_submit")) {
+                INFO("build.prop bind mounted in system\n");
+            } else {
+                ERROR("build.prop bind mount failed! %s\n", strerror(errno));
+            }
+        }
+    }
+    free(existing_level_raw);
+    free(existing_ver_raw);
+    free(patchstring);
+    free(stringtoappend);
+    free(filebuf);
 }

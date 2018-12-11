@@ -1493,6 +1493,8 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
 
                 rom_quirks_on_initrd_finalized();
 
+                rom_quirks_change_patch_and_osver();
+
                 rcadditions_write_to_files(&s->rc);
                 rcadditions_free(&s->rc);
             }

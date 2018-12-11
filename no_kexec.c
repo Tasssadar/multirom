@@ -185,6 +185,48 @@ int nokexec_set_secondary_flag(void)
     return res;
 }
 
+int nokexec_set_oslevel(char *secondary_path)
+{
+    int res = -1;
+    struct bootimg primary_img, secondary_img;
+
+    INFO(NO_KEXEC_LOG_TEXT ": Going to check the bootimg in primary slot for slevel\n");
+
+    if (libbootimg_init_load(&primary_img, nokexec_s.path_boot_mmcblk, LIBBOOTIMG_LOAD_ALL) < 0)
+    {
+        ERROR(NO_KEXEC_LOG_TEXT ": Could not open boot image (%s)!\n", nokexec_s.path_boot_mmcblk);
+        return -1;
+    }
+
+    if (libbootimg_init_load(&secondary_img, secondary_path, LIBBOOTIMG_LOAD_ALL) < 0)
+    {
+        ERROR(NO_KEXEC_LOG_TEXT ": Could not open boot image (%s)!\n", nokexec_s.path_boot_mmcblk);
+        return -1;
+    }
+
+    char* primary_os_version = libbootimg_get_osversion(&primary_img.hdr, true);
+    char* primary_os_level = libbootimg_get_oslevel(&primary_img.hdr, true);
+
+    char* secondary_os_version = libbootimg_get_osversion(&secondary_img.hdr, true);
+    char* secondary_os_level = libbootimg_get_oslevel(&secondary_img.hdr, true);
+
+    if (strtol(primary_os_level, NULL, 10) > strtol(secondary_os_level, NULL, 10) || strtol(primary_os_version, NULL, 10) > strtol(secondary_os_version, NULL,  10)) {
+        secondary_img.hdr.oslevel = primary_img.hdr.oslevel;
+    }
+
+    INFO(NO_KEXEC_LOG_TEXT ": Writing boot.img updated with new security patch\n");
+    if (libbootimg_write_img(&secondary_img, secondary_path) < 0)
+    {
+        ERROR("Failed to libbootimg_write_img!\n");
+    }
+    else
+        res = 0;
+
+    libbootimg_destroy(&primary_img);
+    libbootimg_destroy(&secondary_img);
+    return res;
+}
+
 int nokexec_backup_primary(void)
 {
     int res;
@@ -323,6 +365,10 @@ int nokexec_flash_secondary_bootimg(struct multirom_rom *secondary_rom)
     // now flash the secondary boot.img to primary slot
     char path_bootimg[256];
     sprintf(path_bootimg, "%s/%s", secondary_rom->base_path, "boot.img");
+
+    if (nokexec_set_oslevel(path_bootimg))
+        return -3;
+
     if (nokexec_flash_to_primary(path_bootimg))
         return -3;
 

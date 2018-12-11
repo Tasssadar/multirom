@@ -20,5 +20,6 @@
 struct multirom_rom;
 
 void rom_quirks_on_initrd_finalized(void);
+void rom_quirks_change_patch_and_osver();
 
 #endif

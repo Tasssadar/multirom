@@ -30,6 +30,7 @@ else
 endif
 
 LOCAL_C_INCLUDES += $(multirom_local_path) $(mr_twrp_path) $(mr_twrp_path)/crypto/scrypt/lib/crypto external/openssl/include external/boringssl/include
+LOCAL_C_INCLUDES += system/extras/libbootimg/include
 
 LOCAL_SRC_FILES := \
     encmnt.cpp \
