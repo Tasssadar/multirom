@@ -32,6 +32,8 @@
 #include <linux/loop.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <selinux/selinux.h>
+#include <selinux/android.h>
 
 // clone libbootimg to /system/extras/ from
 // https://github.com/Tasssadar/libbootimg.git
@@ -83,37 +85,30 @@ static volatile int run_usb_refresh = 0;
 static pthread_t usb_refresh_thread;
 static pthread_mutex_t parts_mutex = PTHREAD_MUTEX_INITIALIZER;
 static void (*usb_refresh_handler)(void) = NULL;
+void copy_dir_contents(DIR* d, char* dirpath, char* target);
+void copy_init_contents(DIR* d, char* dirpath, char* target, bool preserve_contexts);
+bool LoadSplitPolicy();
 
-char* read_file(char* file) {
-    char* buf = calloc(1, 256);
-    FILE* fp = fopen(file, "r");
-    if (fp) {
-        fread(buf, 1, 256, fp);
-        fclose(fp);
-    } else {
-        ERROR("cannot open %s %s\n", file, strerror(errno));
-    }
-    return buf;
-}
 
 void disable_dtb_fstab(char* partition) {
+    //return;
     if (access("status", F_OK)) {
+        DIR* dir = opendir("/proc/device-tree/firmware/android");
+        copy_dir_contents(dir, "/proc/device-tree/firmware/android", "/fakefstab");
         FILE* fp = fopen("status", "w");
         fprintf(fp, "disabled");
         fclose(fp);
     }
-    char mnt_pt[100];
-    sprintf(mnt_pt, "%s%s/status", DT_FSTAB_PATH, partition);
-    if (!mount("/status", mnt_pt, "ext4", MS_BIND, "discard,nomblk_io_submit")) {
-        INFO("status node bind mounted in procfs\n");
-    } else {
-        ERROR("status node bind mount failed! %s\n", strerror(errno));
-    }
+    char path[256];
+    sprintf(path, "/fakefstab/fstab/%s/status", partition);
+    copy_file("/status", path);
 }
 
 void remove_dtb_fstab() {
     mkdir("/dummy_fw", S_IFDIR);
-    if (!mount("/dummy_fw", "/proc/device-tree/firmware", "ext4", MS_BIND, "discard,nomblk_io_submit")) {
+    DIR* dir = opendir("/proc/device-tree/firmware/android");
+    copy_dir_contents(dir, "/proc/device-tree/firmware/android", "/fakefstab");
+    if (!mount("/dummy_fw", "/fakefstab", "ext4", MS_BIND, "discard,nomblk_io_submit")) {
         INFO("dummy dtb node bind mounted in procfs\n");
     } else {
         ERROR("dummy dtb node bind mount failed! %s\n", strerror(errno));
@@ -123,10 +118,10 @@ void remove_dtb_fstab() {
 int mount_dtb_fstab(char* partition) {
     int rc = -1;
 
-    char root_path [100] = {'\0'};
-    char device[100] = {'\0'};
-    char type[100] = {'\0'};
-    char mnt_flags[100] = {'\0'};
+    char root_path [256] = {'\0'};
+    char device[256] = {'\0'};
+    char type[256] = {'\0'};
+    char mnt_flags[256] = {'\0'};
 
     sprintf(root_path, "%s%s", DT_FSTAB_PATH, partition);
     sprintf(device, "%s%s", root_path, "/dev");
@@ -475,7 +470,7 @@ int multirom(const char *rom_to_boot)
         }
         else
         {
-            if ((to_boot->type != ROM_DEFAULT) && to_boot->has_bootimg)
+            if ((to_boot->type != ROM_DEFAULT) && to_boot->has_bootimg && !s.use_primary_kernel)
             {
                 // Flash secondary boot.img, and reboot
                 // note: a secondary boot.img in primary slot will trigger second_boot=1
@@ -493,6 +488,8 @@ int multirom(const char *rom_to_boot)
 
                 exit = (EXIT_REBOOT | EXIT_UMOUNT);
                 goto finish;
+            } else if (s.use_primary_kernel) {
+                exit = 0;
             }
         }
 #endif
@@ -847,6 +844,7 @@ int multirom_default_status(struct multirom_status *s)
     s->enable_kmsg_logging = 0;
     s->rotation = MULTIROM_DEFAULT_ROTATION;
     s->anim_duration_coef = 1.f;
+    s->use_primary_kernel = 0;
 
     s->fstab = fstab_auto_load();
     if(!s->fstab)
@@ -1005,6 +1003,8 @@ int multirom_load_status(struct multirom_status *s)
             s->force_generic_fb = atoi(arg);
         else if(strstr(name, "anim_duration_coef_pct"))
             s->anim_duration_coef = ((float)atoi(arg)) / 100;
+        else if(strstr(name, "use_primary_kernel"))
+            s->use_primary_kernel = atoi(arg);
     }
 
     fclose(f);
@@ -1092,6 +1092,7 @@ int multirom_save_status(struct multirom_status *s)
     fprintf(f, "rotation=%d\n", s->rotation);
     fprintf(f, "force_generic_fb=%d\n", s->force_generic_fb);
     fprintf(f, "anim_duration_coef_pct=%d\n", (int)(s->anim_duration_coef*100));
+    fprintf(f, "use_primary_kernel=%d\n", (int)(s->use_primary_kernel));
 
     fclose(f);
     return 0;
@@ -1134,6 +1135,7 @@ void multirom_dump_status(struct multirom_status *s)
     INFO("  auto_boot_rom=%s\n", s->auto_boot_rom ? s->auto_boot_rom->name : "NULL");
     INFO("  auto_boot_type=%d\n", s->auto_boot_type);
     INFO("  curr_rom_part=%s\n", s->curr_rom_part ? s->curr_rom_part : "NULL");
+    INFO("  use_primary_kernel=%d\n", s->use_primary_kernel);
     INFO("\n");
 
     int i;
@@ -1468,8 +1470,13 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
                 if (mount_dtb_fstab("system") == 0) {
                     disable_dtb_fstab("system");
                 }
+                //if (mount_dtb_fstab("vendor") == 0) {
+                    //disable_dtb_fstab("vendor");
+               // }
+               // remove_dtb_fstab();
             }
             rom_quirks_on_initrd_finalized();
+            LoadSplitPolicy();
             break;
         }
         case ROM_LINUX_INTERNAL:
@@ -1483,7 +1490,25 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
         {
             if(!(exit & (EXIT_REBOOT | EXIT_KEXEC)))
             {
-                exit &= ~(EXIT_UMOUNT);
+                if (!s->use_primary_kernel) {
+                    exit &= ~(EXIT_UMOUNT);
+                } else {
+                    exit  = 0;
+                    struct bootimg img;
+                    char bootimg_path[256];
+                    sprintf(bootimg_path, "%s/%s", to_boot->base_path, "boot.img");
+                    libbootimg_init_load(&img, bootimg_path, LIBBOOTIMG_LOAD_ALL);
+                    libbootimg_dump_ramdisk(&img, "/.temprd");
+                    int type = 0;
+                    decompress_rd("/.temprd", "/.newrd", &type);
+                    if (!access("/.newrd/second", F_OK)) {
+                        DIR* dir = opendir("/.newrd/second");
+                        copy_init_contents(dir, "/.newrd/second", "/", true);
+                    } else {
+                        DIR* dir = opendir("/.newrd");
+                        copy_init_contents(dir, "/.newrd", "/", true);
+                    }
+                }
 
                 if(multirom_prep_android_mounts(s, to_boot) == -1)
                     return -1;
@@ -1512,6 +1537,8 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
 }
 
 #define EXEC_MASK (S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP)
+#define EXEC_MASK_NEW (S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH)
+#define EXEC_MASK_RW (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
 
 char *multirom_find_fstab_in_rc(const char *rcfile)
 {
@@ -1593,6 +1620,140 @@ static int multirom_inject_fw_mounter(struct multirom_status *s, struct fstab_pa
     return 0;
 }
 
+
+
+bool is_symlink(const char *filename)
+{
+    struct stat p_statbuf;
+
+    if (lstat(filename, &p_statbuf) < 0) {  /* if error occured */
+        ERROR("calling stat()");
+        return false;
+    }
+
+    if (S_ISLNK(p_statbuf.st_mode) == 1) {
+        INFO("%s is a symbolic link\n", filename);
+        return true;
+    } else {
+        INFO("%s is NOT a symbolic link\n", filename);
+        return false;
+    }
+}
+
+void copy_init_contents(DIR* d, char* dirpath, char* target, bool preserve_contexts) {
+
+    char in[256];
+    char out[256];
+    memset(in, 0, 256);
+    memset(out, 0, 256);
+    struct dirent *dp = NULL;
+    char *fstab_name = NULL;
+    DIR* dir = NULL;
+    ERROR("copying dir %s\n", dirpath);
+    clone_dir(d, dirpath, target, preserve_contexts);
+}
+
+bool GetVendorMappingVersion(char** plat_vers) {
+    if (!(*plat_vers = read_file("/vendor/etc/selinux/plat_sepolicy_vers.txt"))) {
+        //PLOG(ERROR) << "Failed to read /vendor/etc/selinux/plat_sepolicy_vers.txt";
+        return false;
+    }
+    if (!plat_vers) {
+        //LOG(ERROR) << "No version present in plat_sepolicy_vers.txt";
+        return false;
+    }
+    return true;
+}
+
+bool LoadSplitPolicy() {
+    // IMPLEMENTATION NOTE: Split policy consists of three CIL files:
+    // * platform -- policy needed due to logic contained in the system image,
+    // * non-platform -- policy needed due to logic contained in the vendor image,
+    // * mapping -- mapping policy which helps preserve forward-compatibility of non-platform policy
+    //   with newer versions of platform policy.
+    //
+    // secilc is invoked to compile the above three policy files into a single monolithic policy
+    // file. This file is then loaded into the kernel.
+    // Load precompiled policy from vendor image, if a matching policy is found there. The policy
+    // must match the platform policy on the system image.
+      // No suitable precompiled policy could be loaded
+    INFO( "Compiling SELinux policy");
+    // Determine the highest policy language version supported by the kernel
+    set_selinuxmnt("/sys/fs/selinux");
+    int max_policy_version = security_policyvers();
+    if (max_policy_version == -1) {
+        //PLOG(ERROR) << "Failed to determine highest policy version supported by kernel";
+        return false;
+    }
+    // We store the output of the compilation on /dev because this is the most convenient tmpfs
+    // storage mount available this early in the boot sequence.
+    char compiled_sepolicy[] = "/dev/sepolicy.XXXXXX";
+    int compiled_sepolicy_fd = mkostemp(compiled_sepolicy, O_CLOEXEC);
+    if (compiled_sepolicy_fd < 0) {
+        //PLOG(ERROR) << "Failed to create temporary file " << compiled_sepolicy;
+        return false;
+    }
+    // Determine which mapping file to include
+    char* vend_plat_vers;
+    if (!GetVendorMappingVersion(&vend_plat_vers)) {
+        return false;
+    }
+    char* mapping_file = NULL;
+    asprintf(&mapping_file, "/system/etc/selinux/mapping/%s.cil","28.0");
+    // vendor_sepolicy.cil and plat_pub_versioned.cil are the new design to replace
+    // nonplat_sepolicy.cil.
+    char* plat_pub_versioned_cil_file = "/vendor/etc/selinux/plat_pub_versioned.cil";
+    char* vendor_policy_cil_file = "/vendor/etc/selinux/vendor_sepolicy.cil";
+    if (access(vendor_policy_cil_file, F_OK) == -1) {
+        // For backward compatibility.
+        // TODO: remove this after no device is using nonplat_sepolicy.cil.
+        vendor_policy_cil_file = "/vendor/etc/selinux/nonplat_sepolicy.cil";
+        plat_pub_versioned_cil_file = NULL;
+    } else if (access(plat_pub_versioned_cil_file, F_OK) == -1) {
+        //LOG(ERROR) << "Missing " << plat_pub_versioned_cil_file;
+        return false;
+    }
+    // odm_sepolicy.cil is default but optional.
+    const char* version_as_string = NULL;
+    asprintf(&version_as_string, "%d", max_policy_version);
+    const char plat_policy_cil_file[] = "/system/etc/selinux/plat_sepolicy.cil";
+    // clang-format off
+    char* compile_args[] = {
+        "/system/bin/secilc",
+        plat_policy_cil_file,
+        "-m", "-M", "true", "-G", "-N",
+        // Target the highest policy language version supported by the kernel
+        "-c", version_as_string,
+        mapping_file,
+        "-o", compiled_sepolicy,
+        // We don't care about file_contexts output by the compiler
+        "-f", "/sys/fs/selinux/null", "", "", NULL  // /dev/null is not yet available
+    };
+    // clang-format on
+    if (plat_pub_versioned_cil_file) {
+        compile_args[14] = plat_pub_versioned_cil_file;
+    }
+    if (vendor_policy_cil_file) {
+        compile_args[15] = vendor_policy_cil_file;
+    }
+    int exit_code = 0;
+    for (int i = 0; i < 17; i++) {
+        INFO("args %s", compile_args[i]);
+    }
+    INFO("%s", run_get_stdout_with_exit(compile_args, &exit_code));
+        //unlink(compiled_sepolicy);
+        //return false;
+    unlink(compiled_sepolicy);
+    INFO( "Loading compiled SELinux policy");
+    if (selinux_android_load_policy_from_fd(compiled_sepolicy_fd, compiled_sepolicy) < 0) {
+        //LOG(ERROR) << "Failed to load SELinux policy from " << compiled_sepolicy;
+        return false;
+    }
+    INFO( "sepolicy loaded successfuly");
+    write_file("/sys/fs/selinux/checkreqprot", "0");
+    return true;
+}
+
 int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom *rom)
 {
     char in[128];
@@ -1607,57 +1768,6 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
 
     sprintf(path, "%s/firmware.img", rom->base_path);
     has_fw = (access(path, R_OK) >= 0);
-
-    sprintf(path, "%s/boot", rom->base_path);
-
-    DIR *d = opendir(path);
-    char* prefix = NULL;
-    if(!d)
-    {
-        ERROR("Failed to open rom path %s\n", path);
-        return -1;
-    }
-
-    struct dirent *dp = NULL;
-
-    while((dp = readdir(d)))
-    {
-        if((dp->d_name[0] == '.' && strlen(dp->d_name) == 1) || (dp->d_name[0] == '.' && (dp->d_name[1] == '.') || dp->d_name[1] == 0))
-            continue;
-
-        if (dp->d_type == DT_DIR) {
-            sprintf(in, "%s/%s", path, dp->d_name);
-            d = opendir(in);
-            prefix = dp->d_name;
-            continue;
-        }
-
-        if (prefix) {
-            sprintf(out, "/%s/%s", prefix, dp->d_name);
-            sprintf(in, "%s/%s/%s", path, prefix, dp->d_name);
-        } else {
-            sprintf(in, "%s/%s", path, dp->d_name);
-            sprintf(out, "/%s", dp->d_name);
-        }
-
-        copy_file(in, out);
-
-        if(strstr(dp->d_name, ".rc"))
-        {
-            // set permissions for .rc files
-            chmod(out, EXEC_MASK);
-
-            if(!fstab_name && strcmp(dp->d_name, "init."TARGET_DEVICE".rc") == 0)
-                fstab_name = multirom_find_fstab_in_rc(out);
-        }
-    }
-    closedir(d);
-
-    if(multirom_process_android_fstab(fstab_name, has_fw, &fw_part, 0) != 0) {
-        INFO("fstab couldnt be found in ramdisk. Rom maybe treble. Retry after vendor mount\n");
-    } else {
-        found_fstab = 1;
-    }
 
     unlink("/cache");
 
@@ -1734,10 +1844,51 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
     if (!access(DT_FSTAB_PATH, F_OK)) {
         remove_dtb_fstab();
     }
+
+    //System as root detection
+    char* system_path = NULL;
+    bool system_as_root = false;
+    asprintf(&system_path, "%s/system.sparse.img", rom->base_path);
+
+   if (!multirom_path_exists("/system", "init.rc")) {
+       umount("/system");
+       mkdir_with_perms("/system_root", 0755, NULL, NULL);
+       multirom_mount_image(system_path, "/system_root", "ext4", MS_RDONLY, NULL);
+       system_as_root = true;
+       if(mount("/system_root/system", "/system", "ext4", MS_BIND | MS_RDONLY, "discard,nomblk_io_submit") < 0) {
+           INFO("mount error\n");
+       } else {
+           INFO("Bind mounted /system_root/system on /system\n");
+       }
+
+       LoadSplitPolicy();
+       DIR* dir = opendir("/system_root");
+       copy_init_contents(dir, "/system_root", "/", true);
+   }
+
+    sprintf(path, "%s/boot", rom->base_path);
+    DIR* dir = opendir(path);
+    if (!system_as_root) {
+        LoadSplitPolicy();
+    }
+    copy_init_contents(dir, path, "/", false);
+    if (!access("/system/bin/init", F_OK) && is_symlink("/main_init")) {
+        char* context = calloc(1, 50);
+        getfilecon("/system/bin/init", &context);
+        copy_file_with_context("/system/bin/init", "/main_init", context);
+        chmod("/main_init", EXEC_MASK_NEW);
+    }
+
+    if(multirom_process_android_fstab(fstab_name, has_fw, &fw_part, 0) != 0) {
+        INFO("fstab couldnt be found in ramdisk. Rom maybe treble. Retry after vendor mount\n");
+    } else {
+        found_fstab = 1;
+    }
     if(!found_fstab && multirom_process_android_fstab(NULL, has_fw, &fw_part, 1) != 0) {
         INFO("fstab not found even in vendor!\n");
         goto exit;
     }
+
 
     // mount() does not necessarily obey the mount options (eg, ro on system or nosuid on data)
     // so attempt a remount on the partitions, but don't abort if the remount in unsuccessful,

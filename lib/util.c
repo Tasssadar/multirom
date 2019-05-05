@@ -31,6 +31,7 @@
 #ifdef HAVE_SELINUX
 #include <selinux/label.h>
 #endif
+#include <selinux/selinux.h>
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -189,6 +190,39 @@ int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const cha
     return 0;
 }
 
+int mkdir_with_perms_context(const char *path, mode_t mode, const char *owner, const char *group, char* context)
+{
+    int ret;
+    struct passwd *pwd = NULL;
+
+    ret = mkdir(path, mode);
+    /* chmod in case the directory already exists */
+    if (ret == -1 && errno == EEXIST) {
+        ret = chmod(path, mode);
+    }
+    if (ret == -1) {
+        return -errno;
+    }
+
+    if(owner)
+    {
+        pwd = getpwnam(owner);
+
+        if (!pwd) {
+            return -errno;
+        }
+
+        uid_t uid = pwd->pw_uid;
+        gid_t gid = pwd->pw_gid;
+
+        if(chown(path, uid, gid) < 0) {
+            return -errno;
+        }
+    }
+    setfilecon(path, context);
+    return 0;
+}
+
 /*
 * replaces any unacceptable characters with '_', the
 * length of the resulting string is equal to the input string
@@ -294,6 +328,120 @@ int copy_file(const char *from, const char *to)
     return 0;
 }
 
+int copy_file_with_context(const char *from, const char *to, char* context)
+{
+    FILE *in = fopen(from, "re");
+    if(!in)
+        return -1;
+
+    FILE *out = fopen(to, "we");
+    if(!out)
+    {
+        fclose(in);
+        return -1;
+    }
+
+    fseek(in, 0, SEEK_END);
+    int size = ftell(in);
+    rewind(in);
+
+    char *buff = malloc(size);
+    fread(buff, 1, size, in);
+    fwrite(buff, 1, size, out);
+
+    fclose(in);
+    fclose(out);
+    free(buff);
+    setfilecon(out, context);
+    return 0;
+}
+
+int getattr(const char *path, struct file_attr *a) {
+	if (lstat(path, &a->st) == -1)
+		return -1;
+	char con[256];
+	if (getfilecon(path, &con) == -1)
+		return -1;
+	strcpy(a->con, con);
+	//freecon(con);
+	return 0;
+}
+
+int setattr(const char *path, struct file_attr *a) {
+	if (chmod(path, a->st.st_mode & 0777) < 0)
+		return -1;
+	if (chown(path, a->st.st_uid, a->st.st_gid) < 0)
+		return -1;
+	if (a->con[0] && setfilecon(path, a->con) < 0)
+		return -1;
+	return 0;
+}
+
+void clone_dir(DIR* d, char* dirpath, char* target, bool preserve_context) {
+
+    char in[256];
+    char out[256];
+    memset(in, 0, 256);
+    memset(out, 0, 256);
+    struct dirent *dp = NULL;
+    char *fstab_name = NULL;
+    DIR* dir = NULL;
+    if (access(target, F_OK)) {
+        mkdir_with_perms(target, 0755, NULL, NULL);
+    }
+    ERROR("copying dir %s to %s\n", dirpath, target);
+    while((dp = readdir(d)))
+    {
+        if((dp->d_name[0] == '.' && strlen(dp->d_name) == 1) || (dp->d_name[0] == '.' && dp->d_name[1] == '.') || (!strcmp(dp->d_name, "system")))
+            continue;
+
+        sprintf(in, "%s/%s", dirpath, dp->d_name);
+        if (!strcmp(dp->d_name, "init")) {
+            sprintf(out, "%s/%s", target, "main_init");
+        } else {
+            sprintf(out, "%s/%s", target, dp->d_name);
+        }
+
+        struct file_attr a;
+        getattr(in, &a);
+
+        if (dp->d_type == DT_DIR) {
+            dir = opendir(in);
+            if (preserve_context) {
+                char* context = calloc(1, 50);
+                getfilecon(in, &context);
+                mkdir_with_perms_context(out, 0755, NULL, NULL, context);
+            } else {
+                mkdir_with_perms(out, 0755, NULL, NULL);
+            }
+            setattr(out, &a);
+            copy_dir_contents(dir, in, out);
+            continue;
+        } else if (dp->d_type == DT_LNK) {
+            char target[256];
+            readlink(in, target, sizeof(target));
+            symlink(target, out);
+            setattr(out, &a);
+        } else if (dp->d_type == DT_REG) {
+            if (preserve_context) {
+                char* context = calloc(1, 50);
+                getfilecon(in, &context);
+                copy_file_with_context(in, out, context);
+            } else {
+                copy_file(in, out);
+            }
+            setattr(out, &a);
+        }
+
+    }
+    closedir(d);
+}
+
+
+void copy_dir_contents(DIR* d, char* dirpath, char* target) {
+    clone_dir(d, dirpath, target, false);
+}
+
 int write_file(const char *path, const char *value)
 {
     int fd, ret, len;
@@ -314,6 +462,7 @@ int write_file(const char *path, const char *value)
 
     close(fd);
     if (ret < 0) {
+        ERROR("Failed to open file %s (%d: %s)\n", path, errno, strerror(errno));
         return -errno;
     } else {
         return 0;
@@ -397,6 +546,18 @@ int run_cmd_with_env(char **cmd, char *const *envp)
     }
 }
 
+
+char* read_file(char* file) {
+    char* buf = calloc(1, 256);
+    FILE* fp = fopen(file, "r");
+    if (fp) {
+        fread(buf, 1, 256, fp);
+        fclose(fp);
+    } else {
+        ERROR("cannot open %s %s\n", file, strerror(errno));
+    }
+    return buf;
+}
 
 char *run_get_stdout(char **cmd)
 {

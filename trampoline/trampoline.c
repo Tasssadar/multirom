@@ -15,6 +15,7 @@
  * along with MultiROM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define _GNU_SOURCE
 #include <sys/stat.h>
 #include <sys/mount.h>
 #include <errno.h>
@@ -27,7 +28,11 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <linux/fs.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/klog.h>
 #include <cutils/android_reboot.h>
+#include <pthread.h>
 
 #include "devices.h"
 #include "../lib/log.h"
@@ -46,6 +51,88 @@
 #include "trampoline.h"
 
 static char path_multirom[64] = { 0 };
+
+int fork_and_exec_with_stdout(char *cmd, char *const *envp)
+{
+   int fd[2];
+   int exit_code = -1;
+   char* command[] = {cmd, NULL};
+   if(pipe2(fd, O_CLOEXEC) < 0)
+        return -1;
+
+    pid_t pid = fork();
+    if (pid < 0)
+    {
+        close(fd[0]);
+        close(fd[1]);
+        return pid;
+    }
+
+    if(pid == 0) // child
+    {
+        close(fd[0]);
+        dup2(fd[1], 1);  // send stdout to the pipe
+        dup2(fd[1], 2);  // send stderr to the pipe
+        close(fd[1]);
+
+        if (execve(command[0], command, envp) == -1) {
+            ERROR("execve failed %s\n", strerror(errno));
+        }
+        _exit(127);
+    }
+    else
+    {
+        close(fd[1]);
+
+        char *res = malloc(512);
+        char buffer[512];
+        int size = 512, written = 0, len;
+        while ((len = read(fd[0], buffer, sizeof(buffer))) > 0)
+        {
+            if(written + len + 1 > size)
+            {
+                size = written + len + 256;
+                res = realloc(res, size);
+            }
+            memcpy(res+written, buffer, len);
+            written += len;
+        }
+        res[written] = 0;
+
+        close(fd[0]);
+
+        waitpid(pid, &exit_code, 0);
+        ERROR("%s\n", res);
+
+        if(written == 0)
+        {
+            free(res);
+            return pid;
+        }
+        return pid;
+    }
+    return pid;
+}
+
+static int fork_and_exec_with_strace(char *cmd, char** env)
+{
+    pid_t pID = fork();
+    if(pID == 0)
+    {
+        char* args[] = {"/mrom_enc/strace", "-o", NULL, "-f", NULL, NULL};
+        char strace_arg1[100];
+        sprintf(strace_arg1, "strace-%s", (cmd + 10));
+        args[2] = strace_arg1;
+        args[4] = cmd;
+        INFO("running %s %s %s %s %s\n", args[0], args[1], args[2], args[3], args[4]);
+        stdio_to_null();
+        setpgid(0, getpid());
+        execve(args[0], args, env);
+        ERROR("Failed to exec %s: %s\n", args[0], strerror(errno));
+        _exit(127);
+    }
+    return pID;
+}
 
 static int find_multirom(void)
 {
@@ -387,6 +474,68 @@ exit:
     return res;
 }
 
+char *trampoline_get_klog(void)
+{
+    int len = klogctl(10, NULL, 0);
+    if      (len < 16*1024)      len = 16*1024;
+    else if (len > 16*1024*1024) len = 16*1024*1024;
+
+    char *buff = malloc(len + 1);
+    len = klogctl(3, buff, len);
+    if(len <= 0)
+    {
+        ERROR("Could not get klog!\n");
+        free(buff);
+        return NULL;
+    }
+    buff[len] = 0;
+    return buff;
+}
+
+int trampoline_copy_log(char *klog, const char *dest_path_relative)
+{
+    int res = 0;
+    int freeLog = (klog == NULL);
+
+    if(!klog)
+        klog = trampoline_get_klog();
+
+    if(klog)
+    {
+        char path[256];
+        snprintf(path, sizeof(path), "%s", dest_path_relative);
+        FILE *f = fopen(path, "we");
+
+        if(f)
+        {
+            fwrite(klog, 1, strlen(klog), f);
+            fclose(f);
+            chmod(path, 0777);
+        }
+        else
+        {
+            ERROR("Failed to open %s!\n", path);
+            res = -1;
+        }
+    }
+    else
+    {
+        ERROR("Could not get klog!\n");
+        res = -1;
+    }
+
+    if(freeLog)
+        free(klog);
+    return res;
+}
+
+void klog_periodic(void* ptr) {
+    while(1) {
+        usleep(2000000);
+        trampoline_copy_log(NULL, "/data/last_kmsg");
+    }
+}
+
 int main(int argc, char *argv[])
 {
     if (argc > 1)
@@ -409,6 +558,7 @@ int main(int argc, char *argv[])
     mount("proc", "/proc", "proc", 0, NULL);
     mount("sysfs", "/sys", "sysfs", 0, NULL);
     mount("pstore", "/sys/fs/pstore", "pstore", 0, NULL);
+    mount("selinuxfs", "/sys/fs/selinux", "selinuxfs", 0, NULL);
 
 #if MR_USE_DEBUGFS_MOUNT
     // Mount the debugfs kernel sysfs
@@ -455,9 +605,16 @@ run_main_init:
     umount("/sys/kernel/debug");
 #endif
 
+    if (access("/fakefstab/", F_OK)) {
+        DIR* dir = opendir("/proc/device-tree/firmware/android");
+        copy_dir_contents(dir, "/proc/device-tree/firmware/android", "/fakefstab");
+    }
     umount("/proc");
     umount("/sys/fs/pstore");
-    umount("/sys");
+    umount("/sys/fs/selinux");
+    if(umount("/sys")) {
+        ERROR("sysfs unmount failed :%s\n", strerror(errno));
+    }
 
     INFO("Running main_init\n");
 
@@ -466,7 +623,17 @@ run_main_init:
     chmod("/main_init", EXEC_MASK);
     rename("/main_init", "/init");
 
+    pthread_t klog_thread;
+    if(pthread_create(&klog_thread, NULL, klog_periodic, NULL)) {
+
+        fprintf(stderr, "Error creating thread\n");
+        return 1;
+
+    }
+
+    //trampoline_copy_log(NULL, "/data/last_kmsg");
     res = execve(cmd[0], cmd, NULL);
+    //trampoline_copy_log(NULL, "/data/last_kmsg");
     ERROR("execve returned %d %d %s\n", res, errno, strerror(errno));
     return 0;
 }

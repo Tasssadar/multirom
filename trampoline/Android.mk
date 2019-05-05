@@ -12,7 +12,7 @@ LOCAL_MODULE_TAGS := optional
 
 LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT)
 LOCAL_UNSTRIPPED_PATH := $(TARGET_ROOT_OUT_UNSTRIPPED)
-LOCAL_STATIC_LIBRARIES := libcutils libc libmultirom_static libbootimg
+LOCAL_STATIC_LIBRARIES := libcutils libc libmultirom_static libbootimg libselinux
 LOCAL_C_INCLUDES += system/extras/libbootimg/include
 LOCAL_FORCE_STATIC_EXECUTABLE := true
 

@@ -116,6 +116,7 @@ struct multirom_status
     char *int_display_name;
     int rotation;
     int force_generic_fb;
+    int use_primary_kernel;
     float anim_duration_coef;
     struct multirom_rom *auto_boot_rom;
     struct multirom_rom *current_rom;

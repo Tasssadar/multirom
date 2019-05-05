@@ -19,5 +19,9 @@
 #define INJECT_H
 
 int inject_bootimg(const char *img_path, int force);
+int decompress_second_rd(const char* target, const char *second_path);
+int pack_second_rd(const char *second_path, const char* unpacked_dir);
+int decompress_rd(const char *path, const char* target, int* type);
+int pack_rd(const char *path, const char *target, int type);
 
 #endif

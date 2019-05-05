@@ -227,6 +227,32 @@ int nokexec_set_oslevel(char *secondary_path)
     return res;
 }
 
+int nokexec_set_cmdline(char *secondary_path)
+{
+    int res = 0;
+    struct bootimg image;
+    char* custom_cmdline = "androidboot.selinux=permissive printk.devkmsg=on androidboot.android_dt_dir=/fakefstab/";
+
+    INFO(NO_KEXEC_LOG_TEXT ": Going to check the bootimg in primary slot for slevel\n");
+
+    if (libbootimg_init_load(&image, secondary_path, LIBBOOTIMG_LOAD_ALL) < 0)
+    {
+        ERROR(NO_KEXEC_LOG_TEXT ": Could not open boot image (%s)!\n", nokexec_s.path_boot_mmcblk);
+        return -1;
+    }
+
+    char* cmdline = libbootimg_get_cmdline(&image.hdr);
+    char* newcmdline = NULL;
+    asprintf(&newcmdline, "%s %s", cmdline, custom_cmdline);
+
+    libbootimg_set_cmdline(&image.hdr, newcmdline);
+    free(newcmdline);
+
+    libbootimg_destroy(&image);
+    return res;
+}
+
+
 int nokexec_backup_primary(void)
 {
     int res;
@@ -367,6 +393,9 @@ int nokexec_flash_secondary_bootimg(struct multirom_rom *secondary_rom)
     sprintf(path_bootimg, "%s/%s", secondary_rom->base_path, "boot.img");
 
     if (nokexec_set_oslevel(path_bootimg))
+        return -3;
+
+    if (nokexec_set_cmdline(path_bootimg))
         return -3;
 
     if (nokexec_flash_to_primary(path_bootimg))

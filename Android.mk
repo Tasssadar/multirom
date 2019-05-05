@@ -9,6 +9,7 @@ LOCAL_C_INCLUDES += $(multirom_local_path) \
     external/libpng \
     external/zlib \
     external/freetype/include \
+    external/selinux/libselinux/include \
     $(multirom_local_path)/lib
 
 LOCAL_SRC_FILES:= \
@@ -37,7 +38,7 @@ LOCAL_FORCE_STATIC_EXECUTABLE := true
 LOCAL_MODULE_PATH := $(TARGET_ROOT_OUT)
 LOCAL_UNSTRIPPED_PATH := $(TARGET_ROOT_OUT_UNSTRIPPED)
 
-LOCAL_STATIC_LIBRARIES := libcutils libc libmultirom_static
+LOCAL_STATIC_LIBRARIES := libcutils libc libmultirom_static libselinux
 LOCAL_WHOLE_STATIC_LIBRARIES := libm libcutils libpng libz libft2_mrom_static
 
 ifeq ($(MR_FIRMWARE_DIR),)

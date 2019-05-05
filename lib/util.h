@@ -17,10 +17,12 @@
 #ifndef _INIT_UTIL_H_
 #define _INIT_UTIL_H_
 
+#include <stdbool.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <time.h>
+#include <dirent.h>
 
 #define UNUSED __attribute__((unused))
 
@@ -31,6 +33,11 @@
 #define REBOOT_BOOTLOADER 2
 #define REBOOT_SHUTDOWN 3
 
+struct file_attr {
+	struct stat st;
+	char con[128];
+};
+
 time_t gettime(void);
 unsigned int decode_uid(const char *s);
 int mkdir_recursive(const char *pathname, mode_t mode);
@@ -40,8 +47,12 @@ int make_link(const char *oldpath, const char *newpath);
 void remove_link(const char *oldpath, const char *newpath);
 int wait_for_file(const char *filename, int timeout);
 int copy_file(const char *from, const char *to);
+int copy_file_with_context(const char *from, const char *to, char* context);
+void copy_dir_contents(DIR* d, char* dirpath, char* target);
+void clone_dir(DIR* d, char* dirpath, char* target, bool preserve_context);
 int copy_dir(const char *from, const char *to);
 int mkdir_with_perms(const char *path, mode_t mode, const char *owner, const char *group);
+int mkdir_with_perms_context(const char *path, mode_t mode, const char *owner, const char *group, char* context);
 int write_file(const char *path, const char *value);
 int remove_dir(const char *dir);
 int run_cmd(char **cmd);
@@ -60,6 +71,7 @@ int mount_image(const char *src, const char *dst, const char *fs, int flags, con
 int multirom_mount_image(const char *src, const char *dst, const char *fs, int flags, const void *data);
 void do_reboot(int type);
 int mr_system(const char *shell_fmt, ...);
+char* read_file(char* file);
 
 inline int imin(int a, int b);
 inline int imax(int a, int b);

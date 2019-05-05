@@ -27,6 +27,7 @@ common_C_INCLUDES := $(multirom_local_path)/lib \
     external/libpng \
     external/zlib \
     external/freetype/include \
+    external/selinux/libselinux/include \
     system/extras/libbootimg/include \
 
 # With these, GCC optimizes aggressively enough so full-screen alpha blending

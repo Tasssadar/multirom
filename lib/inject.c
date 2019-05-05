@@ -50,7 +50,7 @@ static int get_img_trampoline_ver(struct bootimg *img)
     return ver;
 }
 
-static int copy_rd_files(UNUSED const char *path, UNUSED const char *busybox_path)
+static int copy_rd_files(UNUSED const char *path, const char *target)
 {
     char buf[256];
     char path_dir[64];
@@ -63,34 +63,21 @@ static int copy_rd_files(UNUSED const char *path, UNUSED const char *busybox_pat
     char path_ueventd[64];
     char path_watchdog[64];
 
-    if (access(TMP_RD2, F_OK) != -1)
-    {
-        snprintf(path_dir, sizeof(path_dir), TMP_RD2_UNPACKED_DIR);
-        snprintf(path_init, sizeof(path_init), TMP_RD2_UNPACKED_DIR "/init");
-        snprintf(path_main, sizeof(path_main), TMP_RD2_UNPACKED_DIR "/main_init");
-        snprintf(path_mrom_enc, sizeof(path_mrom_enc), TMP_RD2_UNPACKED_DIR "/mrom_enc");
-        snprintf(path_mrom_fstab, sizeof(path_mrom_fstab), TMP_RD2_UNPACKED_DIR "/mrom.fstab");
-        snprintf(path_hwservice_contexts, sizeof(path_hwservice_contexts), TMP_RD2_UNPACKED_DIR "/plat_hwservice_contexts");
-        snprintf(path_nonplat_hwservice_contexts, sizeof(path_nonplat_hwservice_contexts), TMP_RD2_UNPACKED_DIR "/nonplat_hwservice_contexts");
-        snprintf(path_ueventd, sizeof(path_ueventd), TMP_RD2_UNPACKED_DIR "/sbin/ueventd");
-        snprintf(path_watchdog, sizeof(path_watchdog), TMP_RD2_UNPACKED_DIR "/sbin/watchdogd");
+
+    snprintf(path_dir, sizeof(path_dir), "%s", target);
+    snprintf(path_init, sizeof(path_init), "%s%s", target, "/init.real");
+    if (access(path_init, F_OK) != -1) {
+        snprintf(path_init, sizeof(path_init), "%s%s", target, "/init.real");
+    } else {
+        snprintf(path_init, sizeof(path_init), "%s%s", target, "/init");
     }
-    else
-    {
-        snprintf(path_dir, sizeof(path_dir), TMP_RD_UNPACKED_DIR);
-        if (access(TMP_RD_UNPACKED_DIR "/init.real", F_OK) != -1) {
-            snprintf(path_init, sizeof(path_init), TMP_RD_UNPACKED_DIR "/init.real");
-        } else {
-            snprintf(path_init, sizeof(path_init), TMP_RD_UNPACKED_DIR "/init");
-        }
-        snprintf(path_main, sizeof(path_main), TMP_RD_UNPACKED_DIR "/main_init");
-        snprintf(path_mrom_enc, sizeof(path_mrom_enc), TMP_RD_UNPACKED_DIR "/mrom_enc");
-        snprintf(path_mrom_fstab, sizeof(path_mrom_fstab), TMP_RD_UNPACKED_DIR "/mrom.fstab");
-        snprintf(path_hwservice_contexts, sizeof(path_hwservice_contexts), TMP_RD_UNPACKED_DIR "/plat_hwservice_contexts");
-        snprintf(path_nonplat_hwservice_contexts, sizeof(path_nonplat_hwservice_contexts), TMP_RD_UNPACKED_DIR "/nonplat_hwservice_contexts");
-        snprintf(path_ueventd, sizeof(path_ueventd), TMP_RD_UNPACKED_DIR "/sbin/ueventd");
-        snprintf(path_watchdog, sizeof(path_watchdog), TMP_RD_UNPACKED_DIR "/sbin/watchdogd");
-    }
+    snprintf(path_main, sizeof(path_main), "%s%s", target, "/main_init");
+    snprintf(path_mrom_enc, sizeof(path_mrom_enc), "%s%s", target, "/mrom_enc");
+    snprintf(path_mrom_fstab, sizeof(path_mrom_fstab), "%s%s", target, "/mrom.fstab");
+    snprintf(path_hwservice_contexts, sizeof(path_hwservice_contexts), "%s%s", target, "/plat_hwservice_contexts");
+    snprintf(path_nonplat_hwservice_contexts, sizeof(path_nonplat_hwservice_contexts), "%s%s", target, "/nonplat_hwservice_contexts");
+    snprintf(path_ueventd, sizeof(path_ueventd), "%s%s", target, "/sbin/ueventd");
+    snprintf(path_watchdog, sizeof(path_watchdog), "%s%s", target, "/sbin/watchdogd");
 
     if (access(path_main, F_OK) < 0 &&
             rename(path_init, path_main))
@@ -136,21 +123,13 @@ static int copy_rd_files(UNUSED const char *path, UNUSED const char *busybox_pat
 
 #define RD_GZIP 1
 #define RD_LZ4  2
-static int inject_second_rd(const char *path, const char *second_path)
-{
+
+int decompress_second_rd(const char* target, const char *second_path) {
     int result = -1;
-    uint32_t magic = 0;
 
-    FILE *f = fopen(path, "re");
-    if(!f)
-    {
-        ERROR("Couldn't open %s!\n", path);
-        return -1;
-    }
-    fread(&magic, sizeof(magic), 1, f);
-    fclose(f);
-
-    mkdir(TMP_RD2_UNPACKED_DIR, 0755);
+    char second_unpacked_dir[256];
+    sprintf(second_unpacked_dir, "%s/%s", target, "second");
+    mkdir(second_unpacked_dir, 0755);
 
     // Decompress initrd
     int type;
@@ -158,10 +137,10 @@ static int inject_second_rd(const char *path, const char *second_path)
     char busybox_path[256];
     snprintf(busybox_path, sizeof(busybox_path), "%s/busybox", mrom_dir());
 
+
+    snprintf(buff, sizeof(buff), "B=\"%s\"; cd \"%s\"; \"$B\" cat \"%s\" | \"$B\" cpio -i", busybox_path, second_unpacked_dir, second_path);
+
     char *cmd[] = { busybox_path, "sh", "-c", buff, NULL };
-
-    snprintf(buff, sizeof(buff), "B=\"%s\"; cd \"%s\"; \"$B\" cat \"%s\" | \"$B\" cpio -i", busybox_path, TMP_RD2_UNPACKED_DIR, second_path);
-
     int r;
     char *out = run_get_stdout_with_exit(cmd, &r);
     if (r != 0)
@@ -169,33 +148,48 @@ static int inject_second_rd(const char *path, const char *second_path)
         ERROR("Output: %s\n", out);
         ERROR("Failed to unpack second ramdisk!%s\n", buff);
         goto fail;
+    } else {
+        return 0;
     }
+fail:
+    remove_dir(second_unpacked_dir);
+    return result;
+}
 
-    // Update files
-    if (copy_rd_files(second_path, busybox_path) < 0)
-    {
-        goto fail;
-    }
+int pack_second_rd(const char *second_path, const char* unpacked_dir) {
 
+    int result = -1;
+    char second_unpacked_dir[256];
+    sprintf(second_unpacked_dir, "%s/%s", unpacked_dir, "second");
     // Pack initrd again
-    snprintf(buff, sizeof(buff), "B=\"%s\"; cd \"%s\"; \"$B\" find . | \"$B\" cpio -o -H newc > \"%s\"", busybox_path, TMP_RD2_UNPACKED_DIR, second_path);
+    char buff[256];
+    char busybox_path[256];
+    snprintf(busybox_path, sizeof(busybox_path), "%s/busybox", mrom_dir());
+    snprintf(buff, sizeof(buff), "B=\"%s\"; cd \"%s\"; \"$B\" find . | \"$B\" cpio -o -H newc > \"%s\"", busybox_path, second_unpacked_dir, second_path);
 
-    out = run_get_stdout_with_exit(cmd, &r);
+    char *cmd[] = { busybox_path, "sh", "-c", buff, NULL };
+    int r;
+    char *out = run_get_stdout_with_exit(cmd, &r);
     if (r != 0)
     {
         ERROR("Output: %s\n", out);
         ERROR("Failed to pack ramdisk.cpio!\n");
         goto fail;
+    } else {
+        return 0;
     }
 success:
     result = 0;
 fail:
-    remove_dir(TMP_RD2_UNPACKED_DIR);
+    remove_dir(second_unpacked_dir);
     return result;
+
 }
 
-static int inject_rd(const char *path, const char *second_path)
-{
+
+
+int decompress_rd(const char *path, const char* target, int* type) {
+
     int result = -1;
     uint32_t magic = 0;
 
@@ -208,26 +202,24 @@ static int inject_rd(const char *path, const char *second_path)
     fread(&magic, sizeof(magic), 1, f);
     fclose(f);
 
-    remove_dir(TMP_RD_UNPACKED_DIR);
-    mkdir(TMP_RD_UNPACKED_DIR, 0755);
+    remove_dir(target);
+    mkdir(target, 0755);
 
     // Decompress initrd
-    int type;
     char buff[256];
     char busybox_path[256];
     snprintf(busybox_path, sizeof(busybox_path), "%s/busybox", mrom_dir());
 
-    char *cmd[] = { busybox_path, "sh", "-c", buff, NULL };
 
     if((magic & 0xFFFF) == 0x8B1F)
     {
-        type = RD_GZIP;
-        snprintf(buff, sizeof(buff), "B=\"%s\"; cd \"%s\"; \"$B\" gzip -d -c \"%s\" | \"$B\" cpio -i", busybox_path, TMP_RD_UNPACKED_DIR, path);
+        *type = RD_GZIP;
+        snprintf(buff, sizeof(buff), "B=\"%s\"; cd \"%s\"; \"$B\" gzip -d -c \"%s\" | \"$B\" cpio -i", busybox_path, target, path);
     }
     else if(magic == 0x184C2102)
     {
-        type = RD_LZ4;
-        snprintf(buff, sizeof(buff), "cd \"%s\"; \"%s/lz4\" -d \"%s\" stdout | \"%s\" cpio -i", TMP_RD_UNPACKED_DIR, mrom_dir(), path, busybox_path);
+        *type = RD_LZ4;
+        snprintf(buff, sizeof(buff), "cd \"%s\"; \"%s/lz4\" -d \"%s\" stdout | \"%s\" cpio -i", target, mrom_dir(), path, busybox_path);
     }
     else
     {
@@ -235,6 +227,7 @@ static int inject_rd(const char *path, const char *second_path)
         goto success;
     }
 
+    char *cmd[] = { busybox_path, "sh", "-c", buff, NULL };
     int r = run_cmd(cmd);
     if(r != 0)
     {
@@ -242,41 +235,109 @@ static int inject_rd(const char *path, const char *second_path)
         goto fail;
     }
 
-    if (access(TMP_RD2, F_OK) != -1)
+    char second_path[256];
+    sprintf(second_path, "%s/%s", target, "sbin/ramdisk.cpio");
+    if (access(second_path, F_OK) != -1)
     {
-        if (inject_second_rd(path, second_path) < 0)
+        if (decompress_second_rd(target, second_path) < 0)
         {
             goto fail;
+        } else {
+            return 0;
         }
+    } else {
+        return 0;
     }
-    else if (copy_rd_files(path, busybox_path) < 0)
-    {
-        goto fail;
-    }
+success:
+    result = 0;
+fail:
+    remove_dir(target);
+    return result;
+}
+
+int pack_rd(const char *path, const char *target, int type) {
 
     // Pack ramdisk
+    char second_path[256];
+    sprintf(second_path, "%s/%s", target, "sbin/ramdisk.cpio");
+    if (access(second_path, F_OK) != -1)
+    {
+        pack_second_rd(second_path, target);
+    }
+
+    char buff[256];
+    char busybox_path[256];
+    snprintf(busybox_path, sizeof(busybox_path), "%s/busybox", mrom_dir());
     switch (type)
     {
         case RD_GZIP:
-            snprintf(buff, sizeof(buff), "B=\"%s\"; cd \"%s\"; \"$B\" find . | \"$B\" cpio -o -H newc | \"$B\" gzip > \"%s\"", busybox_path, TMP_RD_UNPACKED_DIR, path);
+            snprintf(buff, sizeof(buff), "B=\"%s\"; cd \"%s\"; \"$B\" find . | \"$B\" cpio -o -H newc | \"$B\" gzip > \"%s\"", busybox_path, target, path);
             break;
         case RD_LZ4:
-            snprintf(buff, sizeof(buff), "B=\"%s\"; cd \"%s\"; \"$B\" find . | \"$B\" cpio -o -H newc | \"%s/lz4\" stdin \"%s\"", busybox_path, TMP_RD_UNPACKED_DIR, mrom_dir(), path);
+            snprintf(buff, sizeof(buff), "B=\"%s\"; cd \"%s\"; \"$B\" find . | \"$B\" cpio -o -H newc | \"%s/lz4\" stdin \"%s\"", busybox_path, target, mrom_dir(), path);
             break;
     }
 
+    char *cmd[] = { busybox_path, "sh", "-c", buff, NULL };
+    int r;
     r = run_cmd(cmd);
     if(r != 0)
     {
         ERROR("Failed to pack ramdisk!\n");
+        return -1;
+    } else {
+        return 0;
+    }
+}
+
+
+static int inject_rd(const char *path)
+{
+    int result = -1;
+    int type;
+
+    char *copy_target;
+    if (decompress_rd(path, TMP_RD_UNPACKED_DIR, &type)) {
         goto fail;
     }
+
+    if (!access(TMP_RD2_UNPACKED_DIR, F_OK)) {
+        copy_target = TMP_RD2_UNPACKED_DIR;
+    } else {
+        copy_target = TMP_RD_UNPACKED_DIR;
+    }
+
+    if (copy_rd_files(path, copy_target) < 0)
+    {
+        goto fail;
+    }
+
+    if (pack_rd(path, TMP_RD_UNPACKED_DIR, type) < 0) {
+        goto fail;
+    }
+
 
 success:
     result = 0;
 fail:
-    remove_dir(TMP_RD_UNPACKED_DIR);
     return result;
+}
+
+int inject_cmdline(struct bootimg *image)
+{
+    int res = 0;
+    char* custom_cmdline = "printk.devkmsg=on androidboot.android_dt_dir=/fakefstab/";
+
+    char* cmdline = libbootimg_get_cmdline(&image->hdr);
+    char* newcmdline = NULL;
+    if (!strstr(cmdline, custom_cmdline)) {
+        asprintf(&newcmdline, "%s %s", cmdline, custom_cmdline);
+
+        libbootimg_set_cmdline(&image->hdr, newcmdline);
+        free(newcmdline);
+    }
+
+    return res;
 }
 
 int inject_bootimg(const char *img_path, int force)
@@ -322,7 +383,7 @@ int inject_bootimg(const char *img_path, int force)
         goto exit;
     }
 
-    if(inject_rd(initrd_tmp_name, initrd2_tmp_name) >= 0)
+    if(inject_rd(initrd_tmp_name) >= 0 && inject_cmdline(&img) == 0)
     {
         // Update the boot.img
         snprintf((char*)img.hdr.name, BOOT_NAME_SIZE, "tr_ver%d", VERSION_TRAMPOLINE);
