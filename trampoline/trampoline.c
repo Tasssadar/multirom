@@ -22,6 +22,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <dirent.h>
@@ -33,6 +35,7 @@
 #include <sys/klog.h>
 #include <cutils/android_reboot.h>
 #include <pthread.h>
+#include <selinux/selinux.h>
 
 #include "devices.h"
 #include "../lib/log.h"
@@ -620,8 +623,13 @@ run_main_init:
 
     fixup_symlinks();
 
+    char* context = calloc(1, 50);
+    getfilecon("/main_init", &context);
+    INFO("context of main_init is %s", context);
     chmod("/main_init", EXEC_MASK);
     rename("/main_init", "/init");
+    getfilecon("/init", &context);
+    INFO("context of init is %s", context);
 
     pthread_t klog_thread;
     if(pthread_create(&klog_thread, NULL, klog_periodic, NULL)) {
@@ -630,6 +638,25 @@ run_main_init:
         return 1;
 
     }
+
+    char *addr;
+    int initfd = open("/init", O_RDWR);
+    struct stat st;
+    stat("/init", &st);
+    size_t size = st.st_size;
+    addr = mmap(NULL, size, PROT_WRITE, MAP_SHARED, initfd, 0);
+    for (char *p = addr; p < addr + size; ++p) {
+        if (memcmp(p, "/system/bin/init", sizeof("/system/bin/init")) == 0) {
+            // Force execute /init instead of /system/bin/init
+            INFO("Patch init: [/system/bin/init] -> [/init]\n");
+            strcpy(p, "/init");
+            p += sizeof("/system/bin/init") - 1;
+        }
+    }
+    munmap(addr, size);
+    close(initfd);
+
+    //setexeccon("u:object_r:kernel:s0");
 
     //trampoline_copy_log(NULL, "/data/last_kmsg");
     res = execve(cmd[0], cmd, NULL);

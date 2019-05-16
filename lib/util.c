@@ -349,10 +349,13 @@ int copy_file_with_context(const char *from, const char *to, char* context)
     fread(buff, 1, size, in);
     fwrite(buff, 1, size, out);
 
+    if(setfilecon(to, context)) {
+        ERROR("couldnt set %s context to %s because %s", to, context, strerror(errno));
+    }
+
     fclose(in);
     fclose(out);
     free(buff);
-    setfilecon(out, context);
     return 0;
 }
 

@@ -17,9 +17,11 @@
 #ifndef ROM_QUIRKS_H
 #define ROM_QUIRKS_H
 
+#include <multirom.h>
+
 struct multirom_rom;
 
 void rom_quirks_on_initrd_finalized(void);
-void rom_quirks_change_patch_and_osver();
+void rom_quirks_change_patch_and_osver(struct multirom_status *s, struct multirom_rom *to_boot);
 
 #endif

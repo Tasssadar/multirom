@@ -309,6 +309,27 @@ void multirom_kmsg_logging(int kmsg_backup_type)
     set_mediarw_perms(path_log_file);
 }
 
+int multirom_get_current_oslevel(struct multirom_status *s)
+{
+    int res = -1;
+    struct bootimg primary_img, secondary_img;
+
+    char* secondary_path = "/dev/block/bootdevice/by-name/boot";
+
+    INFO(NO_KEXEC_LOG_TEXT ": Going to check the bootimg in primary slot for slevel\n");
+
+    if (libbootimg_init_load(&secondary_img, secondary_path, LIBBOOTIMG_LOAD_ALL) < 0)
+    {
+        return -1;
+    }
+
+    char* secondary_os_version = libbootimg_get_osversion(&secondary_img.hdr, true);
+    char* secondary_os_level = libbootimg_get_oslevel(&secondary_img.hdr, true);
+
+    memcpy(s->os_version, secondary_os_version, 6);
+    return 0;
+}
+
 int multirom(const char *rom_to_boot)
 {
     if(multirom_find_base_dir() == -1)
@@ -464,6 +485,7 @@ int multirom(const char *rom_to_boot)
 
         if (s.is_second_boot != 0)
         {
+            multirom_get_current_oslevel(&s);
             // Restore primary boot.img, and continue
             if (nokexec_restore_primary_and_cleanup() < 0)
                 MR_NO_KEXEC_ABORT;
@@ -691,7 +713,7 @@ int multirom_apk_get_roms(struct multirom_status *s)
 {
     if(multirom_find_base_dir() == -1)
     {
-        printf("Could not find multirom dir\n");
+        INFO("Could not find multirom dir\n");
         return -1;
     }
 
@@ -725,13 +747,13 @@ int multirom_apk_get_roms(struct multirom_status *s)
                 s->curr_rom_part = strdup(arg);
         }
 
-        printf("current_rom='%s' curr_rom_part='%s'\n", current_rom, (s->curr_rom_part ? s->curr_rom_part : ""));
+        INFO("current_rom='%s' curr_rom_part='%s'\n", current_rom, (s->curr_rom_part ? s->curr_rom_part : ""));
 
         fclose(f);
     }
     else
     {
-        printf("Failed to open config file, setting current_rom to null!\n");
+        INFO("Failed to open config file, setting current_rom to null!\n");
     }
 
     /* Get Internal ROM */
@@ -740,7 +762,7 @@ int multirom_apk_get_roms(struct multirom_status *s)
     DIR *d = opendir(roms_path);
     if(!d)
     {
-        printf("Failed to open Internal ROM's folder, creating one with ROM from internal memory...\n");
+        INFO("Failed to open Internal ROM's folder, creating one with ROM from internal memory...\n");
         multirom_import_internal();
     }
     else
@@ -751,7 +773,7 @@ int multirom_apk_get_roms(struct multirom_status *s)
     d = opendir(roms_path);
     if(!d)
     {
-        printf("Failed to open roms dir!\n");
+        INFO("Failed to open roms dir!\n");
         //return -1;
     }
     else
@@ -769,11 +791,11 @@ int multirom_apk_get_roms(struct multirom_status *s)
 
             if(strlen(dr->d_name) > MAX_ROM_NAME_LEN)
             {
-                printf("Skipping ROM %s, name is too long (max %d chars allowed)\n", dr->d_name, MAX_ROM_NAME_LEN);
+                INFO("Skipping ROM %s, name is too long (max %d chars allowed)\n", dr->d_name, MAX_ROM_NAME_LEN);
                 continue;
             }
 
-            //printf("Adding ROM %s\n", dr->d_name);
+            //INFO("Adding ROM %s\n", dr->d_name);
 
             struct multirom_rom *rom = malloc(sizeof(struct multirom_rom));
             memset(rom, 0, sizeof(struct multirom_rom));
@@ -822,7 +844,7 @@ int multirom_apk_get_roms(struct multirom_status *s)
     s->current_rom = multirom_get_rom(s, current_rom, s->curr_rom_part);
     if(!s->current_rom)
     {
-        printf("Failed to find current rom (%s, part %s)!\n", current_rom, (s->curr_rom_part) ? s->curr_rom_part : "");
+        INFO("Failed to find current rom (%s, part %s)!\n", current_rom, (s->curr_rom_part) ? s->curr_rom_part : "");
         free(s->curr_rom_part);
         s->curr_rom_part = NULL;
     }
@@ -1516,9 +1538,8 @@ int multirom_prepare_for_boot(struct multirom_status *s, struct multirom_rom *to
                 if(multirom_create_media_link(s) == -1)
                     return -1;
 
-                rom_quirks_on_initrd_finalized();
 
-                rom_quirks_change_patch_and_osver();
+                rom_quirks_change_patch_and_osver(s, to_boot);
 
                 rcadditions_write_to_files(&s->rc);
                 rcadditions_free(&s->rc);
@@ -1751,6 +1772,22 @@ bool LoadSplitPolicy() {
     }
     INFO( "sepolicy loaded successfuly");
     write_file("/sys/fs/selinux/checkreqprot", "0");
+    struct stat fileStat;
+    if(stat("/sys/fs/selinux/checkreqprot",&fileStat) < 0)
+        return false;
+
+    INFO("File Permissions: \t");
+    INFO("read %d\n", fileStat.st_mode & S_IRUSR);
+    INFO("write %d\n", fileStat.st_mode & S_IWUSR);
+    INFO("exec %d\n", fileStat.st_mode & S_IXUSR);
+    INFO("%d\n", fileStat.st_mode & S_IRGRP);
+    INFO("%d\n", fileStat.st_mode & S_IWGRP);
+    INFO("%d\n", fileStat.st_mode & S_IXGRP);
+    INFO("%d\n", fileStat.st_mode & S_IROTH);
+    INFO("%d\n", fileStat.st_mode & S_IWOTH);
+    INFO("%d\n", fileStat.st_mode & S_IXOTH);
+    INFO("\n\n");
+
     return true;
 }
 
@@ -1861,6 +1898,7 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
            INFO("Bind mounted /system_root/system on /system\n");
        }
 
+       rom_quirks_on_initrd_finalized();
        LoadSplitPolicy();
        DIR* dir = opendir("/system_root");
        copy_init_contents(dir, "/system_root", "/", true);
@@ -1869,13 +1907,19 @@ int multirom_prep_android_mounts(struct multirom_status *s, struct multirom_rom 
     sprintf(path, "%s/boot", rom->base_path);
     DIR* dir = opendir(path);
     if (!system_as_root) {
+        rom_quirks_on_initrd_finalized();
         LoadSplitPolicy();
     }
     copy_init_contents(dir, path, "/", false);
-    if (!access("/system/bin/init", F_OK) && is_symlink("/main_init")) {
+    if (!access("/system/bin/init", F_OK) && is_symlink("/system_root/init")) {
         char* context = calloc(1, 50);
         getfilecon("/system/bin/init", &context);
-        copy_file_with_context("/system/bin/init", "/main_init", context);
+        copy_file_with_context("/system/bin/init", "/main_init", "u:object_r:rootfs:s0");
+        chmod("/main_init", EXEC_MASK_NEW);
+    } else if (!is_symlink("/system_root/init") && !access("/system_root/init", F_OK)) {
+        char* context = calloc(1, 50);
+        getfilecon("/system_root/init", &context);
+        copy_file_with_context("/system_root/init", "/main_init", context);
         chmod("/main_init", EXEC_MASK_NEW);
     }
 

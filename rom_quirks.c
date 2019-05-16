@@ -243,7 +243,7 @@ char* convert_to_raw(char* str) {
     return out;
 }
 
-void rom_quirks_change_patch_and_osver() {
+void rom_quirks_change_patch_and_osver(struct multirom_status *s, struct multirom_rom *to_boot) {
 
     char* path = "/system/build.prop";
     struct bootimg primary_img;
@@ -254,6 +254,7 @@ void rom_quirks_change_patch_and_osver() {
 
     if (libbootimg_init_load(&primary_img, "/dev/block/bootdevice/by-name/boot", LIBBOOTIMG_LOAD_ALL) < 0)
     {
+        ERROR("cant open /dev/block/bootdevice/by-name/boot\n");
         return;
     }
 
@@ -298,7 +299,7 @@ void rom_quirks_change_patch_and_osver() {
     char* existing_level_raw = convert_to_raw(existing_level);
     char* existing_ver_raw = convert_to_raw(existing_ver);
 
-    if (strtol(primary_os_ver_raw, NULL, 10) > strtol(existing_ver_raw, NULL, 10) || strtol(primary_os_level_raw, NULL, 10) > strtol(existing_level_raw, NULL, 10)) {
+    if (strtol(primary_os_ver_raw, NULL, 10) > strtol(existing_ver_raw, NULL, 10) || strtol(primary_os_level_raw, NULL, 10) > strtol(existing_level_raw, NULL, 10) || s->use_primary_kernel || !to_boot->has_bootimg) {
 
         existing_level = strstr(filebuf, "ro.build.version.security_patch");
 
@@ -314,6 +315,7 @@ void rom_quirks_change_patch_and_osver() {
 
         destfile = open("/build.prop", O_RDWR | O_CREAT, 0644);
         write(destfile, filebuf, strlen(filebuf));
+        INFO("build.prop %s\n", filebuf);
         close(destfile);
 
 
