@@ -380,7 +380,7 @@ int setattr(const char *path, struct file_attr *a) {
 	return 0;
 }
 
-void clone_dir(DIR* d, char* dirpath, char* target, bool preserve_context) {
+void clone_dir(DIR* d, char* dirpath, char* target, bool preserve_context, char* exclude_dir) {
 
     char in[256];
     char out[256];
@@ -395,7 +395,7 @@ void clone_dir(DIR* d, char* dirpath, char* target, bool preserve_context) {
     ERROR("copying dir %s to %s\n", dirpath, target);
     while((dp = readdir(d)))
     {
-        if((dp->d_name[0] == '.' && strlen(dp->d_name) == 1) || (dp->d_name[0] == '.' && dp->d_name[1] == '.') || (!strcmp(dp->d_name, "system")))
+        if((dp->d_name[0] == '.' && strlen(dp->d_name) == 1) || (dp->d_name[0] == '.' && dp->d_name[1] == '.') || (exclude_dir && !strcmp(dp->d_name, exclude_dir)))
             continue;
 
         sprintf(in, "%s/%s", dirpath, dp->d_name);
@@ -418,7 +418,7 @@ void clone_dir(DIR* d, char* dirpath, char* target, bool preserve_context) {
                 mkdir_with_perms(out, 0755, NULL, NULL);
             }
             setattr(out, &a);
-            copy_dir_contents(dir, in, out);
+            copy_dir_contents(dir, in, out, exclude_dir);
             continue;
         } else if (dp->d_type == DT_LNK) {
             char target[256];
@@ -441,8 +441,8 @@ void clone_dir(DIR* d, char* dirpath, char* target, bool preserve_context) {
 }
 
 
-void copy_dir_contents(DIR* d, char* dirpath, char* target) {
-    clone_dir(d, dirpath, target, false);
+void copy_dir_contents(DIR* d, char* dirpath, char* target, char* exclude_dir) {
+    clone_dir(d, dirpath, target, false, exclude_dir);
 }
 
 int write_file(const char *path, const char *value)
