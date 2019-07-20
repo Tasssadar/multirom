@@ -246,24 +246,16 @@ char* convert_to_raw(char* str) {
 void rom_quirks_change_patch_and_osver(struct multirom_status *s, struct multirom_rom *to_boot) {
 
     char* path = "/system/build.prop";
-    struct bootimg primary_img;
     char* patchstring = NULL, *stringtoappend = NULL;
     char* existing_ver = NULL;
     char* existing_level = NULL;
     int sourcefile, destfile, n;
 
-    if (libbootimg_init_load(&primary_img, "/dev/block/bootdevice/by-name/boot", LIBBOOTIMG_LOAD_ALL) < 0)
-    {
-        ERROR("cant open /dev/block/bootdevice/by-name/boot\n");
-        return;
-    }
+    char* primary_os_version = s->os_version;
+    char* primary_os_level = s->os_level;
 
-    char* primary_os_version = libbootimg_get_osversion(&primary_img.hdr, false);
-    char* primary_os_level = libbootimg_get_oslevel(&primary_img.hdr, false);
-
-    char* primary_os_ver_raw = libbootimg_get_osversion(&primary_img.hdr, true);
-    char* primary_os_level_raw = libbootimg_get_oslevel(&primary_img.hdr, true);
-    libbootimg_destroy(&primary_img);
+    char* primary_os_ver_raw = s->os_version_raw;
+    char* primary_os_level_raw = s->os_level_raw;
 
     sourcefile = open(path, O_RDONLY, 0644);
 
@@ -299,7 +291,9 @@ void rom_quirks_change_patch_and_osver(struct multirom_status *s, struct multiro
     char* existing_level_raw = convert_to_raw(existing_level);
     char* existing_ver_raw = convert_to_raw(existing_ver);
 
-    if (strtol(primary_os_ver_raw, NULL, 10) > strtol(existing_ver_raw, NULL, 10) || strtol(primary_os_level_raw, NULL, 10) > strtol(existing_level_raw, NULL, 10) || s->use_primary_kernel || !to_boot->has_bootimg) {
+    INFO("primary %s existing %s", primary_os_level_raw, existing_level_raw);
+
+    if (strtol(primary_os_ver_raw, NULL, 10) != strtol(existing_ver_raw, NULL, 10) || strtol(primary_os_level_raw, NULL, 10) != strtol(existing_level_raw, NULL, 10) || s->use_primary_kernel || !to_boot->has_bootimg) {
 
         existing_level = strstr(filebuf, "ro.build.version.security_patch");
 
